@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -90,20 +90,21 @@ public class ClothHexagon extends Mesh {
         FloatBuffer posBuffer
                 = BufferUtils.createFloatBuffer(numAxes * numVertices);
         setBuffer(VertexBuffer.Type.Position, numAxes, posBuffer);
-        /*
-         * Write the vertex locations:
-         */
+
+        // Write the vertex locations:
         posBuffer.put(0f).put(0f).put(0f);
 
         for (int ringIndex = 0; ringIndex < numRings; ++ringIndex) {
             float cornerR = vertexSpacing * (ringIndex + 1);
 
             for (int sideIndex = 0; sideIndex < numSides; ++sideIndex) {
-                double theta0 = sideIndex * oneThirdPi; // radians from +X around -Y
+                double theta0
+                        = sideIndex * oneThirdPi; // radians from +X around -Y
                 float cornerX = cornerR * (float) Math.cos(theta0);
                 float cornerZ = cornerR * (float) Math.sin(theta0);
 
-                double theta2 = (sideIndex + 2) * oneThirdPi; // radians from +X around -Y
+                double theta2 = (sideIndex + 2)
+                        * oneThirdPi; // radians from +X around -Y
                 float stepX = vertexSpacing * (float) Math.cos(theta2);
                 float stepZ = vertexSpacing * (float) Math.sin(theta2);
 
@@ -120,9 +121,8 @@ public class ClothHexagon extends Mesh {
         FloatBuffer normBuffer
                 = BufferUtils.createFloatBuffer(numAxes * numVertices);
         setBuffer(VertexBuffer.Type.Normal, numAxes, normBuffer);
-        /*
-         * Write the normals:
-         */
+
+        // Write the normals:
         for (int vertexIndex = 0; vertexIndex < numVertices; ++vertexIndex) {
             normBuffer.put(0f).put(1f).put(0f);
         }
@@ -136,9 +136,8 @@ public class ClothHexagon extends Mesh {
         VertexBuffer.Format ibFormat = indexBuffer.getFormat();
         Buffer ibData = indexBuffer.getBuffer();
         setBuffer(VertexBuffer.Type.Index, MyMesh.vpt, ibFormat, ibData);
-        /*
-         * Write vertex indices for triangles:
-         */
+
+        // Write vertex indices for triangles:
         int ivi = 0; // index of the current vertex in the inner ring
         int ovi = 1; // index of the current vertex in the outer ring
         for (int ringIndex = 0; ringIndex < numRings; ++ringIndex) {

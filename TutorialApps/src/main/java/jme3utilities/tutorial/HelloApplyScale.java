@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@ import com.jme3.system.AppSettings;
 
 /**
  * A simple example of a kinematic RigidBodyControl with setApplyScale(true).
- *
+ * <p>
  * Builds upon HelloKinematicRbc.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -70,9 +70,9 @@ public class HelloApplyScale extends SimpleApplication {
     /**
      * Main entry point for the HelloApplyScale application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloApplyScale application = new HelloApplyScale();
 
         // Enable gamma correction for accurate lighting.
@@ -123,9 +123,7 @@ public class HelloApplyScale extends SimpleApplication {
      */
     @Override
     public void simpleUpdate(float tpf) {
-        /*
-         * Vary the scale of the Geometry with time.
-         */
+        // Vary the scale of the Geometry with time.
         float cycleTime = 3f; // seconds
         float phaseAngle = elapsedTime * FastMath.TWO_PI / cycleTime;
 
@@ -140,8 +138,10 @@ public class HelloApplyScale extends SimpleApplication {
 
     /**
      * Add lighting to the specified scene.
+     *
+     * @param scene the scene to augment (not null)
      */
-    private void addLighting(Spatial scene) {
+    private static void addLighting(Spatial scene) {
         ColorRGBA ambientColor = new ColorRGBA(0.02f, 0.02f, 0.02f, 1f);
         AmbientLight ambient = new AmbientLight(ambientColor);
         scene.addLight(ambient);
@@ -164,6 +164,8 @@ public class HelloApplyScale extends SimpleApplication {
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();

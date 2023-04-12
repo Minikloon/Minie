@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -48,21 +48,28 @@ import java.util.Collection;
 
 /**
  * A simple example of vehicle physics.
- *
+ * <p>
  * Builds upon HelloStaticBody.
  *
  * @author Stephen Gold sgold@sonic.net
  */
 public class HelloVehicle extends SimpleApplication {
     // *************************************************************************
+    // fields
+
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
+    // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloVehicle application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloVehicle application = new HelloVehicle();
         application.start();
     }
@@ -74,7 +81,7 @@ public class HelloVehicle extends SimpleApplication {
      */
     @Override
     public void simpleInitApp() {
-        PhysicsSpace physicsSpace = configurePhysics();
+        physicsSpace = configurePhysics();
 
         // Create a wedge-shaped vehicle with a low center of gravity.
         // The local forward direction is +Z.
@@ -127,18 +134,17 @@ public class HelloVehicle extends SimpleApplication {
 
         // Add a static plane to represent the ground.
         float y = -radius - 0.35f;
-        addPlane(y, physicsSpace);
+        addPlane(y);
     }
     // *************************************************************************
     // private methods
 
     /**
-     * Add a horizontal plane body to the specified PhysicsSpace.
+     * Add a horizontal plane body to the space.
      *
      * @param y (the desired elevation, in physics-space coordinates)
-     * @param physicsSpace (not null)
      */
-    private void addPlane(float y, PhysicsSpace physicsSpace) {
+    private void addPlane(float y) {
         Plane plane = new Plane(Vector3f.UNIT_Y, y);
         PlaneCollisionShape shape = new PlaneCollisionShape(plane);
         PhysicsRigidBody body
@@ -155,8 +161,8 @@ public class HelloVehicle extends SimpleApplication {
         texture.setWrap(Texture.WrapMode.Repeat);
 
         // Enable anisotropic filtering, to reduce blurring.
-        int maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
-        int degree = Math.min(8, maxDegree);
+        Integer maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
+        int degree = (maxDegree == null) ? 1 : Math.min(8, maxDegree);
         texture.setAnisotropicFilter(degree);
 
         // Apply a tiled, unshaded debug material to the body.
@@ -174,11 +180,13 @@ public class HelloVehicle extends SimpleApplication {
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
-        bulletAppState.setDebugEnabled(true);
+        bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
         return result;

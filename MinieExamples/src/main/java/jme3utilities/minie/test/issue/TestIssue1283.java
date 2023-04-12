@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -86,28 +86,36 @@ public class TestIssue1283 extends SimpleApplication {
     /**
      * Material to visualize projectiles
      */
-    private Material projectileMaterial;
+    private static Material projectileMaterial;
     /**
      * Material to visualize the wall
      */
-    private Material wallMaterial;
+    private static Material wallMaterial;
     /**
-     * dump debugging information to System.out
+     * dump debugging information to {@code System.out}
      */
-    final private PhysicsDumper dumper = new PhysicsDumper();
+    final static private PhysicsDumper dumper = new PhysicsDumper();
     /**
      * space for physics simulation
      */
-    private PhysicsSpace physicsSpace;
+    private static PhysicsSpace physicsSpace;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue1283 application.
+     */
+    public TestIssue1283() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestIssue1283 application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         TestIssue1283 application = new TestIssue1283();
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
@@ -217,13 +225,13 @@ public class TestIssue1283 extends SimpleApplication {
      * Configure materials during startup.
      */
     private void configureMaterials() {
-        wallMaterial = new Material(assetManager,
-                "Common/MatDefs/Misc/Unshaded.j3md");
+        wallMaterial = new Material(
+                assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
         wallMaterial.setColor("Color", ColorRGBA.White.clone());
         wallMaterial.getAdditionalRenderState().setWireframe(true);
 
-        projectileMaterial = new Material(assetManager,
-                "Common/MatDefs/Light/Lighting.j3md");
+        projectileMaterial = new Material(
+                assetManager, "Common/MatDefs/Light/Lighting.j3md");
         projectileMaterial.setBoolean("UseMaterialColors", true);
         projectileMaterial.setColor("Ambient", ColorRGBA.Red.clone());
         projectileMaterial.setColor("Diffuse", ColorRGBA.Red.clone());

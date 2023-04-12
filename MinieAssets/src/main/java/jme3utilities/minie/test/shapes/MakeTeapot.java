@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2021, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@ import com.jme3.asset.DesktopAssetManager;
 import com.jme3.asset.plugins.ClasspathLocator;
 import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
 import com.jme3.bullet.util.CollisionShapeFactory;
+import com.jme3.export.Savable;
 import com.jme3.material.plugins.J3MLoader;
 import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
@@ -45,16 +46,15 @@ import jme3utilities.MySpatial;
 import jme3utilities.MyString;
 import jme3utilities.math.MyMath;
 import jme3utilities.math.MyVector3f;
-import vhacd.VHACD;
 import vhacd.VHACDParameters;
-import vhacd.VHACDProgressListener;
 
 /**
- * A console application to generate the collision-shape asset "teapot.j3o".
+ * A console application to generate the collision-shape assets "teapot.j3o" and
+ * "teapotGi.j3o".
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MakeTeapot {
+final public class MakeTeapot {
     // *************************************************************************
     // constants and loggers
 
@@ -69,6 +69,15 @@ public class MakeTeapot {
     final private static String assetDirPath
             = "../MinieExamples/src/main/resources";
     // *************************************************************************
+    // constructors
+
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private MakeTeapot() {
+        // do nothing
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
@@ -78,29 +87,18 @@ public class MakeTeapot {
      */
     public static void main(String[] arguments) {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
-        /*
-         * Mute the chatty loggers found in some imported packages.
-         */
+
+        // Mute the chatty loggers found in some imported packages.
         Heart.setLoggingLevels(Level.WARNING);
         Logger.getLogger(OBJLoader.class.getName()).setLevel(Level.SEVERE);
-        /*
-         * Set the logging level for this class.
-         */
-        //logger.setLevel(Level.INFO);
-        /*
-         * Instantiate the application.
-         */
-        MakeTeapot application = new MakeTeapot();
-        /*
-         * Log the working directory.
-         */
+
+        // Log the working directory.
         String userDir = System.getProperty("user.dir");
         logger.log(Level.INFO, "working directory is {0}",
                 MyString.quote(userDir));
-        /*
-         * Generate the collision shape.
-         */
-        application.makeTeapot();
+
+        // Generate the collision shape.
+        makeTeapot();
     }
     // *************************************************************************
     // private methods
@@ -108,7 +106,7 @@ public class MakeTeapot {
     /**
      * Generate a collision shape for a teapot.
      */
-    private void makeTeapot() {
+    private static void makeTeapot() {
         DesktopAssetManager assetManager = new DesktopAssetManager();
         assetManager.registerLoader(OBJLoader.class, "obj");
         assetManager.registerLoader(MTLLoader.class, "mtl");
@@ -120,9 +118,8 @@ public class MakeTeapot {
          */
         String objAssetPath = "Models/Teapot/Teapot.obj";
         Spatial geom = assetManager.loadModel(objAssetPath);
-        /*
-         * Translate and uniformly scale the model to fit inside a 2x2x2 cube.
-         */
+
+        // Translate and uniformly scale the model to fit inside a 2x2x2 cube.
         geom.setLocalTransform(Transform.IDENTITY);
         Vector3f[] minMax = MySpatial.findMinMaxCoords(geom);
         Vector3f center = MyVector3f.midpoint(minMax[0], minMax[1], null);
@@ -137,39 +134,21 @@ public class MakeTeapot {
 
         Node cgmRoot = new Node();
         cgmRoot.attachChild(parent);
-        /*
-         * Generate a CollisionShape to approximate the Mesh.
-         */
-        VHACD.addProgressListener(new VHACDProgressListener() {
-            private double lastOP = -1.0;
 
-            @Override
-            public void update(double overallPercent, double stagePercent,
-                    double operationPercent, String stageName,
-                    String operationName) {
-                if (overallPercent != lastOP) {
-                    System.out.printf("MakeTeapot %.0f%% complete%n",
-                            overallPercent);
-                    lastOP = overallPercent;
-                }
-            }
-        });
-        VHACDParameters parms = new VHACDParameters();
-        //parms.setMaxConcavity(0.003);
-        long startTime = System.nanoTime();
-        CompoundCollisionShape shape
-                = CollisionShapeFactory.createVhacdShape(cgmRoot, parms, null);
-        long elapsedNsec = System.nanoTime() - startTime;
-        if (shape.countChildren() == 0) {
-            throw new RuntimeException("V-HACD failed!");
-        }
-        System.out.printf("MakeTeapot number of hulls = %d (%.3f sec)%n",
-                shape.countChildren(), elapsedNsec * 1e-9f);
-        /*
-         * Write the shape to the asset file.
-         */
+        // Using V-HACD, generate a CollisionShape to approximate the Mesh.
+        VHACDParameters parameters = new VHACDParameters();
+        CompoundCollisionShape shape = ShapeUtils.createVhacdShape(
+                cgmRoot, parameters, "MakeTeapot");
+
+        // Write the shape to the asset file.
         String assetPath = "CollisionShapes/teapot.j3o";
         String writeFilePath = String.format("%s/%s", assetDirPath, assetPath);
         Heart.writeJ3O(writeFilePath, shape);
+
+        // Generate a CollisionShape using GImpact and write to asset file.
+        Savable giShape = CollisionShapeFactory.createGImpactShape(cgmRoot);
+        assetPath = "CollisionShapes/teapotGi.j3o";
+        writeFilePath = String.format("%s/%s", assetDirPath, assetPath);
+        Heart.writeJ3O(writeFilePath, giShape);
     }
 }

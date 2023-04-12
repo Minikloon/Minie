@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2013-2021, Stephen Gold
+ Copyright (c) 2013-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@ import jme3utilities.Validate;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MyControlP {
+final public class MyControlP {
     // *************************************************************************
     // constants and loggers
 
@@ -219,8 +219,8 @@ public class MyControlP {
      * @param subtree (not null)
      * @param space the PhysicsSpace to add to, or null for none
      */
-    public static void enablePhysicsControls(Spatial subtree,
-            PhysicsSpace space) {
+    public static void enablePhysicsControls(
+            Spatial subtree, PhysicsSpace space) {
         int numControls = subtree.getNumControls();
         for (int controlI = 0; controlI < numControls; ++controlI) {
             Control control = subtree.getControl(controlI);
@@ -355,7 +355,7 @@ public class MyControlP {
      */
     public static void removeNonPhysicsControls(Spatial subtree) {
         int numControls = subtree.getNumControls();
-        for (int controlI = numControls - 1; controlI >= 0; controlI--) {
+        for (int controlI = numControls - 1; controlI >= 0; --controlI) {
             Control control = subtree.getControl(controlI);
             if (!(control instanceof PhysicsControl)) {
                 subtree.removeControl(control);

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2020, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -35,6 +35,7 @@ import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.control.BetterCharacterControl;
 import com.jme3.bullet.control.GhostControl;
 import com.jme3.bullet.control.RigidBodyControl;
+import java.util.logging.Logger;
 
 /**
  * Test case for JME issue #889: disabled physics control gets added to a
@@ -46,14 +47,30 @@ import com.jme3.bullet.control.RigidBodyControl;
  */
 public class TestIssue889 extends SimpleApplication {
     // *************************************************************************
+    // constants and loggers
+
+    /**
+     * message logger for this class
+     */
+    final public static Logger logger
+            = Logger.getLogger(TestIssue889.class.getName());
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue889 application.
+     */
+    public TestIssue889() { // explicit to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestIssue889 application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         TestIssue889 app = new TestIssue889();
         app.start();
     }

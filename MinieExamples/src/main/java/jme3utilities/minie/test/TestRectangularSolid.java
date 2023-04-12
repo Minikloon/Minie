@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -30,13 +30,13 @@ import com.jme3.app.Application;
 import com.jme3.app.state.AppState;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.PhysicsSpace;
+import com.jme3.bullet.animation.RagUtils;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.HullCollisionShape;
 import com.jme3.bullet.collision.shapes.MultiSphere;
 import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.bullet.util.DebugShapeFactory;
 import com.jme3.font.BitmapText;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.material.Material;
@@ -47,8 +47,6 @@ import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Node;
 import com.jme3.system.AppSettings;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
@@ -56,9 +54,11 @@ import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
 import jme3utilities.MyString;
 import jme3utilities.math.RectangularSolid;
+import jme3utilities.math.VectorSet;
+import jme3utilities.math.VectorSetUsingBuffer;
+import jme3utilities.math.noise.Generator;
 import jme3utilities.mesh.PointMesh;
 import jme3utilities.minie.test.common.PhysicsDemo;
-import jme3utilities.minie.test.shape.ShapeGenerator;
 import jme3utilities.ui.CameraOrbitAppState;
 import jme3utilities.ui.InputMode;
 
@@ -94,57 +94,64 @@ public class TestRectangularSolid extends PhysicsDemo {
      */
     final private static String applicationName
             = TestRectangularSolid.class.getSimpleName();
+    /**
+     * local copy of {@link com.jme3.math.Vector3f#UNIT_XYZ}
+     */
+    final private static Vector3f scaleIdentity = new Vector3f(1f, 1f, 1f);
     // *************************************************************************
     // fields
 
     /**
      * status displayed in the upper-left corner of the GUI node
      */
-    private BitmapText statusText;
+    private static BitmapText statusText;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * pseudo-random seed for the current/next trial
      */
-    private long trialSeed = 1L;
+    private static long trialSeed = 1L;
     /**
      * scene-graph node for the current trial
      */
-    private Node trialNode = null;
+    private static Node trialNode = null;
     /**
      * latest rigid body
      */
-    private PhysicsRigidBody rigidBody;
+    private static PhysicsRigidBody rigidBody;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestRectangularSolid application.
+     */
+    public TestRectangularSolid() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestRectangularSolid application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new TestRectangularSolid();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new TestRectangularSolid();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -154,17 +161,16 @@ public class TestRectangularSolid extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
         configureCamera();
-        /*
-         * Add the status text to the GUI.
-         */
-        statusText = new BitmapText(guiFont);
-        statusText.setLocalTranslation(0f, cam.getHeight(), 0f);
-        guiNode.attachChild(statusText);
 
-        Material material = MyAsset.createWireframeMaterial(assetManager,
-                sampleColor, samplePointSize);
+        // Add the status text to the GUI.
+        statusText = new BitmapText(guiFont);
+        guiNode.attachChild(statusText);
+        super.acorusInit();
+
+        Material material = MyAsset.createWireframeMaterial(
+                assetManager, sampleColor, samplePointSize);
         registerMaterial("samplePoint", material);
 
         bulletAppState = new BulletAppState();
@@ -207,6 +213,7 @@ public class TestRectangularSolid extends PhysicsDemo {
         InputMode dim = getDefaultInputMode();
 
         dim.bind("next trial capsule", KeyInput.KEY_F3);
+        dim.bind("next trial cylinder", KeyInput.KEY_F4);
         dim.bind("next trial rounded", KeyInput.KEY_F1);
         dim.bind("next trial square", KeyInput.KEY_F2);
 
@@ -216,15 +223,6 @@ public class TestRectangularSolid extends PhysicsDemo {
         dim.bindSignal("orbitRight", KeyInput.KEY_RIGHT);
 
         dim.bind(asToggleHelp, KeyInput.KEY_H);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + 20f);
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -245,6 +243,18 @@ public class TestRectangularSolid extends PhysicsDemo {
             }
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        statusText.setLocalTranslation(0f, newHeight, 0f);
+        super.onViewPortResize(newWidth, newHeight);
     }
     // *************************************************************************
     // private methods
@@ -271,9 +281,9 @@ public class TestRectangularSolid extends PhysicsDemo {
     /**
      * Perform a new trial after cleaning up from the previous one.
      *
-     * @param shapeName type of collision shape to generate:
-     * "square"&rarr;HullCollisionShape, "capsule"&rarr;MultiSphere with 2
-     * spheres, or "rounded"&rarr;MultiSphere with 4 spheres
+     * @param shapeName type of collision shape to generate: "square"
+     * &rarr;HullCollisionShape, "capsule" &rarr;MultiSphere with 2 spheres, or
+     * "rounded" &rarr;MultiSphere with 4 spheres
      */
     private void nextTrial(String shapeName) {
         if (trialNode != null) {
@@ -301,11 +311,10 @@ public class TestRectangularSolid extends PhysicsDemo {
         String message = "trialSeed = " + trialSeed;
         System.out.println(message);
         statusText.setText(message);
-        ShapeGenerator random = getGenerator();
+        Generator random = getGenerator();
         random.setSeed(trialSeed);
-        /*
-         * Generate a new transform.
-         */
+
+        // Generate a new transform.
         Transform transform = new Transform();
         Quaternion rotation = random.nextQuaternion();
         transform.setRotation(rotation);
@@ -319,18 +328,16 @@ public class TestRectangularSolid extends PhysicsDemo {
          * Generate sample points on the surface of a transformed unit sphere
          * (which is an ellipsoid).
          */
-        Collection<Vector3f> sampleLocations = new ArrayList<>(samplesPerTrial);
-        for (int sampleIndex = 0;
-                sampleIndex < samplesPerTrial;
-                ++sampleIndex) {
-            Vector3f sampleLocation = random.nextUnitVector3f();
+        VectorSet samples = new VectorSetUsingBuffer(samplesPerTrial, true);
+        Vector3f sampleLocation = new Vector3f();
+        for (int sampleI = 0; sampleI < samplesPerTrial; ++sampleI) {
+            random.nextUnitVector3f(sampleLocation);
             transform.transformVector(sampleLocation, sampleLocation);
-            sampleLocations.add(sampleLocation);
+            samples.add(sampleLocation);
         }
-        /*
-         * Visualize the sample points.
-         */
-        for (Vector3f location : sampleLocations) {
+
+        // Visualize the sample points.
+        for (Vector3f location : samples.toVectorArray()) {
             PointMesh pointMesh = new PointMesh();
             pointMesh.setLocation(location);
             Geometry sampleGeometry = new Geometry("sample", pointMesh);
@@ -338,18 +345,20 @@ public class TestRectangularSolid extends PhysicsDemo {
             sampleGeometry.setMaterial(material);
             trialNode.attachChild(sampleGeometry);
         }
-        /*
-         * Generate a rectangular solid that contains all the samples.
-         */
-        RectangularSolid solid = new RectangularSolid(sampleLocations);
+
+        // Generate a rectangular solid that contains all the samples.
+        RectangularSolid solid
+                = RagUtils.makeRectangularSolid(samples, scaleIdentity);
         logger.log(Level.INFO, solid.toString());
-        /*
-         * Generate a collision shape.
-         */
+
+        // Generate a collision shape.
         CollisionShape collisionShape;
         switch (shapeName) {
             case "capsule":
                 collisionShape = new MultiSphere(solid, 0.5f);
+                break;
+            case "cylinder":
+                collisionShape = RagUtils.makeCylinder(samples, scaleIdentity);
                 break;
             case "rounded":
                 collisionShape = new MultiSphere(solid);
@@ -361,9 +370,8 @@ public class TestRectangularSolid extends PhysicsDemo {
                 message = "shapeName = " + MyString.quote(shapeName);
                 throw new IllegalArgumentException(message);
         }
-        /*
-         * Add a rigid body with that shape.
-         */
+
+        // Add a dynamic rigid body with that shape.
         rigidBody = new PhysicsRigidBody(collisionShape);
         rigidBody.setDebugMeshResolution(DebugShapeFactory.highResolution);
         PhysicsSpace space = bulletAppState.getPhysicsSpace();

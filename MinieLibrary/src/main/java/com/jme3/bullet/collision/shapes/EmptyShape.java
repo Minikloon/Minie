@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021 jMonkeyEngine
+ * Copyright (c) 2018-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,7 @@ import java.io.IOException;
 import java.util.logging.Logger;
 
 /**
- * An empty CollisionShape based on Bullet's btEmptyShape.
+ * An empty collision shape based on Bullet's {@code btEmptyShape.}
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -71,15 +71,25 @@ public class EmptyShape extends CollisionShape {
     // new methods exposed
 
     /**
-     * Determine the unscaled volume of the shape.
+     * Return the unscaled volume of the shape.
      *
      * @return 0
      */
     public float unscaledVolume() {
-        return 0;
+        return 0f;
     }
     // *************************************************************************
     // CollisionShape methods
+
+    /**
+     * Test whether this shape can be split by an arbitrary plane.
+     *
+     * @return true if splittable, false otherwise
+     */
+    @Override
+    public boolean canSplit() {
+        return true;
+    }
 
     /**
      * Callback from {@link com.jme3.util.clone.Cloner} to convert this
@@ -97,28 +107,13 @@ public class EmptyShape extends CollisionShape {
     }
 
     /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public EmptyShape jmeClone() {
-        try {
-            EmptyShape clone = (EmptyShape) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
-    }
-
-    /**
      * Determine how far the shape extends from its center.
      *
      * @return the distance (in physics-space units, &ge;0)
      */
     @Override
     public float maxRadius() {
-        return 0;
+        return 0f;
     }
 
     /**
@@ -132,6 +127,16 @@ public class EmptyShape extends CollisionShape {
     public void read(JmeImporter importer) throws IOException {
         super.read(importer);
         createShape();
+    }
+
+    /**
+     * Estimate the volume of this shape, including scale and margin.
+     *
+     * @return 0
+     */
+    @Override
+    public float scaledVolume() {
+        return 0f;
     }
     // *************************************************************************
     // Java private methods

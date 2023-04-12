@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021 jMonkeyEngine
+ * Copyright (c) 2019-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -137,11 +137,14 @@ public class Anchor extends PhysicsJoint {
      * storeResult or a new instance)
      */
     public Vector3f copyPivot(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return pivotInB.clone();
+            result = pivotInB.clone();
         } else {
-            return storeResult.set(pivotInB);
+            result = storeResult.set(pivotInB);
         }
+
+        return result;
     }
 
     /**
@@ -237,9 +240,17 @@ public class Anchor extends PhysicsJoint {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        super.cloneFields(cloner, original);
+        assert !hasAssignedNativeObject();
+        Anchor old = (Anchor) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
 
-        pivotInB = cloner.clone(pivotInB);
+        super.cloneFields(cloner, original);
+        if (hasAssignedNativeObject()) {
+            return;
+        }
+
+        this.pivotInB = cloner.clone(pivotInB);
         createAnchor();
     }
 
@@ -254,21 +265,6 @@ public class Anchor extends PhysicsJoint {
     }
 
     /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public Anchor jmeClone() {
-        try {
-            Anchor clone = (Anchor) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
-    }
-
-    /**
      * De-serialize this joint from the specified importer, for example when
      * loading from a J3O file.
      *
@@ -280,11 +276,12 @@ public class Anchor extends PhysicsJoint {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        allowCollisions
+        this.allowCollisions
                 = capsule.readBoolean(tagAllowCollisions, true);
-        influence = capsule.readFloat(tagInfluence, 1f);
-        nodeIndexA = capsule.readInt(tagNodeIndexA, 0);
-        pivotInB = (Vector3f) capsule.readSavable(tagPivotInB, new Vector3f());
+        this.influence = capsule.readFloat(tagInfluence, 1f);
+        this.nodeIndexA = capsule.readInt(tagNodeIndexA, 0);
+        this.pivotInB
+                = (Vector3f) capsule.readSavable(tagPivotInB, new Vector3f());
 
         createAnchor();
     }
@@ -321,8 +318,8 @@ public class Anchor extends PhysicsJoint {
         PhysicsRigidBody b = getRigidBody();
         long bId = b.nativeId();
 
-        long anchorId = createAnchor(aId, nodeIndexA, bId, pivotInB,
-                allowCollisions, influence);
+        long anchorId = createAnchor(
+                aId, nodeIndexA, bId, pivotInB, allowCollisions, influence);
         setNativeIdNotTracked(anchorId);
     }
     // *************************************************************************

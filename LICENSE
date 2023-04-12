@@ -1,5 +1,5 @@
-com.jme3 and jme3test software packages Copyright (c) 2009-2021 jMonkeyEngine
-jme3utilities software packages Copyright (c) 2013-2022 Stephen Gold
+com.jme3 and jme3test software packages Copyright (c) 2009-2023 jMonkeyEngine
+jme3utilities software packages Copyright (c) 2013-2023 Stephen Gold
 vhacd software package Copyright (c) 2016, Riccardo Balbo
 
 All rights reserved.
@@ -16,7 +16,8 @@ Note: the following license does not apply to certain assets/resources
  2 files in MinieAssets/src/main/resources/Models/Horseshoe,
  3 files in MinieAssets/src/main/resources/Models/MhGame,
  5 files in MinieAssets/src/main/resources/Models/MhGame/textures,
- 2 files in MinieExamples/src/main/resources/Models/Puppet)
+ 2 files in MinieExamples/src/main/resources/Models/Puppet,
+ 3 files in VhacdTuner/src/main/resources/Textures/icons)
 which are separately licensed.  See the license.txt files for details.
 
 BSD 3-Clause License

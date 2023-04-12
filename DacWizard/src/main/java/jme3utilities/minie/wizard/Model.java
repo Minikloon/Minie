@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -45,10 +45,10 @@ import com.jme3.bullet.animation.MassHeuristic;
 import com.jme3.bullet.animation.RagUtils;
 import com.jme3.bullet.animation.RangeOfMotion;
 import com.jme3.bullet.animation.ShapeHeuristic;
-import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Mesh;
 import com.jme3.scene.Spatial;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
@@ -63,13 +63,13 @@ import jme3utilities.InfluenceUtil;
 import jme3utilities.MyAnimation;
 import jme3utilities.MySkeleton;
 import jme3utilities.MySpatial;
-import jme3utilities.math.MyVector3f;
+import jme3utilities.MyString;
 import jme3utilities.math.VectorSet;
 import jme3utilities.ui.InputMode;
 import jme3utilities.ui.Locators;
 
 /**
- * State information (MVC model) in the DacWizard application.
+ * The state information (MVC model) in the DacWizard application.
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -78,9 +78,9 @@ class Model {
     // constants and loggers
 
     /**
-     * desired height of the C-G model (for visualization, in world units)
+     * magic clip/animation index used to denote bind pose
      */
-    final public static float cgmHeight = 10f;
+    final private static int bindPoseIndex = -1;
     /**
      * message logger for this class
      */
@@ -89,6 +89,10 @@ class Model {
     // *************************************************************************
     // fields
 
+    /**
+     * mode for displaying angles
+     */
+    private AngleMode angleMode = AngleMode.Degrees;
     /**
      * bones that influence the Mesh in any way
      */
@@ -102,9 +106,17 @@ class Model {
      */
     private BitSet linkedBones;
     /**
-     * whether to show PhysicsJoint axes in the TestScreen
+     * whether to visualize PhysicsJoint axes in the TestScreen
      */
     private boolean isShowingAxes = false;
+    /**
+     * whether to render model meshes in the TestScreen
+     */
+    private boolean isShowingMeshes = true;
+    /**
+     * whether to visualize the skeleton/armature
+     */
+    private boolean isShowingSkeleton = true;
     /**
      * PhysicsControl that will be added to the C-G model
      */
@@ -114,13 +126,30 @@ class Model {
      */
     private Exception loadException;
     /**
+     * animation time for the selected pose (in seconds, &ge;0)
+     */
+    private float animationTime = 0f;
+    /**
      * task for estimating ranges of motion
      */
     private FutureTask<RangeOfMotion[]> romTask;
     /**
-     * number of components in the file-system path to the asset root
+     * index of the selected clip/animation, or {@link #bindPoseIndex} for bind
+     * pose
+     */
+    private int animationIndex = bindPoseIndex;
+    /**
+     * index of the torso's main bone, or -1 for the default
+     */
+    private int mainBoneIndex;
+    /**
+     * number of components in the filesystem path to the asset root
      */
     private int numComponentsInRoot;
+    /**
+     * list of all clip/animation names in the loaded C-G model
+     */
+    final private List<String> animationNames = new ArrayList<>(32);
     /**
      * map manager names to sets of vertices
      */
@@ -130,7 +159,7 @@ class Model {
      */
     private RomCallable romCallable;
     /**
-     * root spatial of the C-G model
+     * root spatial of the loaded C-G model
      */
     private Spatial rootSpatial;
     /**
@@ -138,53 +167,135 @@ class Model {
      */
     private String selectedLink;
     /**
-     * components of the file-system path to the C-G model (not null)
+     * components of the filesystem path to the C-G model (not null)
      */
     private String[] filePathComponents = new String[0];
-    /**
-     * initial local transform of the C-G model's root spatial, for
-     * visualization
-     */
-    final private Transform initTransform = new Transform();
     // *************************************************************************
     // new methods exposed
 
     /**
-     * Determine the asset path to the J3O binary. The file-system path must be
-     * set.
+     * Return the mode for displaying angles.
+     *
+     * @return an enum value (not null)
+     */
+    AngleMode angleMode() {
+        assert angleMode != null;
+        return angleMode;
+    }
+
+    /**
+     * Return the duration of the selected clip/animation.
+     *
+     * @return the duration (in seconds, &ge;0)
+     */
+    float animationDuration() {
+        float result;
+        if (animationIndex == bindPoseIndex) {
+            result = 0f;
+
+        } else {
+            result = Float.NaN;
+            String name = animationNames.get(animationIndex);
+            int skipNames = animationIndex;
+
+            List<AnimControl> animControls = MySpatial
+                    .listControls(rootSpatial, AnimControl.class, null);
+            for (AnimControl animControl : animControls) {
+                Collection<String> names = animControl.getAnimationNames();
+                if (skipNames < names.size()) {
+                    Animation animation = animControl.getAnim(name);
+                    result = animation.getLength();
+                    break;
+                } else {
+                    skipNames -= names.size();
+                }
+            }
+
+            List<AnimComposer> composers = MySpatial
+                    .listControls(rootSpatial, AnimComposer.class, null);
+            for (AnimComposer composer : composers) {
+                Collection<String> names = composer.getAnimClipsNames();
+                if (skipNames < names.size()) {
+                    AnimClip animClip = composer.getAnimClip(name);
+                    result = (float) animClip.getLength();
+                    break;
+                } else {
+                    skipNames -= names.size();
+                }
+            }
+
+            if (Float.isNaN(result)) {
+                throw new RuntimeException(
+                        "clip/animation not found: " + MyString.quote(name));
+            }
+        }
+
+        assert result >= 0f : result;
+        return result;
+    }
+
+    /**
+     * Return the clip/animation name for the selected pose.
+     *
+     * @return the name of the clip/animation or {@code bindPoseName} for bind
+     * pose (not null)
+     */
+    String animationName() {
+        String result;
+        if (animationIndex == bindPoseIndex) {
+            result = DacWizard.bindPoseName;
+        } else {
+            result = animationNames.get(animationIndex);
+        }
+
+        assert result != null;
+        return result;
+    }
+
+    /**
+     * Return the animation time for the selected pose.
+     *
+     * @return the animation time (in seconds, &ge;0)
+     */
+    float animationTime() {
+        assert animationTime >= 0f : animationTime;
+        return animationTime;
+    }
+
+    /**
+     * Determine the asset path to the J3O/glTF asset. The filesystem path must
+     * be set.
      *
      * @return the path (not null, not empty)
      */
     String assetPath() {
         int numComponents = filePathComponents.length;
         if (numComponents == 0) {
-            throw new RuntimeException("File-system path not set.");
+            throw new RuntimeException("Filesystem path not set.");
         }
         assert numComponentsInRoot < numComponents : numComponents;
-        String[] resultComponents = Arrays.copyOfRange(filePathComponents,
-                numComponentsInRoot, numComponents);
+        String[] resultComponents = Arrays.copyOfRange(
+                filePathComponents, numComponentsInRoot, numComponents);
         String result = String.join("/", resultComponents);
         result = "/" + result;
 
-        assert result != null;
-        assert !result.isEmpty();
         return result;
     }
 
     /**
-     * Determine the file-system path to the asset root. The file-system path
-     * must be set.
+     * Determine the filesystem path to the asset root. The filesystem path must
+     * be set.
      *
      * @return the path (not null, not empty)
      */
     String assetRoot() {
         int numComponents = filePathComponents.length;
         if (numComponents == 0) {
-            throw new RuntimeException("File-system path not set.");
+            throw new RuntimeException("Filesystem path not set.");
         }
         assert numComponentsInRoot < numComponents : numComponents;
-        String[] resultComponents = Arrays.copyOfRange(filePathComponents, 0,
-                numComponentsInRoot);
+        String[] resultComponents = Arrays.copyOfRange(
+                filePathComponents, 0, numComponentsInRoot);
         String result = String.join("/", resultComponents);
         result += "/";
 
@@ -194,7 +305,7 @@ class Model {
     }
 
     /**
-     * Read the name of the indexed bone. A C-G model must be loaded.
+     * Return the name of the indexed bone. A C-G model must be loaded.
      *
      * @param boneIndex which bone (&ge;0)
      * @return the name (may be null)
@@ -206,12 +317,12 @@ class Model {
 
         String result;
         Skeleton skeleton = findSkeleton();
-        if (skeleton == null) {
+        if (skeleton == null) { // new animation system
             Armature armature = findArmature();
             Joint joint = armature.getJoint(boneIndex);
             result = joint.getName();
 
-        } else {
+        } else { // old animation system
             Bone bone = skeleton.getBone(boneIndex);
             result = bone.getName();
         }
@@ -220,7 +331,7 @@ class Model {
     }
 
     /**
-     * Read the configuration of the named bone/torso link.
+     * Return the configuration of the named bone/torso link.
      *
      * @param boneName the name of the bone/torso (not null)
      * @return the pre-existing configuration (not null)
@@ -231,21 +342,6 @@ class Model {
     }
 
     /**
-     * Copy the initial Transform for visualization.
-     *
-     * @param storeResult storage for the result (modified if not null)
-     * @return a Transform relative to world coordinates (either storeResult or
-     * a new instance)
-     */
-    Transform copyInitTransform(Transform storeResult) {
-        if (storeResult == null) {
-            return initTransform.clone();
-        } else {
-            return storeResult.set(initTransform);
-        }
-    }
-
-    /**
      * Copy the configured DynamicAnimControl.
      *
      * @return a new Control, or null if no model loaded
@@ -253,6 +349,16 @@ class Model {
     DynamicAnimControl copyRagdoll() {
         DynamicAnimControl clone = Heart.deepCopy(ragdoll);
         return clone;
+    }
+
+    /**
+     * Count how many clip/animations are in the loaded C-G model.
+     *
+     * @return the count (&ge;0)
+     */
+    int countAnimations() {
+        int result = animationNames.size();
+        return result;
     }
 
     /**
@@ -267,9 +373,9 @@ class Model {
 
         int count = 0;
         Skeleton skeleton = findSkeleton();
-        if (skeleton != null) {
+        if (skeleton != null) { // old animation system
             count = skeleton.getBoneCount();
-        } else {
+        } else { // new animation system
             Armature armature = findArmature();
             if (armature != null) {
                 count = armature.getJointCount();
@@ -286,8 +392,8 @@ class Model {
      * @return the count (&ge;0) or 0 if no model loaded
      */
     int countDacs() {
-        int count = MySpatial.countControls(rootSpatial,
-                DynamicAnimControl.class);
+        int count = MySpatial.countControls(
+                rootSpatial, DynamicAnimControl.class);
 
         assert count >= 0 : count;
         return count;
@@ -308,18 +414,18 @@ class Model {
         int count = 0;
 
         Skeleton skeleton = findSkeleton();
-        if (skeleton == null) {
+        if (skeleton == null) { // new animation system
             Armature armature = findArmature();
             int numJoints = armature.getJointCount();
             for (int boneIndex = 0; boneIndex < numJoints; ++boneIndex) {
                 Joint joint = armature.getJoint(boneIndex);
-                String name = findManager(joint, armature);
+                String name = findManager(joint);
                 if (managerName.equals(name)) {
                     ++count;
                 }
             }
 
-        } else {
+        } else { // old animation system
             int numBones = skeleton.getBoneCount();
             for (int boneIndex = 0; boneIndex < numBones; ++boneIndex) {
                 Bone bone = skeleton.getBone(boneIndex);
@@ -376,8 +482,8 @@ class Model {
         List<AnimControl> animControls
                 = MySpatial.listControls(rootSpatial, AnimControl.class, null);
         for (AnimControl animControl : animControls) {
-            Collection<String> animationNames = animControl.getAnimationNames();
-            for (String animName : animationNames) {
+            Collection<String> names = animControl.getAnimationNames();
+            for (String animName : names) {
                 Animation animation = animControl.getAnim(animName);
                 if (MyAnimation.hasTrackForBone(animation, boneIndex)) {
                     ++count;
@@ -426,7 +532,7 @@ class Model {
     }
 
     /**
-     * Determine the file-system path to the J3O binary.
+     * Return the filesystem path to the J3O/glTF file.
      *
      * @return the path (not null, may be empty)
      */
@@ -503,12 +609,30 @@ class Model {
     }
 
     /**
-     * Test whether the PhysicsJoint axes will be rendered.
+     * Test whether the PhysicsJoint axes will be visualized.
      *
-     * @return true if rendered, otherwise false
+     * @return true if visualized, otherwise false
      */
     boolean isShowingAxes() {
         return isShowingAxes;
+    }
+
+    /**
+     * Test whether the model meshes will be rendered.
+     *
+     * @return true if rendered, otherwise false
+     */
+    boolean isShowingMeshes() {
+        return isShowingMeshes;
+    }
+
+    /**
+     * Test whether the skeleton/armature will be visualized.
+     *
+     * @return true if visualized, otherwise false
+     */
+    boolean isShowingSkeleton() {
+        return isShowingSkeleton;
     }
 
     /**
@@ -527,17 +651,17 @@ class Model {
 
         String name;
         Skeleton skeleton = findSkeleton();
-        if (skeleton == null) {
+        if (skeleton == null) { // new animation system
             Armature armature = findArmature();
             Joint child = armature.getJoint(childName);
             Joint parent = child.getParent();
             if (parent == null) { // the named Joint was a root joint
                 name = DacConfiguration.torsoName;
             } else {
-                name = findManager(parent, armature);
+                name = findManager(parent);
             }
 
-        } else {
+        } else { // old animation system
             Bone child = skeleton.getBone(childName);
             Bone parent = child.getParent();
             if (parent == null) { // the named Bone was a root bone
@@ -576,14 +700,42 @@ class Model {
     }
 
     /**
-     * Attempt to load a C-G model. The file-system path must have been
-     * previously set. If successful, rootSpatial and linkedBones are
-     * initialized. Otherwise, rootSpatial==null and loadException is set.
+     * Enumerate the indices of all bones managed by the torso. A C-G model must
+     * be loaded.
+     *
+     * @return a new array of indices (not null)
+     */
+    int[] listTorsoManagedBones() {
+        if (rootSpatial == null) {
+            throw new RuntimeException("No model loaded.");
+        }
+
+        int numManaged = countManagedBones(DacConfiguration.torsoName);
+        int[] result = new int[numManaged];
+
+        int managedIndex = 0;
+        int numBones = countBones();
+        for (int boneIndex = 0; boneIndex < numBones; ++boneIndex) {
+            String managerName = findManager(boneIndex);
+            if (managerName.equals(DacConfiguration.torsoName)) {
+                result[managedIndex] = boneIndex;
+                ++managedIndex;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Attempt to load a C-G model. The filesystem path must have been
+     * previously set. If successful, rootSpatial, animNames, ragdoll,
+     * mainBoneIndex, and linkedBones are initialized. Otherwise,
+     * {@code rootSpatial==null} and loadException is set.
      */
     void load() {
         int numComponents = filePathComponents.length;
         if (numComponents == 0) {
-            throw new RuntimeException("File-system path not set.");
+            throw new RuntimeException("Filesystem path not set.");
         }
 
         unload();
@@ -597,18 +749,26 @@ class Model {
         AssetManager assetManager = Locators.getAssetManager();
         assetManager.clearCache();
         try {
-            rootSpatial = assetManager.loadModel(assetPath);
-            loadException = null;
+            this.rootSpatial = assetManager.loadModel(assetPath);
+            this.loadException = null;
         } catch (RuntimeException exception) {
-            rootSpatial = null;
-            loadException = exception;
+            this.rootSpatial = null;
+            this.loadException = exception;
         }
         Locators.restore();
 
+        animationNames.clear();
         if (rootSpatial != null) {
-            ragdoll = removeDac();
-            recalculateInitTransform();
+            this.ragdoll = removeDac();
             recalculateInfluence();
+            updateAnimationNames();
+
+            int mbIndex = -1;
+            if (ragdoll != null) {
+                String mbName = ragdoll.mainBoneName();
+                mbIndex = findBoneIndex(mbName);
+            }
+            setMainBoneIndex(mbIndex);
 
             int numBones = countBones();
             BitSet bitset = new BitSet(numBones); // empty set
@@ -625,7 +785,7 @@ class Model {
     }
 
     /**
-     * Read the exception that occurred during the most recent load attempt.
+     * Return the exception that occurred during the most recent load attempt.
      *
      * @return the exception message, or "" if none
      */
@@ -639,7 +799,35 @@ class Model {
     }
 
     /**
-     * Shift one component of the file-system path from the asset root to the
+     * Return the index of the torso's main bone.
+     *
+     * @return the bone index (&ge;0)
+     */
+    int mainBoneIndex() {
+        int result = mainBoneIndex;
+        if (mainBoneIndex == -1) {
+            List<Mesh> targetList = RagUtils.listDacMeshes(rootSpatial, null);
+            Mesh[] meshes = new Mesh[targetList.size()];
+            targetList.toArray(meshes);
+
+            Skeleton skeleton = findSkeleton();
+            if (skeleton != null) { // old animation system
+                Bone bone = RagUtils.findMainBone(skeleton, meshes);
+                result = skeleton.getBoneIndex(bone);
+
+            } else { // new animation system
+                Armature armature = findArmature();
+                Joint armatureJoint = RagUtils.findMainJoint(armature, meshes);
+                result = armatureJoint.getId();
+            }
+        }
+
+        assert result >= 0 : result;
+        return result;
+    }
+
+    /**
+     * Shift one component of the filesystem path from the asset root to the
      * asset path.
      */
     void morePath() {
@@ -648,12 +836,26 @@ class Model {
     }
 
     /**
-     * Shift one component of the file-system path from the asset path to the
+     * Shift one component of the filesystem path from the asset path to the
      * asset root.
      */
     void moreRoot() {
         unload();
         ++numComponentsInRoot;
+    }
+
+    /**
+     * Select the next clip/animation in the loaded C-G model.
+     */
+    void nextAnimation() {
+        int numAnimations = countAnimations();
+        if (animationIndex < numAnimations - 1) {
+            ++animationIndex;
+        } else {
+            this.animationIndex = bindPoseIndex;
+        }
+
+        this.animationTime = 0f;
     }
 
     /**
@@ -669,7 +871,7 @@ class Model {
 
         int result;
         Skeleton skeleton = findSkeleton();
-        if (skeleton == null) {
+        if (skeleton == null) { // new animation system
             Armature armature = findArmature();
             Joint joint = armature.getJoint(boneIndex);
             Joint parent = joint.getParent();
@@ -677,10 +879,10 @@ class Model {
             if (parent == null) {
                 result = -1;
             } else {
-                result = armature.getJointIndex(parent);
+                result = parent.getId();
             }
 
-        } else {
+        } else { // old animation system
             Bone bone = skeleton.getBone(boneIndex);
             Bone parent = bone.getParent();
 
@@ -696,7 +898,7 @@ class Model {
 
     /**
      * If the range-of-motion task is done, instantiate the DynamicAnimControl
-     * and proceed to LinksScreen.
+     * and proceed to the "links" screen.
      */
     void pollForTaskCompletion() {
         if (romTask == null || !romTask.isDone()) {
@@ -711,16 +913,20 @@ class Model {
             System.out.print(exception);
             return;
         }
-        romCallable.cleanup();
-        romTask = null;
+        this.romCallable.cleanup();
+        this.romTask = null;
 
-        ragdoll = new DynamicAnimControl();
+        this.ragdoll = new DynamicAnimControl();
         float massParameter = 1f;
-        LinkConfig linkConfig = new LinkConfig(massParameter,
-                MassHeuristic.Density, ShapeHeuristic.VertexHull,
+        LinkConfig linkConfig = new LinkConfig(
+                massParameter, MassHeuristic.Density, ShapeHeuristic.VertexHull,
                 new Vector3f(1f, 1f, 1f), CenterHeuristic.Mean);
 
         ragdoll.setConfig(DacConfiguration.torsoName, linkConfig);
+
+        int mbIndex = mainBoneIndex();
+        String mbName = boneName(mbIndex);
+        ragdoll.setMainBoneName(mbName);
 
         int numBones = countBones();
         for (int boneIndex = 0; boneIndex < numBones; ++boneIndex) {
@@ -736,7 +942,21 @@ class Model {
     }
 
     /**
-     * Read the joint limits of the named BoneLink.
+     * Select the previous clip/animation in the loaded C-G model.
+     */
+    void previousAnimation() {
+        int numAnimations = countAnimations();
+        if (animationIndex == bindPoseIndex) {
+            this.animationIndex = numAnimations - 1;
+        } else {
+            --animationIndex;
+        }
+
+        this.animationTime = 0f;
+    }
+
+    /**
+     * Access the joint limits of the named BoneLink.
      *
      * @param boneName the name of the bone (not null, not empty)
      * @return the pre-existing limits (not null)
@@ -765,7 +985,19 @@ class Model {
      */
     void selectLink(String boneName) {
         assert boneName != null;
-        selectedLink = boneName;
+        this.selectedLink = boneName;
+    }
+
+    /**
+     * Alter the animation time for the selected pose.
+     *
+     * @param time the desired animation time (&ge;0, &le;duration)
+     */
+    void setAnimationTime(float time) {
+        assert time >= 0f : time;
+        assert time <= animationDuration() : time;
+
+        this.animationTime = time;
     }
 
     /**
@@ -782,21 +1014,21 @@ class Model {
     }
 
     /**
-     * Alter the model's file-system path.
+     * Alter the model's filesystem path.
      *
-     * @param path the desired file-system path (not null, contains a "/")
+     * @param path the desired filesystem path (not null, contains a "/")
      */
     void setFilePath(String path) {
         assert path != null;
         assert path.contains("/");
 
-        filePathComponents = path.split("/");
-        numComponentsInRoot = 1;
-        loadException = null;
+        this.filePathComponents = path.split("/");
+        this.numComponentsInRoot = 1;
+        this.loadException = null;
         unload();
         /*
          * Use heuristics to guess how many components there are
-         * in the file-system path to the asset root.
+         * in the filesystem path to the asset root.
          */
         int numComponents = filePathComponents.length;
         assert numComponents > 0 : numComponents;
@@ -815,6 +1047,7 @@ class Model {
                         numComponentsInRoot = componentI;
                     }
                     break;
+                default:
             }
         }
     }
@@ -822,7 +1055,7 @@ class Model {
     /**
      * Alter which bones will be linked. A C-G model must be loaded.
      *
-     * @param linkedBones the desired set of linked bones
+     * @param linkedBones the desired set of linked bones (not null)
      */
     void setLinkedBones(BitSet linkedBones) {
         assert linkedBones != null;
@@ -836,14 +1069,14 @@ class Model {
             String[] managerMap = new String[numBones];
 
             Skeleton skeleton = findSkeleton();
-            if (skeleton == null) {
+            if (skeleton == null) { // new animation system
                 Armature armature = findArmature();
                 for (int jointIndex = 0; jointIndex < numBones; ++jointIndex) {
                     Joint joint = armature.getJoint(jointIndex);
-                    managerMap[jointIndex] = findManager(joint, armature);
+                    managerMap[jointIndex] = findManager(joint);
                 }
 
-            } else {
+            } else { // old animation system
                 for (int boneIndex = 0; boneIndex < numBones; ++boneIndex) {
                     Bone bone = skeleton.getBone(boneIndex);
                     managerMap[boneIndex] = findManager(bone, skeleton);
@@ -853,11 +1086,20 @@ class Model {
             List<Mesh> targetList = RagUtils.listDacMeshes(rootSpatial, null);
             Mesh[] targets = new Mesh[targetList.size()];
             targetList.toArray(targets);
-            /*
-             * Enumerate mesh-vertex coordinates and assign them to managers.
-             */
-            coordsMap = RagUtils.coordsMap(targets, managerMap);
+
+            // Enumerate mesh-vertex coordinates and assign them to managers.
+            this.coordsMap = RagUtils.coordsMap(targets, managerMap);
         }
+    }
+
+    /**
+     * Alter the index for the main bone in the torso.
+     *
+     * @param desiredIndex the desired index (&ge;0) or -1 to use the default
+     */
+    void setMainBoneIndex(int desiredIndex) {
+        assert desiredIndex >= -1 : desiredIndex;
+        this.mainBoneIndex = desiredIndex;
     }
 
     /**
@@ -875,29 +1117,65 @@ class Model {
     }
 
     /**
+     * Alter whether model meshes will be rendered.
+     *
+     * @param setting true to render meshes, false to hide them
+     */
+    void setShowingMeshes(boolean setting) {
+        this.isShowingMeshes = setting;
+    }
+
+    /**
      * Start a thread to estimate the range of motion for each linked bone.
      */
     void startRomTask() {
-        romCallable = new RomCallable(this);
+        this.romCallable = new RomCallable(this);
         assert romTask == null;
-        romTask = new FutureTask<>(romCallable);
+        this.romTask = new FutureTask<>(romCallable);
         Thread romThread = new Thread(romTask);
         romThread.start();
+    }
+
+    /**
+     * Toggle the mode for displaying angles.
+     */
+    void toggleAngleMode() {
+        switch (angleMode) {
+            case Degrees:
+                this.angleMode = AngleMode.Radians;
+                break;
+            case Radians:
+                this.angleMode = AngleMode.Degrees;
+                break;
+            default:
+                throw new IllegalStateException("angleMode = " + angleMode);
+        }
     }
 
     /**
      * Toggle the visibility of PhysicsJoint axes in TestScreen.
      */
     void toggleShowingAxes() {
-        isShowingAxes = !isShowingAxes;
+        this.isShowingAxes = !isShowingAxes;
+    }
+
+    /**
+     * Toggle the visibility of the skeleton.
+     */
+    void toggleShowingSkeleton() {
+        this.isShowingSkeleton = !isShowingSkeleton;
     }
 
     /**
      * Unload the loaded C-G model, if any.
      */
     void unload() {
-        rootSpatial = null;
-        ragdoll = null;
+        this.animationIndex = bindPoseIndex;
+        animationNames.clear();
+        this.animationTime = 0f;
+        this.mainBoneIndex = -1;
+        this.rootSpatial = null;
+        this.ragdoll = null;
     }
 
     /**
@@ -912,7 +1190,7 @@ class Model {
 
         String result = "";
         Skeleton skeleton = findSkeleton();
-        if (skeleton == null) {
+        if (skeleton == null) { // new animation system
             Armature armature = findArmature();
             try {
                 RagUtils.validate(rootSpatial);
@@ -921,7 +1199,7 @@ class Model {
                 result = exception.getMessage();
             }
 
-        } else {
+        } else { // old animation system
             try {
                 RagUtils.validate(rootSpatial);
                 RagUtils.validate(skeleton);
@@ -946,8 +1224,8 @@ class Model {
             throw new RuntimeException("No model loaded.");
         }
 
-        List<SkinningControl> skinners = MySpatial.listControls(rootSpatial,
-                SkinningControl.class, null);
+        List<SkinningControl> skinners = MySpatial.listControls(
+                rootSpatial, SkinningControl.class, null);
 
         Armature result = null;
         if (skinners.size() == 1) {
@@ -959,7 +1237,51 @@ class Model {
     }
 
     /**
-     * Find the manager of the specified Bone.
+     * Return the index of the named bone. A C-G model must be loaded.
+     *
+     * @param boneName the name of the bone to find
+     * @return the index (&ge;0) or -1 if not found
+     */
+    private int findBoneIndex(String boneName) {
+        int result;
+
+        Skeleton skeleton = findSkeleton();
+        if (skeleton == null) { // new animation system
+            Armature armature = findArmature();
+            result = armature.getJointIndex(boneName);
+
+        } else { // old animation system
+            result = skeleton.getBoneIndex(boneName);
+        }
+
+        return result;
+    }
+
+    /**
+     * Find the manager of the indexed bone.
+     *
+     * @param startBoneIndex the index of the bone to analyze (&ge;0)
+     * @return the bone/torso name (not null)
+     */
+    private String findManager(int startBoneIndex) {
+        String result;
+
+        Skeleton skeleton = findSkeleton();
+        if (skeleton == null) { // new animation system
+            Armature armature = findArmature();
+            Joint startJoint = armature.getJoint(startBoneIndex);
+            result = findManager(startJoint);
+
+        } else { // old animation system
+            Bone startBone = skeleton.getBone(startBoneIndex);
+            result = findManager(startBone, skeleton);
+        }
+
+        return result;
+    }
+
+    /**
+     * Find the link that manages the specified Bone.
      *
      * @param startBone which Bone to analyze (not null, unaffected)
      * @param skeleton the Skeleton containing the Bone
@@ -988,19 +1310,18 @@ class Model {
     }
 
     /**
-     * Find the manager of the specified Joint.
+     * Find the link that manages the specified armature joint.
      *
      * @param startJoint which Joint to analyze (not null, unaffected)
-     * @param skeleton the Armature containing the Joint
      * @return a bone/torso name (not null)
      */
-    private String findManager(Joint startJoint, Armature skeleton) {
+    private String findManager(Joint startJoint) {
         assert startJoint != null;
 
         String managerName;
         Joint joint = startJoint;
         while (true) {
-            int jointIndex = skeleton.getJointIndex(joint);
+            int jointIndex = joint.getId();
             if (linkedBones.get(jointIndex)) {
                 managerName = joint.getName();
                 break;
@@ -1021,53 +1342,21 @@ class Model {
      */
     private void recalculateInfluence() {
         Skeleton skeleton = findSkeleton();
-        if (skeleton == null) {
+        if (skeleton == null) { // new animation system
             Armature armature = findArmature();
             if (armature != null) {
-                anyInfluenceBones = InfluenceUtil.addAllInfluencers(
+                this.anyInfluenceBones = InfluenceUtil.addAllInfluencers(
                         rootSpatial, armature);
                 armature.applyBindPose();
             }
-        } else {
-            anyInfluenceBones = InfluenceUtil.addAllInfluencers(rootSpatial,
-                    skeleton);
+        } else { // old animation system
+            this.anyInfluenceBones = InfluenceUtil.addAllInfluencers(
+                    rootSpatial, skeleton);
         }
 
         int numBones = countBones();
-        directInfluenceBones = new BitSet(numBones);
+        this.directInfluenceBones = new BitSet(numBones);
         InfluenceUtil.addDirectInfluencers(rootSpatial, directInfluenceBones);
-    }
-
-    /**
-     * Recalculate the initial Transform for visualization.
-     */
-    private void recalculateInitTransform() {
-        Spatial cgmCopy = Heart.deepCopy(rootSpatial);
-        /*
-         * Scale the copy uniformly to the desired height, assuming Y-up
-         * orientation.
-         */
-        Vector3f[] minMax = MySpatial.findMinMaxCoords(cgmCopy);
-        Vector3f min = minMax[0];
-        Vector3f max = minMax[1];
-        float oldHeight = max.y - min.y;
-        if (oldHeight > 0f) {
-            cgmCopy.scale(cgmHeight / oldHeight);
-        }
-        /*
-         * Translate a copy's center so that it rests on the X-Z plane, and its
-         * center lies on the Y axis.
-         */
-        minMax = MySpatial.findMinMaxCoords(cgmCopy);
-        min = minMax[0];
-        max = minMax[1];
-        Vector3f center = MyVector3f.midpoint(min, max, null);
-        Vector3f offset = new Vector3f(center.x, min.y, center.z);
-        Vector3f location = cgmCopy.getWorldTranslation();
-        location.subtractLocal(offset);
-        MySpatial.setWorldLocation(cgmCopy, location);
-
-        initTransform.set(cgmCopy.getLocalTransform());
     }
 
     /**
@@ -1076,8 +1365,8 @@ class Model {
      * @return the pre-existing control that was removed, or null if none
      */
     private DynamicAnimControl removeDac() {
-        List<DynamicAnimControl> list = MySpatial.listControls(rootSpatial,
-                DynamicAnimControl.class, null);
+        List<DynamicAnimControl> list = MySpatial.listControls(
+                rootSpatial, DynamicAnimControl.class, null);
         DynamicAnimControl result = null;
         if (!list.isEmpty()) {
             assert list.size() == 1 : list.size();
@@ -1087,5 +1376,29 @@ class Model {
         }
 
         return result;
+    }
+
+    /**
+     * Update the list of all clips/animations in the loaded C-G model.
+     */
+    private void updateAnimationNames() {
+        animationNames.clear();
+
+        List<AnimControl> animControls = MySpatial
+                .listControls(rootSpatial, AnimControl.class, null);
+        for (AnimControl animControl : animControls) {
+            Collection<String> names = animControl.getAnimationNames();
+            animationNames.addAll(names);
+        }
+
+        List<AnimComposer> composers = MySpatial
+                .listControls(rootSpatial, AnimComposer.class, null);
+        for (AnimComposer composer : composers) {
+            Collection<String> names = composer.getAnimClipsNames();
+            animationNames.addAll(names);
+        }
+
+        this.animationIndex = bindPoseIndex;
+        this.animationTime = 0f;
     }
 }

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2014-2021, Stephen Gold
+ Copyright (c) 2014-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -33,14 +33,12 @@ import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
 import com.jme3.bullet.collision.shapes.ConeCollisionShape;
 import com.jme3.bullet.collision.shapes.CylinderCollisionShape;
-import com.jme3.bullet.collision.shapes.EmptyShape;
 import com.jme3.bullet.collision.shapes.HullCollisionShape;
 import com.jme3.bullet.collision.shapes.MultiSphere;
 import com.jme3.bullet.collision.shapes.SimplexCollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.collision.shapes.infos.ChildCollisionShape;
 import com.jme3.math.Vector3f;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.MyString;
 import jme3utilities.Validate;
@@ -51,7 +49,7 @@ import jme3utilities.math.MyVector3f;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MyShape {
+final public class MyShape {
     // *************************************************************************
     // constants and loggers
 
@@ -72,7 +70,7 @@ public class MyShape {
     // new methods exposed
 
     /**
-     * Describe the type of a shape.
+     * Describe the type of the specified shape.
      *
      * @param shape the shape to describe (not null, unaffected)
      * @return the type description (not null)
@@ -234,8 +232,8 @@ public class MyShape {
         int numChildren = children.length;
         float[] result = new float[numChildren];
         for (int i = 0; i < numChildren; ++i) {
-            CollisionShape childShape = children[i].getShape();
-            result[i] = volume(childShape);
+            CollisionShape baseShape = children[i].getShape();
+            result[i] = volume(baseShape);
         }
 
         return result;
@@ -310,7 +308,8 @@ public class MyShape {
         } else if (shape instanceof CylinderCollisionShape) {
             Vector3f halfExtents = halfExtents(shape, null);
             int axisIndex = mainAxisIndex(shape);
-            float r1, r2;
+            float r1;
+            float r2;
             switch (axisIndex) {
                 case PhysicsSpace.AXIS_X:
                     r1 = halfExtents.y;
@@ -353,8 +352,8 @@ public class MyShape {
      * @param newHalfExtents (not null, no negative component, unaffected)
      * @return a new shape, or null if not possible
      */
-    public static CollisionShape setHalfExtents(CollisionShape oldShape,
-            Vector3f newHalfExtents) {
+    public static CollisionShape setHalfExtents(
+            CollisionShape oldShape, Vector3f newHalfExtents) {
         Validate.nonNull(oldShape, "old shape");
         Validate.nonNegative(newHalfExtents, "new half extents");
 
@@ -365,7 +364,9 @@ public class MyShape {
         } else if (oldShape instanceof CapsuleCollisionShape
                 || oldShape instanceof ConeCollisionShape) {
             int axisIndex = mainAxisIndex(oldShape);
-            float axisHalfExtent, radius1, radius2;
+            float axisHalfExtent;
+            float radius1;
+            float radius2;
             switch (axisIndex) {
                 case PhysicsSpace.AXIS_X:
                     axisHalfExtent = newHalfExtents.x;
@@ -433,8 +434,8 @@ public class MyShape {
      * @param newHeight the desired unscaled height (&ge;0)
      * @return a new shape
      */
-    public static CollisionShape setHeight(CollisionShape oldShape,
-            float newHeight) {
+    public static CollisionShape setHeight(
+            CollisionShape oldShape, float newHeight) {
         Validate.nonNull(oldShape, "old shape");
         Validate.nonNegative(newHeight, "new height");
 
@@ -485,8 +486,8 @@ public class MyShape {
      * @param newRadius the desired unscaled radius (&ge;0)
      * @return a new shape
      */
-    public static CollisionShape setRadius(CollisionShape oldShape,
-            float newRadius) {
+    public static CollisionShape setRadius(
+            CollisionShape oldShape, float newRadius) {
         Validate.nonNull(oldShape, "old shape");
         Validate.nonNegative(newRadius, "new radius");
 
@@ -537,61 +538,8 @@ public class MyShape {
      * @return the volume (in physics-space units cubed, &ge;0)
      */
     public static float volume(CollisionShape shape) {
-        Vector3f scale = shape.getScale(null);
-        float volume = scale.x * scale.y * scale.z;
-
-        if (shape instanceof BoxCollisionShape) {
-            volume *= ((BoxCollisionShape) shape).unscaledVolume();
-
-        } else if (shape instanceof CapsuleCollisionShape) {
-            volume *= ((CapsuleCollisionShape) shape).unscaledVolume();
-
-        } else if (shape instanceof CompoundCollisionShape) {
-            /*
-             * Scale factors get applied during calculation of child volumes.
-             * Any overlaps among the children are ignored,
-             * which exaggerates of the estimated volume.
-             */
-            CompoundCollisionShape compound = (CompoundCollisionShape) shape;
-            volume = 0f;
-            for (ChildCollisionShape child : compound.listChildren()) {
-                float childVolume = volume(child.getShape());
-                volume += childVolume;
-            }
-
-        } else if (shape instanceof ConeCollisionShape) {
-            ConeCollisionShape cone = (ConeCollisionShape) shape;
-            volume *= cone.unscaledVolume();
-
-        } else if (shape instanceof CylinderCollisionShape) {
-            CylinderCollisionShape cylinder = (CylinderCollisionShape) shape;
-            volume *= cylinder.unscaledVolume();
-
-        } else if (shape instanceof EmptyShape) {
-            volume = 0f;
-
-        } else if (shape instanceof HullCollisionShape) {
-            HullCollisionShape hull = (HullCollisionShape) shape;
-            volume = hull.scaledVolume();
-
-        } else if (shape instanceof MultiSphere) {
-            MultiSphere multiSphere = (MultiSphere) shape;
-            volume = multiSphere.scaledVolume();
-
-        } else if (shape instanceof SimplexCollisionShape) {
-            SimplexCollisionShape simplex = (SimplexCollisionShape) shape;
-            volume *= simplex.unscaledVolume();
-
-        } else if (shape instanceof SphereCollisionShape) {
-            SphereCollisionShape sphere = (SphereCollisionShape) shape;
-            volume *= sphere.unscaledVolume();
-
-        } else {
-            logger.log(Level.SEVERE, "shape={0}", shape.getClass());
-            throw new IllegalArgumentException("Shape must be closed!");
-        }
-
-        assert volume >= 0f : volume;
-        return volume;
+        float result = shape.scaledVolume();
+        assert result >= 0f : result;
+        return result;
     }
 }

@@ -32,6 +32,8 @@
 package com.jme3.bullet.collision.shapes;
 
 import com.jme3.bullet.PhysicsSpace;
+import com.jme3.bullet.collision.shapes.infos.IndexedMesh;
+import com.jme3.bullet.util.DebugShapeFactory;
 import com.jme3.export.InputCapsule;
 import com.jme3.export.JmeExporter;
 import com.jme3.export.JmeImporter;
@@ -48,8 +50,8 @@ import java.util.logging.Logger;
 import jme3utilities.Validate;
 
 /**
- * A CollisionShape for terrain defined by a matrix of height values, based on
- * Bullet's btHeightfieldTerrainShape. Should be more efficient than an
+ * A collision shape for terrain defined by a matrix of height values, based on
+ * Bullet's {@code btHeightfieldTerrainShape}. Should be more efficient than an
  * equivalent MeshCollisionShape. Not for use in dynamic bodies. Collisions
  * between HeightfieldCollisionShape, MeshCollisionShape, and
  * PlaneCollisionShape objects are never detected.
@@ -239,12 +241,11 @@ public class HeightfieldCollisionShape extends CollisionShape {
         Validate.nonEmpty(heightmap, "heightmap");
         assert heightmap.length >= stickLength * stickWidth : heightmap.length;
         Validate.nonNegative(scale, "scale");
-        Validate.inRange(upAxis, "up axis", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(upAxis, "up axis");
 
-        heightStickLength = stickLength;
-        heightStickWidth = stickWidth;
-        heightfieldData = heightmap.clone();
+        this.heightStickLength = stickLength;
+        this.heightStickWidth = stickWidth;
+        this.heightfieldData = heightmap.clone();
         this.scale.set(scale);
         this.upAxis = upAxis;
         this.flipQuadEdges = flipQuadEdges;
@@ -284,25 +285,8 @@ public class HeightfieldCollisionShape extends CollisionShape {
     @Override
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
-        // directBuffer not cloned
-        // heightfieldData not cloned
+        // directBuffer and heightfieldData are never cloned.
         createShape();
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public HeightfieldCollisionShape jmeClone() {
-        try {
-            HeightfieldCollisionShape clone
-                    = (HeightfieldCollisionShape) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -317,21 +301,37 @@ public class HeightfieldCollisionShape extends CollisionShape {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        heightStickWidth = capsule.readInt(tagHeightStickWidth, 0);
-        heightStickLength = capsule.readInt(tagHeightStickLength, 0);
-        heightScale = capsule.readFloat(tagHeightScale, 0f);
-        minHeight = capsule.readFloat(tagMinHeight, 0f);
-        maxHeight = capsule.readFloat(tagMaxHeight, 0f);
-        upAxis = capsule.readInt(tagUpAxis, PhysicsSpace.AXIS_Y);
-        heightfieldData = capsule.readFloatArray(tagHeightfieldData,
-                new float[0]);
-        flipQuadEdges = capsule.readBoolean(tagFlipQuadEdges, true);
-        flipTriangleWinding = capsule.readBoolean(tagFlipTriangleWinding,
-                false);
-        useDiamond = capsule.readBoolean(tagUseDiamond, false);
-        useZigzag = capsule.readBoolean(tagUseZigzag, false);
+        this.heightStickWidth = capsule.readInt(tagHeightStickWidth, 0);
+        this.heightStickLength = capsule.readInt(tagHeightStickLength, 0);
+        this.heightScale = capsule.readFloat(tagHeightScale, 0f);
+        this.minHeight = capsule.readFloat(tagMinHeight, 0f);
+        this.maxHeight = capsule.readFloat(tagMaxHeight, 0f);
+        this.upAxis = capsule.readInt(tagUpAxis, PhysicsSpace.AXIS_Y);
+        this.heightfieldData
+                = capsule.readFloatArray(tagHeightfieldData, new float[0]);
+        this.flipQuadEdges = capsule.readBoolean(tagFlipQuadEdges, true);
+        this.flipTriangleWinding
+                = capsule.readBoolean(tagFlipTriangleWinding, false);
+        this.useDiamond = capsule.readBoolean(tagUseDiamond, false);
+        this.useZigzag = capsule.readBoolean(tagUseZigzag, false);
 
         createShape();
+    }
+
+    /**
+     * Approximate this shape with a splittable shape.
+     *
+     * @return a new splittable shape
+     */
+    @Override
+    public CollisionShape toSplittableShape() {
+        // Generate debug triangles.
+        FloatBuffer buffer = DebugShapeFactory
+                .getDebugTriangles(this, DebugShapeFactory.lowResolution);
+        IndexedMesh nativeMesh = new IndexedMesh(buffer);
+        MeshCollisionShape result = new MeshCollisionShape(true, nativeMesh);
+
+        return result;
     }
 
     /**
@@ -370,9 +370,8 @@ public class HeightfieldCollisionShape extends CollisionShape {
 
         float min = heightfieldData[0];
         float max = heightfieldData[0];
-        /*
-         * Find the min and max heights in the data.
-         */
+
+        // Find the min and max heights in the data.
         for (float height : heightfieldData) {
             if (height < min) {
                 min = height;
@@ -393,32 +392,38 @@ public class HeightfieldCollisionShape extends CollisionShape {
         } else {
             max = -min;
         }
-        minHeight = min;
-        maxHeight = max;
+        this.minHeight = min;
+        this.maxHeight = max;
     }
 
     /**
-     * Instantiate a square btHeightfieldTerrainShape.
+     * Instantiate a square {@code btHeightfieldTerrainShape}.
+     *
+     * @param heightmap (not null, length&ge;4, length a perfect square,
+     * unaffected)
+     * @param worldScale the desired scale factor for each local axis (not null,
+     * no negative component, unaffected)
      */
-    private void createCollisionHeightfield(float[] heightmap,
-            Vector3f worldScale) {
+    private void
+            createCollisionHeightfield(float[] heightmap, Vector3f worldScale) {
         scale.set(worldScale);
 
-        heightfieldData = heightmap.clone();
-        heightStickWidth = (int) FastMath.sqrt(heightfieldData.length);
+        this.heightfieldData = heightmap.clone();
+        this.heightStickWidth = (int) FastMath.sqrt(heightfieldData.length);
         assert heightStickWidth > 1 : heightStickWidth;
 
-        heightStickLength = heightStickWidth;
+        this.heightStickLength = heightStickWidth;
 
         calculateMinAndMax();
         createShape();
     }
 
     /**
-     * Instantiate the configured btHeightfieldTerrainShape.
+     * Instantiate the configured {@code btHeightfieldTerrainShape}.
      */
     private void createShape() {
-        directBuffer = BufferUtils.createFloatBuffer(heightfieldData.length);
+        this.directBuffer
+                = BufferUtils.createFloatBuffer(heightfieldData.length);
         for (float height : heightfieldData) {
             if (!Float.isFinite(height)) {
                 throw new IllegalArgumentException("illegal height: " + height);

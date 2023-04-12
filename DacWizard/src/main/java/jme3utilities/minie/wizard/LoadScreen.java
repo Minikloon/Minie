@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -29,13 +29,13 @@ package jme3utilities.minie.wizard;
 import com.jme3.animation.Skeleton;
 import com.jme3.app.Application;
 import com.jme3.app.state.AppStateManager;
-import com.jme3.math.Transform;
 import com.jme3.scene.Spatial;
 import de.lessvoid.nifty.controls.Button;
 import de.lessvoid.nifty.elements.Element;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.InitialState;
+import jme3utilities.MyString;
 import jme3utilities.debug.SkeletonVisualizer;
 import jme3utilities.nifty.GuiScreenController;
 import jme3utilities.ui.InputMode;
@@ -57,13 +57,21 @@ class LoadScreen extends GuiScreenController {
     // fields
 
     /**
-     * element of GUI button to proceed to the next Screen
+     * element of the GUI button to proceed to the "bones" screen
      */
     private Element nextElement;
     /**
-     * root spatial of the C-G model being previewed
+     * animation time of the pose being viewed (in seconds)
+     */
+    private float viewedAnimationTime;
+    /**
+     * root spatial of the C-G model being viewed, or null for none
      */
     private Spatial viewedSpatial;
+    /**
+     * clip/animation name of the pose being viewed
+     */
+    private String viewedAnimationName;
     // *************************************************************************
     // constructors
 
@@ -83,7 +91,7 @@ class LoadScreen extends GuiScreenController {
      *
      * @return "" if ready to proceed, otherwise an explanatory message
      */
-    String feedback() {
+    static String feedback() {
         Model model = DacWizard.getModel();
         int numDacs = model.countDacs();
         int numSkeletonControls = model.countSControls();
@@ -101,12 +109,14 @@ class LoadScreen extends GuiScreenController {
             result = String.format(
                     "The model has %d skinning/skeleton controls.",
                     numSkeletonControls);
+
         } else if (model.countBones() < 1) {
-            if (model.findSkeleton() == null) {
+            if (model.findSkeleton() == null) { // new animation system
                 result = "The model's Armature lacks joints.";
-            } else {
+            } else { // old animation system
                 result = "The model's Skeleton lacks bones.";
             }
+
         } else if (numDacs > 1) {
             result = String.format("The model has %d DACs.", numDacs);
         } else {
@@ -125,8 +135,8 @@ class LoadScreen extends GuiScreenController {
      * @param application (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager,
-            Application application) {
+    public void initialize(
+            AppStateManager stateManager, Application application) {
         super.initialize(stateManager, application);
 
         InputMode inputMode = InputMode.findMode("load");
@@ -146,11 +156,16 @@ class LoadScreen extends GuiScreenController {
         if (nextButton == null) {
             throw new RuntimeException("missing GUI control: nextButton");
         }
-        nextElement = nextButton.getElement();
+        this.nextElement = nextButton.getElement();
 
         DacWizard wizard = DacWizard.getApplication();
         wizard.clearScene();
-        viewedSpatial = null;
+        this.viewedSpatial = null;
+        this.viewedAnimationName = null;
+        this.viewedAnimationTime = Float.NaN;
+
+        Model model = DacWizard.getModel();
+        model.setShowingMeshes(true);
     }
 
     /**
@@ -171,19 +186,28 @@ class LoadScreen extends GuiScreenController {
         updatePath();
         updateToggleButton();
 
+        // Update the 3-D scene.
         Model model = DacWizard.getModel();
         Spatial nextSpatial = model.getRootSpatial();
-        if (nextSpatial != viewedSpatial) {
+        String nextAnimationName = model.animationName();
+        float nextAnimationTime = model.animationTime();
+        if (nextSpatial != viewedSpatial
+                || !nextAnimationName.equals(viewedAnimationName)
+                || nextAnimationTime != viewedAnimationTime) {
             DacWizard wizard = DacWizard.getApplication();
             wizard.clearScene();
-            viewedSpatial = nextSpatial;
+
+            this.viewedSpatial = nextSpatial;
+            this.viewedAnimationName = nextAnimationName;
+            this.viewedAnimationTime = nextAnimationTime;
+
             if (nextSpatial != null) {
                 Spatial cgModel = Heart.deepCopy(nextSpatial);
-                Transform initTransform = model.copyInitTransform(null);
-                cgModel.setLocalTransform(initTransform);
-                wizard.makeScene(cgModel);
+                wizard.makeScene(cgModel, nextAnimationName, nextAnimationTime);
             }
         }
+
+        updatePosingControls();
     }
     // *************************************************************************
     // private methods
@@ -209,6 +233,40 @@ class LoadScreen extends GuiScreenController {
         } else {
             nextElement.hide();
         }
+    }
+
+    /**
+     * Update the posing controls.
+     */
+    private void updatePosingControls() {
+        String anText = "";
+        String atText = "";
+        String naText = "";
+        String paText = "";
+
+        if (viewedSpatial != null) {
+            Model model = DacWizard.getModel();
+            int numAnimations = model.countAnimations();
+            if (numAnimations > 0) {
+                paText = "-";
+                naText = "+";
+            }
+
+            float duration = model.animationDuration();
+            if (duration > 0f) {
+                atText = Float.toString(viewedAnimationTime) + " seconds";
+            }
+
+            anText = viewedAnimationName;
+            if (!anText.equals(DacWizard.bindPoseName)) {
+                anText = MyString.quote(anText);
+            }
+        }
+
+        setStatusText("animationName", anText);
+        setButtonText("animationTime", atText);
+        setButtonText("nextAnimation", naText);
+        setButtonText("previousAnimation", paText);
     }
 
     /**
@@ -249,10 +307,12 @@ class LoadScreen extends GuiScreenController {
         Model model = DacWizard.getModel();
         Spatial root = model.getRootSpatial();
         if (sv != null && root != null) {
+            boolean isShown = model.isShowingSkeleton();
+            sv.setEnabled(isShown);
+
             Skeleton skeleton = model.findSkeleton();
             String armature = (skeleton == null) ? "armature" : "skeleton";
-
-            if (sv.isEnabled()) {
+            if (isShown) {
                 buttonText = "Hide " + armature;
             } else {
                 buttonText = "Show " + armature;

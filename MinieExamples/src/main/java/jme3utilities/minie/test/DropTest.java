@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2022, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -27,6 +27,7 @@
 package jme3utilities.minie.test;
 
 import com.jme3.app.Application;
+import com.jme3.app.StatsAppState;
 import com.jme3.app.state.AppState;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.PhysicsSpace;
@@ -36,7 +37,6 @@ import com.jme3.bullet.collision.PhysicsRayTestResult;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
 import com.jme3.bullet.collision.shapes.MeshCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.BulletDebugAppState;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.objects.PhysicsBody;
@@ -72,16 +72,19 @@ import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.List;
+import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.BackingStoreException;
 import jme3utilities.Heart;
+import jme3utilities.MeshNormals;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
+import jme3utilities.MyString;
+import jme3utilities.math.noise.Generator;
 import jme3utilities.minie.PhysicsDumper;
 import jme3utilities.minie.test.common.PhysicsDemo;
 import jme3utilities.minie.test.mesh.ClothHexagon;
-import jme3utilities.minie.test.shape.ShapeGenerator;
 import jme3utilities.ui.CameraOrbitAppState;
 import jme3utilities.ui.InputMode;
 import jme3utilities.ui.Signals;
@@ -132,24 +135,34 @@ public class DropTest
     /**
      * current drops, in order of creation
      */
-    final private Deque<Drop> drops = new ArrayDeque<>(maxNumDrops);
+    final private static Deque<Drop> drops = new ArrayDeque<>(maxNumDrops);
     /**
      * selected drop, or null if none
      */
-    private Drop selectedDrop = null;
+    private static Drop selectedDrop = null;
     /**
      * AppState to manage the status overlay
      */
-    private DropTestStatus status;
+    private static DropTestStatus status;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private SoftPhysicsAppState bulletAppState;
+    private static SoftPhysicsAppState bulletAppState;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the DropTest application.
+     */
+    public DropTest() { // made explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Count how many rigid bodies are active.
+     *
+     * @return the count (&ge;0)
      */
     int countActive() {
         int result = 0;
@@ -166,8 +179,10 @@ public class DropTest
 
     /**
      * Count how many drops are in the PhysicsSpace.
+     *
+     * @return the count (&ge;0)
      */
-    int countDrops() {
+    static int countDrops() {
         int result = drops.size();
         return result;
     }
@@ -175,30 +190,28 @@ public class DropTest
     /**
      * Main entry point for the DropTest application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Enable direct-memory tracking.
-         */
+
+        // Enable direct-memory tracking.
         BufferUtils.setTrackDirectMemoryEnabled(true);
 
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
         try {
             settings.load(applicationName);
-        } catch (BackingStoreException e) {
+        } catch (BackingStoreException exception) {
             logger.warning("Failed to load AppSettings.");
         }
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setTitle(applicationName); // the window's title bar
-        settings.setVSync(true);
+        settings.setTitle(title); // Customize the window's title bar.
 
         Application application = new DropTest();
         application.setSettings(settings);
@@ -222,29 +235,6 @@ public class DropTest
         String platformName = status.platformType();
         addPlatform(platformName, platformSurfaceY);
     }
-
-    /**
-     * Update the debug materials of all collision objects.
-     */
-    void setDebugMaterialsAll() {
-        PhysicsSpace physicsSpace = getPhysicsSpace();
-        for (PhysicsCollisionObject pco : physicsSpace.getPcoList()) {
-            setDebugMaterial(pco);
-        }
-    }
-
-    /**
-     * Update the ShadowMode of the debug scene.
-     */
-    void setDebugShadowMode() {
-        RenderQueue.ShadowMode mode;
-        if (status.isWireframe()) {
-            mode = RenderQueue.ShadowMode.Off;
-        } else {
-            mode = RenderQueue.ShadowMode.CastAndReceive;
-        }
-        bulletAppState.setDebugShadowMode(mode);
-    }
     // *************************************************************************
     // PhysicsDemo methods
 
@@ -252,10 +242,12 @@ public class DropTest
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
         status = new DropTestStatus();
         boolean success = stateManager.attach(status);
         assert success;
+
+        super.acorusInit();
 
         configureCamera();
         configureDumper();
@@ -263,14 +255,17 @@ public class DropTest
         configurePhysics();
         generateShapes();
 
+        // Hide the render-statistics overlay.
+        stateManager.getState(StatsAppState.class).toggleStats();
+
         ColorRGBA skyColor = new ColorRGBA(0.1f, 0.2f, 0.4f, 1f);
         viewPort.setBackgroundColor(skyColor);
 
         String platformName = status.platformType();
         addPlatform(platformName, platformSurfaceY);
 
-        int maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
-        int degree = Math.min(8, maxDegree);
+        Integer maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
+        int degree = (maxDegree == null) ? 1 : Math.min(8, maxDegree);
         renderer.setDefaultAnisotropicFilter(degree);
 
         addADrop(1);
@@ -290,13 +285,13 @@ public class DropTest
             case "corner":
             case "sieve":
             case "tray":
-                addPlatform(platformName, DebugMeshNormals.Facet, topY);
+                addPlatform(platformName, MeshNormals.Facet, topY);
                 break;
 
             case "candyDish":
             case "dimples":
             case "smooth":
-                addPlatform(platformName, DebugMeshNormals.Smooth, topY);
+                addPlatform(platformName, MeshNormals.Smooth, topY);
                 break;
 
             case "trampoline":
@@ -309,22 +304,40 @@ public class DropTest
     }
 
     /**
+     * Calculate screen bounds for the detailed help node.
+     *
+     * @param viewPortWidth (in pixels, &gt;0)
+     * @param viewPortHeight (in pixels, &gt;0)
+     * @return a new instance
+     */
+    @Override
+    public Rectangle detailedHelpBounds(int viewPortWidth, int viewPortHeight) {
+        // Position help nodes below the status.
+        float margin = 10f; // in pixels
+        float leftX = margin;
+        float topY = viewPortHeight - 160f - margin;
+        float width = viewPortWidth - leftX - margin;
+        float height = topY - margin;
+        Rectangle result = new Rectangle(leftX, topY, width, height);
+
+        return result;
+    }
+
+    /**
      * Initialize the library of named materials during startup.
      */
     @Override
     public void generateMaterials() {
         super.generateMaterials();
-        /*
-         * shiny, lit material for the selected drop
-         */
+
+        // shiny, lit material for the selected drop
         ColorRGBA lightGray = new ColorRGBA(0.6f, 0.6f, 0.6f, 1f);
         Material selected
                 = MyAsset.createShinyMaterial(assetManager, lightGray);
         selected.setFloat("Shininess", 15f);
         registerMaterial("selected", selected);
-        /*
-         * shiny, lit materials for dynamic bodies in drops
-         */
+
+        // shiny, lit materials for dynamic bodies in drops
         ColorRGBA[] dropColors = new ColorRGBA[numDropColors];
         dropColors[0] = new ColorRGBA(0.2f, 0f, 0f, 1f); // ruby
         dropColors[1] = new ColorRGBA(0f, 0.07f, 0f, 1f); // emerald
@@ -350,34 +363,29 @@ public class DropTest
     public void generateShapes() {
         super.generateShapes();
         CollisionShape shape;
-        /*
-         * "ankh" using manual decomposition
-         */
+
+        // "ankh" using manual decomposition
         String ankhPath = "CollisionShapes/ankh.j3o";
         shape = (CollisionShape) assetManager.loadAsset(ankhPath);
         registerShape("ankh", shape);
-        /*
-         * "banana" using manual decomposition
-         */
+
+        // "banana" using manual decomposition
         String bananaPath = "CollisionShapes/banana.j3o";
         shape = (CollisionShape) assetManager.loadAsset(bananaPath);
         registerShape("banana", shape);
-        /*
-         * "barrel"
-         */
+
+        // "barrel"
         String barrelPath = "CollisionShapes/barrel.j3o";
         shape = (CollisionShape) assetManager.loadAsset(barrelPath);
         shape.setScale(3f);
         registerShape("barrel", shape);
-        /*
-         * "bowlingPin" using manual decomposition
-         */
+
+        // "bowlingPin" using manual decomposition
         String bowlingPinPath = "CollisionShapes/bowlingPin.j3o";
         shape = (CollisionShape) assetManager.loadAsset(bowlingPinPath);
         registerShape("bowlingPin", shape);
-        /*
-         * "candyDish"
-         */
+
+        // "candyDish"
         String candyDishPath = "Models/CandyDish/CandyDish.j3o";
         Node candyDishNode = (Node) assetManager.loadModel(candyDishPath);
         Geometry candyDishGeometry = (Geometry) candyDishNode.getChild(0);
@@ -385,59 +393,52 @@ public class DropTest
         shape = new MeshCollisionShape(candyDishMesh);
         shape.setScale(5f);
         registerShape("candyDish", shape);
-        /*
-         * "duck" using V-HACD
-         */
+
+        // "duck" using V-HACD
         String duckPath = "CollisionShapes/duck.j3o";
         shape = (CollisionShape) assetManager.loadAsset(duckPath);
         shape.setScale(2f);
         registerShape("duck", shape);
-        /*
-         * "heart"
-         */
+
+        // "heart"
         String heartPath = "CollisionShapes/heart.j3o";
         shape = (CollisionShape) assetManager.loadAsset(heartPath);
         shape.setScale(1.2f);
         registerShape("heart", shape);
-        /*
-         * "horseshoe" using manual decomposition
-         */
+
+        // "horseshoe" using manual decomposition
         String horseshoePath = "CollisionShapes/horseshoe.j3o";
         shape = (CollisionShape) assetManager.loadAsset(horseshoePath);
         registerShape("horseshoe", shape);
-        /*
-         * "sword" using V-HACD
-         */
+
+        // "sword" using V-HACD
         String swordPath = "CollisionShapes/sword.j3o";
         shape = (CollisionShape) assetManager.loadAsset(swordPath);
         shape.setScale(5f);
         registerShape("sword", shape);
-        /*
-         * "teapot" using V-HACD
-         */
+
+        // "teapot" using V-HACD
         String teapotPath = "CollisionShapes/teapot.j3o";
         shape = (CollisionShape) assetManager.loadAsset(teapotPath);
         shape.setScale(3f);
         registerShape("teapot", shape);
-        /*
-         * letter shapes
-         */
+
+        // letter shapes
         for (char character = 'A'; character <= 'Z'; ++character) {
             char[] array = {character};
             String glyphString = new String(array);
-            String assetPath = String.format("CollisionShapes/glyphs/%s.j3o",
-                    glyphString);
+            String assetPath = String.format(
+                    "CollisionShapes/glyphs/%s.j3o", glyphString);
             shape = (CollisionShape) assetManager.loadAsset(assetPath);
             registerShape(glyphString, shape);
         }
-        /*
-         * digit shapes
-         */
+
+        // digit shapes
         for (char character = '0'; character <= '9'; ++character) {
             char[] array = {character};
             String glyphString = new String(array);
-            String assetPath = String.format("CollisionShapes/glyphs/%s.j3o",
-                    glyphString);
+            String assetPath = String.format(
+                    "CollisionShapes/glyphs/%s.j3o", glyphString);
             shape = (CollisionShape) assetManager.loadAsset(assetPath);
             registerShape(glyphString, shape);
         }
@@ -455,7 +456,7 @@ public class DropTest
     }
 
     /**
-     * Determine the length of debug axis arrows (when they're visible).
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -465,8 +466,8 @@ public class DropTest
     }
 
     /**
-     * Add application-specific hotkey/button bindings and override existing
-     * ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -511,14 +512,11 @@ public class DropTest
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind(asToggleVArrows, KeyInput.KEY_K);
+        dim.bind(asToggleWArrows, KeyInput.KEY_N);
         dim.bind("toggle wireframe", KeyInput.KEY_SLASH);
 
         dim.bind("value+7", KeyInput.KEY_NUMPAD9);
         dim.bind("value-7", KeyInput.KEY_NUMPAD7);
-        /*
-         * The help node can't be created until all hotkeys are bound.
-         */
-        addHelp();
     }
 
     /**
@@ -574,9 +572,12 @@ public class DropTest
 
                 case "toggle childColor":
                     status.toggleChildColor();
+                    setDebugMaterialsAll();
                     return;
                 case "toggle wireframe":
                     status.toggleWireframe();
+                    setDebugMaterialsAll();
+                    setDebugShadowMode();
                     return;
 
                 case "value+7":
@@ -585,9 +586,23 @@ public class DropTest
                 case "value-7":
                     status.advanceValue(-7);
                     return;
+
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        status.resize(newWidth, newHeight);
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -599,7 +614,7 @@ public class DropTest
     public void postAdd(PhysicsCollisionObject pco) {
         Object appData = pco.getApplicationData();
         if (appData == null) {
-            ShapeGenerator random = getGenerator();
+            Random random = getGenerator();
             String materialName = "drop" + random.nextInt(numDropColors);
             Material debugMaterial = findMaterial(materialName);
             assert debugMaterial != null : materialName;
@@ -681,7 +696,7 @@ public class DropTest
             return false; // too many drops
         }
 
-        ShapeGenerator random = getGenerator();
+        Generator random = getGenerator();
         Vector3f startLocation = random.nextVector3f(); //TODO garbage
         startLocation.multLocal(2.5f, 5f, 2.5f);
         startLocation.y += 20f;
@@ -707,21 +722,9 @@ public class DropTest
     }
 
     /**
-     * Attach a Node to display hotkey help/hints.
-     */
-    private void addHelp() {
-        float margin = 10f; // in pixels
-        float width = 400f; // in pixels
-        float height = cam.getHeight() - (2f * margin + 2f * 20f);
-        float leftX = cam.getWidth() - (width + margin);
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
-    }
-
-    /**
      * Add lighting and shadows to the specified scene.
+     *
+     * @param rootSpatial which scene (not null)
      */
     private void addLighting(Spatial rootSpatial) {
         ColorRGBA ambientColor = new ColorRGBA(0.5f, 0.5f, 0.5f, 1f);
@@ -739,8 +742,8 @@ public class DropTest
         int mapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                        numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, mapSize, numSplits);
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
         dlsr.setEdgesThickness(5);
         dlsr.setLight(sun);
@@ -760,16 +763,15 @@ public class DropTest
         PhysicsSoftBody softBody = new PhysicsSoftBody();
         NativeSoftBodyUtil.appendFromTriMesh(mesh, softBody);
         softBody.applyTranslation(new Vector3f(0f, y, 0f));
-        /*
-         * Pin every node on the perimeter.
-         */
+
+        // Pin every node on the perimeter.
         int numNodes = mesh.getVertexCount();
         int numInteriorNodes = 1 + 3 * numRings * (numRings - 1);
         for (int nodeI = numInteriorNodes; nodeI < numNodes; ++nodeI) {
             softBody.setNodeMass(nodeI, PhysicsBody.massForStatic);
         }
 
-        softBody.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        softBody.setDebugMeshNormals(MeshNormals.Smooth);
         softBody.setMargin(1f);
         softBody.setMass(100f);
 
@@ -801,7 +803,7 @@ public class DropTest
     }
 
     /**
-     * Create and configure a new PhysicsSpace.
+     * Configure physics during startup.
      */
     private void configurePhysics() {
         DebugShapeFactory.setIndexBuffers(200);
@@ -879,7 +881,7 @@ public class DropTest
     /**
      * Apply an upward impulse to the selected drop.
      */
-    private void popSelected() {
+    private static void popSelected() {
         if (selectedDrop != null) {
             float gravity = status.gravity();
             float deltaV = FastMath.sqrt(30f * gravity);
@@ -901,6 +903,8 @@ public class DropTest
 
     /**
      * Update the debug materials of the specified collision object.
+     *
+     * @param pco the object to update (not null)
      */
     private void setDebugMaterial(PhysicsCollisionObject pco) {
         CollisionShape shape = pco.getCollisionShape();
@@ -922,5 +926,28 @@ public class DropTest
         }
 
         pco.setDebugMaterial(debugMaterial);
+    }
+
+    /**
+     * Update the debug materials of all collision objects.
+     */
+    private void setDebugMaterialsAll() {
+        PhysicsSpace physicsSpace = getPhysicsSpace();
+        for (PhysicsCollisionObject pco : physicsSpace.getPcoList()) {
+            setDebugMaterial(pco);
+        }
+    }
+
+    /**
+     * Update the ShadowMode of the debug scene.
+     */
+    private static void setDebugShadowMode() {
+        RenderQueue.ShadowMode mode;
+        if (status.isWireframe()) {
+            mode = RenderQueue.ShadowMode.Off;
+        } else {
+            mode = RenderQueue.ShadowMode.CastAndReceive;
+        }
+        bulletAppState.setDebugShadowMode(mode);
     }
 }

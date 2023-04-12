@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 jMonkeyEngine
+ * Copyright (c) 2019-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -82,12 +82,12 @@ class SoftJointDebugControl extends AbstractPhysicsDebugControl {
      * @param debugAppState which app state (not null, alias created)
      * @param joint the joint to visualize (not null, alias created)
      */
-    SoftJointDebugControl(BulletDebugAppState debugAppState,
-            SoftPhysicsJoint joint) {
+    SoftJointDebugControl(
+            BulletDebugAppState debugAppState, SoftPhysicsJoint joint) {
         super(debugAppState);
         this.joint = joint;
 
-        endsGeometry = createEndsGeometry();
+        this.endsGeometry = createEndsGeometry();
     }
     // *************************************************************************
     // AbstractPhysicsDebugControl methods

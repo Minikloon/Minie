@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@ import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.system.NativeLibraryLoader;
+import org.junit.Assert;
 import org.junit.Test;
 
 /**
@@ -42,24 +43,27 @@ public class TestIssue911 {
     // *************************************************************************
     // new methods exposed
 
+    /**
+     * Test to verify that the issue remains solved.
+     */
     @Test
     public void testIssue911() {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
 
         CollisionShape capsule = new SphereCollisionShape(1f);
         PhysicsRigidBody body = new PhysicsRigidBody(capsule, 1f);
-        assert body.getAngularSleepingThreshold() == 1f;
-        assert body.getLinearSleepingThreshold() == 0.8f;
+        Assert.assertEquals(1f, body.getAngularSleepingThreshold(), 0f);
+        Assert.assertEquals(0.8f, body.getLinearSleepingThreshold(), 0f);
 
         body.setAngularSleepingThreshold(0.03f);
 
         assert body.getAngularSleepingThreshold() == 0.03f;
         float lst = body.getLinearSleepingThreshold();
-        assert lst == 0.8f : lst; // fails, actual value is 1f
+        Assert.assertEquals(0.8f, lst, 0f); // fails, actual value is 1f
 
         body.setLinearSleepingThreshold(0.17f);
 
         float ast = body.getAngularSleepingThreshold();
-        assert ast == 0.03f : ast; // fails, actual value is 1f
+        Assert.assertEquals(0.03f, ast, 0f); // fails, actual value is 1f
     }
 }

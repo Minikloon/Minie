@@ -1,25 +1,14 @@
 // Gradle settings and tasks common to all Minie subprojects
 
+apply plugin: 'checkstyle'
 apply plugin: 'java'
-
-ext {
-    jmeTarget = '' // distinguish libraries built for different JME releases
-
-    // module coordinates of dependencies:
-    acorusCoordinates = 'com.github.stephengold:Acorus:0.9.12' + jmeTarget
-    heartCoordinates = 'com.github.stephengold:Heart:7.5.0' + jmeTarget
-    junitCoordinates = 'junit:junit:4.13.2'
-    testdataCoordinates = 'org.jmonkeyengine:jme3-testdata:3.1.0-stable'
-    wesCoordinates = 'com.github.stephengold:Wes:0.7.1' + jmeTarget
-
-    // current versions of libraries:
-    jme3Version = '3.5.1-stable'
-    minieVersion = '4.8.2'
-    minieSnapshot = '-SNAPSHOT' // distinguish development builds from releases
-}
 
 sourceCompatibility = JavaVersion.VERSION_1_7
 targetCompatibility = JavaVersion.VERSION_1_8
+
+checkstyle {
+    toolVersion '9.3'
+}
 
 tasks.withType(JavaCompile) { // Java compile-time options:
     options.compilerArgs << '-Xdiags:verbose'
@@ -49,19 +38,18 @@ tasks.withType(JavaExec) { // Java runtime options:
     enableAssertions true
     //jvmArgs '-verbose:gc'
     //jvmArgs '-Xcheck:jni'
-    jvmArgs '-Xms1024m', '-Xmx1024m'
-    jvmArgs '-XX:+UseG1GC', '-XX:MaxGCPauseMillis=10'
+    jvmArgs '-Xms1024m', '-Xmx1024m' // to enlarge the Java heap
+    //jvmArgs '-XX:+UseG1GC', '-XX:MaxGCPauseMillis=10'
 }
 
-repositories {
-    //mavenLocal() // to find local SNAPSHOTs of libraries
-    mavenCentral()
+configurations.all {
+    resolutionStrategy.cacheChangingModulesFor 0, 'seconds' // to disable caching of SNAPSHOTs
 }
 
 // cleanup tasks:
 
 clean.dependsOn('cleanDLLs', 'cleanDyLibs', 'cleanLogs', 'cleanPDBs', \
-    'cleanSOs', 'cleanWrittenAssets')
+    'cleanSandbox', 'cleanSOs')
 
 tasks.register('cleanDLLs', Delete) { // extracted Windows native libraries
     delete fileTree(dir: '.', include: '*.dll')
@@ -75,9 +63,9 @@ tasks.register('cleanLogs', Delete) { // JVM crash logs
 tasks.register('cleanPDBs', Delete) { // Windows program database files
     delete fileTree(dir: '.', include: '*.pdb')
 }
+tasks.register('cleanSandbox', Delete) { // Acorus output directory
+    delete 'Written Assets'
+}
 tasks.register('cleanSOs', Delete) { // extracted Linux and Android native libraries
     delete fileTree(dir: '.', include: '*.so')
-}
-tasks.register('cleanWrittenAssets', Delete) { // Acorus output directory
-    delete 'Written Assets'
 }

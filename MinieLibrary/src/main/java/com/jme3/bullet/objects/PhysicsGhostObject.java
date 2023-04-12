@@ -42,21 +42,25 @@ import com.jme3.math.Matrix3f;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import com.jme3.util.clone.Cloner;
+import com.simsilica.mathd.Matrix3d;
+import com.simsilica.mathd.Quatd;
+import com.simsilica.mathd.Vec3d;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jme3utilities.Validate;
 
 /**
  * A collision object for intangibles, based on Bullet's
- * btPairCachingGhostObject. This is useful for creating a character controller,
- * collision sensors/triggers, explosions etc.
+ * {@code btPairCachingGhostObject}. This is useful for creating a character
+ * controller, collision sensors/triggers, explosions etc.
  * <p>
  * Overlap detection skips the narrow-phase collision-detection algorithm and
  * relies entirely on the broad-phase algorithm, which is AABB plus a margin of
  * about 0.06 world units. Precise collision detection is still available via
- * PhysicsSpace.addCollisionListener().
+ * {@code PhysicsSpace.addCollisionListener()}.
  * <p>
  * <i>From Bullet manual:</i><br>
  * btGhostObject is a special btCollisionObject, useful for fast localized
@@ -112,18 +116,20 @@ public class PhysicsGhostObject extends PhysicsCollisionObject {
 
     /**
      * Access an overlapping collision object by its position in the list.
+     * Important: {@link #getOverlappingObjects()} must be invoked first!
      *
      * @param index which list position (&ge;0, &lt;count)
      * @return the pre-existing object
      */
     public PhysicsCollisionObject getOverlapping(int index) {
-        return overlappingObjects.get(index);
+        PhysicsCollisionObject result = overlappingObjects.get(index);
+        return result;
     }
 
     /**
      * Count how many collision objects this object overlaps.
      *
-     * @return count (&ge;0)
+     * @return the count (&ge;0)
      */
     public int getOverlappingCount() {
         long objectId = nativeId();
@@ -133,7 +139,7 @@ public class PhysicsGhostObject extends PhysicsCollisionObject {
     }
 
     /**
-     * Access a list of overlapping objects.
+     * Update and access a list of overlapping objects.
      *
      * @return an internal list which may get reused (not null)
      */
@@ -147,36 +153,81 @@ public class PhysicsGhostObject extends PhysicsCollisionObject {
     }
 
     /**
-     * Directly alter the location of this object's center.
+     * Directly alter the location of the ghost's center.
      *
      * @param location the desired location (in physics-space coordinates, not
-     * null, unaffected)
+     * null, finite, unaffected)
      */
     public void setPhysicsLocation(Vector3f location) {
+        Validate.finite(location, "location");
+
         long objectId = nativeId();
         setPhysicsLocation(objectId, location);
     }
 
     /**
-     * Directly alter this object's orientation.
+     * Directly alter the location of the ghost's center.
      *
-     * @param rotation the desired orientation (a rotation matrix in
-     * physics-space coordinates, not null, unaffected)
+     * @param location the desired location (in physics-space coordinates, not
+     * null, unaffected)
      */
-    public void setPhysicsRotation(Matrix3f rotation) {
+    public void setPhysicsLocationDp(Vec3d location) {
+        Validate.nonNull(location, "location");
+
         long objectId = nativeId();
-        setPhysicsRotation(objectId, rotation);
+        setPhysicsLocationDp(objectId, location);
     }
 
     /**
-     * Directly alter this object's orientation.
+     * Directly alter the ghost's orientation.
      *
-     * @param rotation the desired orientation (a rotation quaternion in
+     * @param orientation the desired orientation (a rotation matrix in
      * physics-space coordinates, not null, unaffected)
      */
-    public void setPhysicsRotation(Quaternion rotation) {
+    public void setPhysicsRotation(Matrix3f orientation) {
+        Validate.nonNull(orientation, "orientation");
+
         long objectId = nativeId();
-        setPhysicsRotation(objectId, rotation);
+        setPhysicsRotation(objectId, orientation);
+    }
+
+    /**
+     * Directly alter the ghost's orientation.
+     *
+     * @param orientation the desired orientation (a rotation quaternion in
+     * physics-space coordinates, not null, not zero, unaffected)
+     */
+    public void setPhysicsRotation(Quaternion orientation) {
+        Validate.nonZero(orientation, "orientation");
+
+        long objectId = nativeId();
+        setPhysicsRotation(objectId, orientation);
+    }
+
+    /**
+     * Directly alter the ghost's orientation.
+     *
+     * @param orientation the desired orientation (a rotation matrix in
+     * physics-space coordinates, not null, unaffected)
+     */
+    public void setPhysicsRotationDp(Matrix3d orientation) {
+        Validate.nonNull(orientation, "orientation");
+
+        long objectId = nativeId();
+        setPhysicsRotationDp(objectId, orientation);
+    }
+
+    /**
+     * Directly alter the ghost's orientation.
+     *
+     * @param orientation the desired orientation (a rotation quaternion in
+     * physics-space coordinates, not null, unaffected)
+     */
+    public void setPhysicsRotationDp(Quatd orientation) {
+        Validate.nonNull(orientation, "orientation");
+
+        long objectId = nativeId();
+        setPhysicsRotationDp(objectId, orientation);
     }
     // *************************************************************************
     // PhysicsCollisionObject methods
@@ -194,7 +245,7 @@ public class PhysicsGhostObject extends PhysicsCollisionObject {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
         unassignNativeObject();
-        overlappingObjects = cloner.clone(overlappingObjects);
+        this.overlappingObjects = cloner.clone(overlappingObjects);
         buildObject();
 
         PhysicsGhostObject old = (PhysicsGhostObject) original;
@@ -203,21 +254,6 @@ public class PhysicsGhostObject extends PhysicsCollisionObject {
 
         setPhysicsLocation(old.getPhysicsLocation(null));
         setPhysicsRotation(old.getPhysicsRotationMatrix(null));
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public PhysicsGhostObject jmeClone() {
-        try {
-            PhysicsGhostObject clone = (PhysicsGhostObject) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -247,10 +283,10 @@ public class PhysicsGhostObject extends PhysicsCollisionObject {
         buildObject();
         readPcoProperties(capsule);
 
-        setPhysicsLocation((Vector3f) capsule.readSavable(tagPhysicsLocation,
-                new Vector3f()));
-        setPhysicsRotation(((Matrix3f) capsule.readSavable(tagPhysicsRotation,
-                new Matrix3f())));
+        setPhysicsLocation((Vector3f) capsule.readSavable(
+                tagPhysicsLocation, new Vector3f()));
+        setPhysicsRotation(((Matrix3f) capsule.readSavable(
+                tagPhysicsRotation, new Matrix3f())));
     }
 
     /**
@@ -276,7 +312,7 @@ public class PhysicsGhostObject extends PhysicsCollisionObject {
      *
      * @param co the collision object to add (alias created)
      */
-    private void addOverlappingObject_native(PhysicsCollisionObject co) {
+    private void addOverlappingObject(PhysicsCollisionObject co) {
         overlappingObjects.add(co);
     }
 
@@ -310,9 +346,21 @@ public class PhysicsGhostObject extends PhysicsCollisionObject {
 
     native private static void setGhostFlags(long objectId);
 
-    native private static void setPhysicsLocation(long objectId, Vector3f location);
+    native private static void
+            setPhysicsLocation(long objectId, Vector3f location);
 
-    native private static void setPhysicsRotation(long objectId, Matrix3f rotation);
+    native private static void
+            setPhysicsLocationDp(long objectId, Vec3d location);
 
-    native private static void setPhysicsRotation(long objectId, Quaternion rotation);
+    native private static void
+            setPhysicsRotation(long objectId, Matrix3f rotation);
+
+    native private static void
+            setPhysicsRotation(long objectId, Quaternion rotation);
+
+    native private static void
+            setPhysicsRotationDp(long objectId, Matrix3d rotation);
+
+    native private static void
+            setPhysicsRotationDp(long objectId, Quatd rotation);
 }

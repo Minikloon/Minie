@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,6 @@ import com.jme3.bullet.RotationOrder;
 import com.jme3.bullet.collision.shapes.Box2dShape;
 import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.joints.New6Dof;
 import com.jme3.bullet.joints.motors.MotorParam;
@@ -56,10 +55,11 @@ import com.jme3.scene.Spatial;
 import com.jme3.shadow.DirectionalLightShadowRenderer;
 import com.jme3.shadow.EdgeFilteringMode;
 import com.jme3.system.AppSettings;
+import jme3utilities.MeshNormals;
 
 /**
  * A simple example of a PhysicsJoint with limits.
- *
+ * <p>
  * Builds upon HelloJoint.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -73,31 +73,35 @@ public class HelloLimit
     /**
      * physics-space Y coordinate of the ground plane
      */
-    private final float groundY = -2f;
+    private final static float groundY = -2f;
     /**
      * half the height of the paddle (in physics-space units)
      */
-    private final float paddleHalfHeight = 1f;
+    private final static float paddleHalfHeight = 1f;
     // *************************************************************************
     // fields
 
     /**
      * mouse-controlled kinematic paddle
      */
-    private PhysicsRigidBody paddleBody;
+    private static PhysicsRigidBody paddleBody;
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
     /**
      * latest ground location indicated by the mouse cursor
      */
-    private final Vector3f mouseLocation = new Vector3f();
+    final private static Vector3f mouseLocation = new Vector3f();
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloLimit application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloLimit application = new HelloLimit();
 
         boolean loadDefaults = true;
@@ -121,17 +125,17 @@ public class HelloLimit
     @Override
     public void simpleInitApp() {
         configureCamera();
-        PhysicsSpace physicsSpace = configurePhysics();
+        physicsSpace = configurePhysics();
 
         // Add a static, green square to represent the ground.
         float halfExtent = 3f;
-        addSquare(halfExtent, groundY, physicsSpace);
+        addSquare(halfExtent, groundY);
 
         // Add a mouse-controlled kinematic paddle.
-        addPaddle(physicsSpace);
+        addPaddle();
 
-        // Add a dynamic, yellow ball.
-        PhysicsRigidBody ballBody = addBall(physicsSpace);
+        // Add a dynamic yellow ball.
+        PhysicsRigidBody ballBody = addBall();
 
         // Add a single-ended physics joint to constrain the ball's center.
         Vector3f pivotInBall = new Vector3f(0f, 0f, 0f);
@@ -161,44 +165,40 @@ public class HelloLimit
      */
     @Override
     public void simpleUpdate(float tpf) {
-        /*
-         * Calculate the ground location (if any) selected by the mouse cursor.
-         */
-        Vector2f screenXY = inputManager.getCursorPosition();
+        // Calculate the ground location (if any) selected by the mouse cursor.
+        Vector2f screenXy = inputManager.getCursorPosition();
         float nearZ = 0f;
-        Vector3f nearLocation = cam.getWorldCoordinates(screenXY, nearZ);
+        Vector3f nearLocation = cam.getWorldCoordinates(screenXy, nearZ);
         float farZ = 1f;
-        Vector3f farLocation = cam.getWorldCoordinates(screenXY, farZ);
+        Vector3f farLocation = cam.getWorldCoordinates(screenXy, farZ);
         if (nearLocation.y > groundY && farLocation.y < groundY) {
             float dy = nearLocation.y - farLocation.y;
             float t = (nearLocation.y - groundY) / dy;
-            FastMath.interpolateLinear(t, nearLocation, farLocation,
-                    mouseLocation);
+            FastMath.interpolateLinear(
+                    t, nearLocation, farLocation, mouseLocation);
         }
     }
     // *************************************************************************
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the simulation is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param ignored the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
-    public void prePhysicsTick(PhysicsSpace ignored, float timeStep) {
-        /*
-         * Reposition the paddle based on the mouse location.
-         */
+    public void prePhysicsTick(PhysicsSpace space, float timeStep) {
+        // Reposition the paddle based on the mouse location.
         Vector3f bodyLocation = mouseLocation.add(0f, paddleHalfHeight, 0f);
         paddleBody.setPhysicsLocation(bodyLocation);
     }
 
     /**
-     * Callback from Bullet, invoked just after the simulation has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
-     * @param space ignored
-     * @param timeStep ignored
+     * @param space the space that was just stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -210,10 +210,9 @@ public class HelloLimit
     /**
      * Create a dynamic rigid body with a sphere shape and add it to the space.
      *
-     * @param physicsSpace (not null)
      * @return the new body
      */
-    private PhysicsRigidBody addBall(PhysicsSpace physicsSpace) {
+    private PhysicsRigidBody addBall() {
         float radius = 0.4f;
         SphereCollisionShape shape = new SphereCollisionShape(radius);
 
@@ -221,19 +220,25 @@ public class HelloLimit
         PhysicsRigidBody result = new PhysicsRigidBody(shape, mass);
         physicsSpace.addCollisionObject(result);
 
+        // Apply angular damping to reduce the ball's tendency to spin.
+        result.setAngularDamping(0.6f);
+
         // Disable sleep (deactivation).
         result.setEnableSleep(false);
 
         Material yellowMaterial = createLitMaterial(1f, 1f, 0f);
         result.setDebugMaterial(yellowMaterial);
-        result.setDebugMeshNormals(DebugMeshNormals.Facet);
+        result.setDebugMeshNormals(MeshNormals.Facet);
         // faceted so that rotations will be visible
 
         return result;
     }
 
     /**
-     * Add lighting and shadows to the specified scene.
+     * Add lighting and shadows to the specified scene and set the background
+     * color.
+     *
+     * @param scene the scene to augment (not null)
      */
     private void addLighting(Spatial scene) {
         ColorRGBA ambientColor = new ColorRGBA(0.03f, 0.03f, 0.03f, 1f);
@@ -252,8 +257,8 @@ public class HelloLimit
         int shadowMapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager,
-                        shadowMapSize, numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, shadowMapSize, numSplits);
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
         dlsr.setEdgesThickness(5);
         dlsr.setLight(sun);
@@ -267,31 +272,28 @@ public class HelloLimit
 
     /**
      * Create a kinematic body with a box shape and add it to the space.
-     *
-     * @param physicsSpace (not null)
      */
-    private void addPaddle(PhysicsSpace physicsSpace) {
+    private void addPaddle() {
         BoxCollisionShape shape
                 = new BoxCollisionShape(0.3f, paddleHalfHeight, 1f);
         paddleBody = new PhysicsRigidBody(shape);
         paddleBody.setKinematic(true);
+
         physicsSpace.addCollisionObject(paddleBody);
 
         Material redMaterial = createLitMaterial(1f, 0.1f, 0.1f);
         paddleBody.setDebugMaterial(redMaterial);
-        paddleBody.setDebugMeshNormals(DebugMeshNormals.Facet);
+        paddleBody.setDebugMeshNormals(MeshNormals.Facet);
     }
 
     /**
-     * Add a horizontal square body to the specified PhysicsSpace.
+     * Add a horizontal square body to the space.
      *
      * @param halfExtent (half of the desired side length)
      * @param y (the desired elevation, in physics-space coordinates)
-     * @param physicsSpace (not null)
      * @return the new body (not null)
      */
-    private PhysicsRigidBody addSquare(float halfExtent, float y,
-            PhysicsSpace physicsSpace) {
+    private PhysicsRigidBody addSquare(float halfExtent, float y) {
         // Construct a static rigid body with a square shape.
         Box2dShape shape = new Box2dShape(halfExtent);
         PhysicsRigidBody result
@@ -299,13 +301,13 @@ public class HelloLimit
 
         Material greenMaterial = createLitMaterial(0f, 1f, 0f);
         result.setDebugMaterial(greenMaterial);
-        result.setDebugMeshNormals(DebugMeshNormals.Facet);
+        result.setDebugMeshNormals(MeshNormals.Facet);
 
         physicsSpace.addCollisionObject(result);
 
         // Rotate it 90 degrees to a horizontal orientation.
-        Matrix3f rotate90 = new Matrix3f();
-        rotate90.fromAngleAxis(-FastMath.HALF_PI, Vector3f.UNIT_X);
+        Quaternion rotate90 = new Quaternion();
+        rotate90.fromAngles(-FastMath.HALF_PI, 0f, 0f);
         result.setPhysicsRotation(rotate90);
 
         // Translate it to the desired elevation.
@@ -326,6 +328,8 @@ public class HelloLimit
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
@@ -346,7 +350,7 @@ public class HelloLimit
 
         PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
-        // To enable the callbacks, add this application as a tick listener.
+        // To enable the callbacks, register the application as a tick listener.
         result.addTickListener(this);
 
         // Reduce the time step for better accuracy.

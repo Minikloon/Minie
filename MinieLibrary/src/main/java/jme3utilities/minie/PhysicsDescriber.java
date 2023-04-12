@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2013-2021, Stephen Gold
+ Copyright (c) 2013-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,6 @@
 package jme3utilities.minie;
 
 import com.jme3.bullet.MultiBody;
-import com.jme3.bullet.PhysicsSpace;
 import com.jme3.bullet.SoftBodyWorldInfo;
 import com.jme3.bullet.animation.PhysicsLink;
 import com.jme3.bullet.collision.PhysicsCollisionObject;
@@ -69,6 +68,7 @@ import com.jme3.bullet.objects.infos.Sbcp;
 import com.jme3.bullet.objects.infos.SoftBodyConfig;
 import com.jme3.bullet.objects.infos.SoftBodyMaterial;
 import com.jme3.material.Material;
+import com.jme3.math.Matrix3f;
 import com.jme3.math.Plane;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Spatial;
@@ -94,6 +94,14 @@ public class PhysicsDescriber extends Describer {
      */
     final public static Logger logger
             = Logger.getLogger(PhysicsDescriber.class.getName());
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate a describer with the default separator.
+     */
+    public PhysicsDescriber() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
@@ -396,8 +404,7 @@ public class PhysicsDescriber extends Describer {
      * @return descriptive text (not null, not empty)
      */
     public String describe(TranslationalLimitMotor motor, int axisIndex) {
-        Validate.inRange(axisIndex, "index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
         StringBuilder result = new StringBuilder(80);
         Vector3f tmpVector = new Vector3f();
 
@@ -442,8 +449,8 @@ public class PhysicsDescriber extends Describer {
                 result.append(MyString.describe(erp));
 
                 result.append(" rest=");
-                float restit = motor.getRestitution();
-                result.append(MyString.describe(restit));
+                float rest = motor.getRestitution();
+                result.append(MyString.describe(rest));
 
                 result.append(" soft=");
                 float softness = motor.getLimitSoftness();
@@ -517,7 +524,7 @@ public class PhysicsDescriber extends Describer {
         float restL = wheel.getRestLength();
         result.append(MyString.describe(restL));
 
-        result.append(" stif=");
+        result.append(" stiff=");
         float stiff = wheel.getSuspensionStiffness();
         result.append(MyString.describe(stiff));
 
@@ -552,8 +559,8 @@ public class PhysicsDescriber extends Describer {
                 MyString.describe(config.get(Sbcp.VelocityCorrection)));
         result.append(description);
 
-        description = String.format(
-                "  coef[damp=%s drag=%s fric=%s lift=%s pose=%s pres=%s volCons=%s]",
+        description = String.format("  coef[damp=%s drag=%s fric=%s lift=%s"
+                + " pose=%s pres=%s volCons=%s]",
                 MyString.describe(config.get(Sbcp.Damping)),
                 MyString.describe(config.get(Sbcp.Drag)),
                 MyString.describe(config.get(Sbcp.DynamicFriction)),
@@ -697,13 +704,15 @@ public class PhysicsDescriber extends Describer {
         if (hi < lo) {
             result.append(" free");
         } else if (hi == lo) {
-            result.append(" locked=");
+            result.append(" lock[");
             result.append(MyString.describe(lo));
+            result.append(']');
         } else {
-            result.append(" lo=");
+            result.append(" lims[");
             result.append(MyString.describe(lo));
-            result.append(" hi=");
+            result.append(' ');
             result.append(MyString.describe(hi));
+            result.append(']');
         }
 
         result.append(" motor[");
@@ -786,13 +795,13 @@ public class PhysicsDescriber extends Describer {
         int group = multiBody.collisionGroup();
         if (group != PhysicsCollisionObject.COLLISION_GROUP_01) {
             result.append(" group=0x");
-            result.append(Integer.toString(group, 16));
+            result.append(Integer.toHexString(group));
         }
 
         int groupMask = multiBody.collideWithGroups();
         if (groupMask != PhysicsCollisionObject.COLLISION_GROUP_01) {
             result.append(" gMask=0x");
-            result.append(Integer.toString(groupMask, 16));
+            result.append(Integer.toHexString(groupMask));
         }
 
         return result.toString();
@@ -811,13 +820,13 @@ public class PhysicsDescriber extends Describer {
         int group = pco.getCollisionGroup();
         if (group != PhysicsCollisionObject.COLLISION_GROUP_01) {
             result.append(" group=0x");
-            result.append(Integer.toString(group, 16));
+            result.append(Integer.toHexString(group));
         }
 
         int groupMask = pco.getCollideWithGroups();
         if (groupMask != PhysicsCollisionObject.COLLISION_GROUP_01) {
             result.append(" gMask=0x");
-            result.append(Integer.toString(groupMask, 16));
+            result.append(Integer.toHexString(groupMask));
         }
 
         return result.toString();
@@ -832,40 +841,35 @@ public class PhysicsDescriber extends Describer {
      * include them only when there's no user or application data
      * @return descriptive text (not null, not empty)
      */
-    public String describeJointInBody(PhysicsJoint joint, PhysicsBody body,
-            boolean forceId) {
+    public String describeJointInBody(
+            PhysicsJoint joint, PhysicsBody body, boolean forceId) {
         StringBuilder result = new StringBuilder(80);
 
         String desc = describe(joint);
         result.append(desc);
 
-        PhysicsBody otherBody;
-        Vector3f pivot = null;
-        if (joint.getBody(JointEnd.A) == body) {
-            otherBody = joint.getBody(JointEnd.B);
-            if (joint instanceof Constraint) {
-                Constraint constraint = (Constraint) joint;
-                pivot = constraint.getPivotA(null);
-            }
-        } else {
-            assert joint.getBody(JointEnd.B) == body;
-            otherBody = joint.getBody(JointEnd.A);
-            if (joint instanceof Constraint) {
-                Constraint constraint = (Constraint) joint;
-                pivot = constraint.getPivotB(null);
-            }
-        }
-
-        if (otherBody == null) {
+        if (joint.countEnds() == 1) {
             result.append(" single-ended");
         } else {
-            result.append(" to:");
+            result.append(" to");
+            PhysicsBody otherBody = joint.findOtherBody(body);
             appendPco(result, otherBody, forceId);
         }
 
-        if (pivot != null) {
+        JointEnd end = joint.findEnd(body);
+        if (joint instanceof Constraint) {
+            Constraint constraint = (Constraint) joint;
             result.append(" piv[");
-            result.append(MyVector3f.describe(pivot));
+            Vector3f piv = constraint.getPivot(end, null);
+            result.append(MyVector3f.describe(piv));
+            result.append(']');
+        }
+
+        if (joint instanceof New6Dof) {
+            New6Dof sixDof = (New6Dof) joint;
+            result.append(" rot[");
+            Matrix3f rot = sixDof.getRotationMatrix(end, null);
+            result.append(describeMatrix(rot));
             result.append(']');
         } else if (joint instanceof SoftAngularJoint) {
             SoftAngularJoint saj = (SoftAngularJoint) joint;
@@ -899,8 +903,8 @@ public class PhysicsDescriber extends Describer {
         } else if (joint instanceof Constraint) {
             result = describeConstraintInSpace((Constraint) joint, forceIds);
         } else {
-            result = describeSoftJointInSpace((SoftPhysicsJoint) joint,
-                    forceIds);
+            result = describeSoftJointInSpace(
+                    (SoftPhysicsJoint) joint, forceIds);
         }
 
         return result;
@@ -927,6 +931,36 @@ public class PhysicsDescriber extends Describer {
         Vector3f hi = joint.getLinearUpperLimit(new Vector3f());
         result.append(MyVector3f.describe(hi));
         result.append(']');
+
+        return result.toString();
+    }
+
+    /**
+     * Generate a textual description of a Matrix3f value.
+     *
+     * @param matrix the value to describe (may be null, unaffected)
+     * @return a description (not null, not empty)
+     */
+    static String describeMatrix(Matrix3f matrix) { // TODO use MyString
+        if (matrix == null) {
+            return "null";
+        }
+
+        StringBuilder result = new StringBuilder(80);
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                float element = matrix.get(row, column);
+                String desc = MyString.describe(element);
+                result.append(desc);
+
+                if (row < 2 || column < 2) {
+                    result.append(' ');
+                }
+            }
+            if (row < 2) { // Add an extra space between rows.
+                result.append(' ');
+            }
+        }
 
         return result.toString();
     }
@@ -1017,8 +1051,8 @@ public class PhysicsDescriber extends Describer {
      * @param builder the StringBuilder to append to (not null, modified)
      * @param subject the Object to describe (not null, unaffected)
      */
-    private void appendObjectDescription(StringBuilder builder,
-            Object subject) {
+    private static void appendObjectDescription(
+            StringBuilder builder, Object subject) {
         String className = subject.getClass().getSimpleName();
 
         String desc;
@@ -1066,14 +1100,14 @@ public class PhysicsDescriber extends Describer {
 
             if (forceId) {
                 desc = pco.toString();
-                builder.append(desc);
             } else {
                 desc = pco.getClass().getSimpleName();
+                desc = desc.replace("Body", "");
                 desc = desc.replace("Control", "C");
                 desc = desc.replace("Physics", "");
                 desc = desc.replace("Object", "");
-                builder.append(desc);
             }
+            builder.append(desc);
 
             desc = describeApplicationData(pco);
             builder.append(desc);
@@ -1136,8 +1170,8 @@ public class PhysicsDescriber extends Describer {
      * include them only when there's no user or application data
      * @return descriptive text (not null, not empty)
      */
-    private String describeConstraintInSpace(Constraint constraint,
-            boolean forceIds) {
+    private String describeConstraintInSpace(
+            Constraint constraint, boolean forceIds) {
         StringBuilder result = new StringBuilder(80);
 
         String desc = describe(constraint);
@@ -1193,20 +1227,14 @@ public class PhysicsDescriber extends Describer {
             result.append(MyString.describe(bit));
         }
 
+        if (forceIds) {
+            result.append(" #");
+            long id = constraint.nativeId();
+            String hex = Long.toHexString(id);
+            result.append(hex);
+        }
+
         return result.toString();
-    }
-
-    /**
-     * Describe the specified half extents.
-     *
-     * @param he the half extent for each local axis (not null, unaffected)
-     * @return a bracketed description (not null, not empty)
-     */
-    private String describeHalfExtents(Vector3f he) {
-        String desc = MyVector3f.describe(he);
-        String result = String.format(" he[%s]", desc);
-
-        return result;
     }
 
     /**
@@ -1216,7 +1244,7 @@ public class PhysicsDescriber extends Describer {
      * @param radius the radius of the shape
      * @return a bracketed description (not null, not empty)
      */
-    private String describeHeightAndRadius(float height, float radius) {
+    private static String describeHeightAndRadius(float height, float radius) {
         String hText = MyString.describe(height);
         String rText = MyString.describe(radius);
         String result = String.format(" h=%s r=%s", hText, rText);
@@ -1232,8 +1260,8 @@ public class PhysicsDescriber extends Describer {
      * include them only when there's no user or application data
      * @return descriptive text (not null, not empty)
      */
-    private String describeSoftJointInSpace(SoftPhysicsJoint joint,
-            boolean forceIds) {
+    private String describeSoftJointInSpace(
+            SoftPhysicsJoint joint, boolean forceIds) {
         StringBuilder result = new StringBuilder(80);
 
         String desc = describe(joint);

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -39,10 +39,12 @@ import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import com.jme3.system.NativeLibraryLoader;
 import jme3utilities.Heart;
+import jme3utilities.math.MyQuaternion;
 import org.junit.Test;
 
 /**
- * Test cloning/saving/loading on PhysicsGhostObject and its subclass.
+ * Test cloning/saving/loading on PhysicsGhostObject and its subclass. TODO
+ * replace asserts with JUnit Assert
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -53,7 +55,7 @@ public class TestCloneGhost {
     /**
      * AssetManager required by the BinaryImporter
      */
-    final private AssetManager assetManager = new DesktopAssetManager();
+    final private static AssetManager assetManager = new DesktopAssetManager();
     // *************************************************************************
     // new methods exposed
 
@@ -64,17 +66,15 @@ public class TestCloneGhost {
     public void testCloneGhost() {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
         CollisionShape shape = new SphereCollisionShape(1f);
-        /*
-         * PhysicsGhostObject
-         */
+
+        // PhysicsGhostObject
         PhysicsGhostObject pgo = new PhysicsGhostObject(shape);
         setParameters(pgo, 0f);
         verifyParameters(pgo, 0f);
         PhysicsGhostObject pgoClone = Heart.deepCopy(pgo);
         cloneTest(pgo, pgoClone);
-        /*
-         * GhostControl (a subclass of PhysicsGhostObject)
-         */
+
+        // GhostControl (a subclass of PhysicsGhostObject)
         GhostControl gc = new GhostControl(shape);
         setParameters(gc, 0f);
         verifyParameters(gc, 0f);
@@ -84,8 +84,8 @@ public class TestCloneGhost {
     // *************************************************************************
     // private methods
 
-    private void cloneTest(PhysicsGhostObject pgo,
-            PhysicsGhostObject pgoClone) {
+    private static void cloneTest(
+            PhysicsGhostObject pgo, PhysicsGhostObject pgoClone) {
         assert pgoClone.nativeId() != pgo.nativeId();
 
         verifyParameters(pgo, 0f);
@@ -100,12 +100,12 @@ public class TestCloneGhost {
         verifyParameters(pgoClone, 0.6f);
 
         if (pgo instanceof GhostControl) {
-            GhostControl pgoCopy = BinaryExporter.saveAndLoad(assetManager,
-                    (GhostControl) pgo);
+            GhostControl pgoCopy = BinaryExporter
+                    .saveAndLoad(assetManager, (GhostControl) pgo);
             verifyParameters(pgoCopy, 0.3f);
 
-            GhostControl gcCloneCopy = BinaryExporter.saveAndLoad(assetManager,
-                    (GhostControl) pgoClone);
+            GhostControl gcCloneCopy = BinaryExporter
+                    .saveAndLoad(assetManager, (GhostControl) pgoClone);
             verifyParameters(gcCloneCopy, 0.6f);
         }
     }
@@ -116,7 +116,7 @@ public class TestCloneGhost {
      * @param pgo the ghost object to modify (not null)
      * @param b the key value
      */
-    private void setParameters(PhysicsGhostObject pgo, float b) {
+    private static void setParameters(PhysicsGhostObject pgo, float b) {
         int afMode = Math.round(b / 0.3f);
         pgo.setAnisotropicFriction(
                 new Vector3f(b + 0.004f, b + 0.005f, b + 0.006f), afMode);
@@ -133,7 +133,7 @@ public class TestCloneGhost {
 
         Quaternion orient
                 = new Quaternion(b + 0.21f, b + 0.22f, b + 0.23f, b + 0.24f);
-        orient.normalizeLocal();
+        MyQuaternion.normalizeLocal(orient);
         Matrix3f matrix = orient.toRotationMatrix();
         pgo.setPhysicsRotation(matrix);
 
@@ -148,7 +148,7 @@ public class TestCloneGhost {
      * @param pgo the ghost object to verify (not null, unaffected)
      * @param b the key value
      */
-    private void verifyParameters(PhysicsGhostObject pgo, float b) {
+    private static void verifyParameters(PhysicsGhostObject pgo, float b) {
         int index = Math.round(b / 0.3f);
         if (index == 0) {
             assert !pgo.hasAnisotropicFriction(AfMode.either);
@@ -176,7 +176,7 @@ public class TestCloneGhost {
 
         Quaternion orient
                 = new Quaternion(b + 0.21f, b + 0.22f, b + 0.23f, b + 0.24f);
-        orient.normalizeLocal();
+        MyQuaternion.normalizeLocal(orient);
         Matrix3f matrix = orient.toRotationMatrix();
         Matrix3f m = pgo.getPhysicsRotationMatrix(null);
         assert m.equals(matrix);

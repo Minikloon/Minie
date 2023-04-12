@@ -166,10 +166,11 @@ public class BulletAppState
     // constructors
 
     /**
-     * Instantiate an enabled app state to manage a new PhysicsSpace with DBVT
-     * collision detection.
+     * Instantiate an enabled app state to manage a new space with the DBVT
+     * broadphase collision-detection algorithm.
      * <p>
-     * Use getStateManager().addState(bulletAppState) to start physics.
+     * Use {@code getStateManager().addState(bulletAppState)} to start
+     * simulating physics.
      */
     public BulletAppState() {
         // do nothing
@@ -178,7 +179,8 @@ public class BulletAppState
     /**
      * Instantiate an enabled app state to manage a new PhysicsSpace.
      * <p>
-     * Use getStateManager().addState(bulletAppState) to start physics.
+     * Use {@code getStateManager().addState(bulletAppState)} to start
+     * simulating physics.
      *
      * @param broadphaseType which broadphase collision-detection algorithm to
      * use (not null)
@@ -190,10 +192,11 @@ public class BulletAppState
     }
 
     /**
-     * Instantiate an enabled app state to manage a new PhysicsSpace with
-     * AXIS_SWEEP_3 collision detection.
+     * Instantiate an enabled app state to manage a new space with the
+     * AXIS_SWEEP_3 broadphase collision-detection algorithm.
      * <p>
-     * Use getStateManager().addState(bulletAppState) to start physics.
+     * Use {@code getStateManager().addState(bulletAppState)} to start
+     * simulating physics.
      *
      * @param worldMin the desired minimum coordinate values (not null,
      * unaffected, default=-10k,-10k,-10k)
@@ -205,9 +208,10 @@ public class BulletAppState
     }
 
     /**
-     * Instantiate an enabled app state to manage a new PhysicsSpace.
+     * Instantiate an enabled AppState to manage a new space.
      * <p>
-     * Use getStateManager().addState(bulletAppState) to enable physics.
+     * Use {@code getStateManager().addState(bulletAppState)} to start
+     * simulating physics.
      *
      * @param worldMin the desired minimum coordinate values (not null,
      * unaffected, default=-10k,-10k,-10k)
@@ -244,7 +248,8 @@ public class BulletAppState
      * @return length (in physics-space units, &ge;0)
      */
     public float debugAxisLength() {
-        return debugConfig.axisArrowLength();
+        float result = debugConfig.axisArrowLength();
+        return result;
     }
 
     /**
@@ -253,7 +258,8 @@ public class BulletAppState
      * @return width (in pixels, &ge;1) or 0 for solid arrows
      */
     public float debugAxisLineWidth() {
-        return debugConfig.axisLineWidth();
+        float result = debugConfig.axisLineWidth();
+        return result;
     }
 
     /**
@@ -272,7 +278,8 @@ public class BulletAppState
      * @return the pre-existing instance, or null if unknown
      */
     public Camera getDebugCamera() {
-        return debugConfig.getCamera();
+        Camera result = debugConfig.getCamera();
+        return result;
     }
 
     /**
@@ -282,7 +289,8 @@ public class BulletAppState
      * @return the pre-existing instance, or null if no simulation running
      */
     public PhysicsSpace getPhysicsSpace() {
-        return debugConfig.getSpace();
+        PhysicsSpace result = debugConfig.getSpace();
+        return result;
     }
 
     /**
@@ -321,7 +329,8 @@ public class BulletAppState
      * @return true if enabled, otherwise false
      */
     public boolean isDebugEnabled() {
-        return debugConfig.isEnabled();
+        boolean result = debugConfig.isEnabled();
+        return result;
     }
 
     /**
@@ -345,6 +354,21 @@ public class BulletAppState
         assert !isRunning;
 
         this.broadphaseType = broadphaseType;
+    }
+
+    /**
+     * Alter which angular velocities are included in the debug visualization.
+     *
+     * @param filter the filter to use (alias created) or null to visualize no
+     * angular velocities (default=null)
+     */
+    public void setDebugAngularVelocityFilter(
+            BulletDebugAppState.DebugAppStateFilter filter) {
+        if (debugAppState == null) {
+            debugConfig.setAngularVelocityFilter(filter);
+        } else {
+            debugAppState.setAngularVelocityFilter(filter);
+        }
     }
 
     /**
@@ -532,7 +556,7 @@ public class BulletAppState
         Validate.nonNull(solver, "solver");
         assert !isRunning();
 
-        solverType = solver;
+        this.solverType = solver;
     }
 
     /**
@@ -638,7 +662,7 @@ public class BulletAppState
 
         if (executor != null) {
             executor.shutdown();
-            executor = null;
+            this.executor = null;
         }
         PhysicsSpace pSpace = debugConfig.getSpace();
         pSpace.removeTickListener(this);
@@ -688,15 +712,18 @@ public class BulletAppState
      */
     protected PhysicsSpace createPhysicsSpace(Vector3f min, Vector3f max,
             BroadphaseType type) {
+        PhysicsSpace result;
         if (solverType == SolverType.SI) {
-            return new PhysicsSpace(min, max, type, numSolvers);
+            result = new PhysicsSpace(min, max, type, numSolvers);
         } else if (numSolvers == 1) {
-            return new PhysicsSpace(min, max, type, solverType);
+            result = new PhysicsSpace(min, max, type, solverType);
         } else {
             String message
                     = String.format("num=%d, type=%s", numSolvers, solverType);
             throw new IllegalArgumentException(message);
         }
+
+        return result;
     }
 
     /**
@@ -734,7 +761,7 @@ public class BulletAppState
      * @param desiredSetting true&rarr;running, false&rarr;not running
      */
     protected void setRunning(boolean desiredSetting) {
-        isRunning = desiredSetting;
+        this.isRunning = desiredSetting;
     }
 
     /**
@@ -747,20 +774,21 @@ public class BulletAppState
         if (executor != null) {
             executor.shutdown();
         }
-        executor = new ScheduledThreadPoolExecutor(1);
+        this.executor = new ScheduledThreadPoolExecutor(1);
         final BulletAppState appState = this;
         Callable<Boolean> call = new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
-                PhysicsSpace pSpace = createPhysicsSpace(worldMin, worldMax,
-                        broadphaseType);
+                PhysicsSpace pSpace = createPhysicsSpace(
+                        worldMin, worldMax, broadphaseType);
                 debugConfig.setSpace(pSpace);
                 pSpace.addTickListener(appState);
                 return true;
             }
         };
         try {
-            return executor.submit(call).get();
+            boolean success = executor.submit(call).get();
+            return success;
         } catch (InterruptedException | ExecutionException exception) {
             logger.log(Level.SEVERE, null, exception);
             return false;
@@ -771,9 +799,11 @@ public class BulletAppState
 
     /**
      * Transition this state from terminating to detached. Should be invoked
-     * only by a subclass or by the AppStateManager. Invoked once for each time
-     * {@link #initialize(com.jme3.app.state.AppStateManager, com.jme3.app.Application)}
-     * is invoked.
+     * only by a subclass or by the AppStateManager.
+     * <p>
+     * Invoked once for each time {@link #initialize(
+     * com.jme3.app.state.AppStateManager, com.jme3.app.Application)} is
+     * invoked.
      */
     @Override
     public void cleanup() {
@@ -781,7 +811,7 @@ public class BulletAppState
 
         if (debugAppState != null) {
             stateManager.detach(debugAppState);
-            debugAppState = null;
+            this.debugAppState = null;
         }
         stopPhysics();
     }
@@ -813,7 +843,7 @@ public class BulletAppState
         if (physicsFuture != null) {
             try {
                 physicsFuture.get();
-                physicsFuture = null;
+                this.physicsFuture = null;
             } catch (InterruptedException | ExecutionException exception) {
                 throw new RuntimeException(exception);
             }
@@ -832,7 +862,7 @@ public class BulletAppState
         super.render(rm);
 
         if (threadingType == ThreadingType.PARALLEL) {
-            physicsFuture = executor.submit(parallelPhysicsUpdate);
+            this.physicsFuture = executor.submit(parallelPhysicsUpdate);
         } else if (threadingType == ThreadingType.SEQUENTIAL) {
             PhysicsSpace pSpace = debugConfig.getSpace();
             pSpace.update(isEnabled() ? tpf * speed : 0f);
@@ -855,7 +885,7 @@ public class BulletAppState
         }
         if (threadingType == ThreadingType.PARALLEL) {
             PhysicsSpace pSpace = debugConfig.getSpace();
-            PhysicsSpace.setLocalThreadPhysicsSpace(pSpace);
+            CollisionSpace.setLocalThreadPhysicsSpace(pSpace);
         }
     }
 
@@ -873,18 +903,14 @@ public class BulletAppState
 
         boolean enable = debugConfig.isEnabled();
         if (enable && debugAppState == null) {
-            /*
-             * Start debug visualization.
-             */
-            debugAppState = createDebugAppState();
-            stateManager.attach(debugAppState);
+            // Start debug visualization.
+            this.debugAppState = createDebugAppState();
+            this.stateManager.attach(debugAppState);
 
         } else if (!enable && debugAppState != null) {
-            /*
-             * Stop debug visualization.
-             */
-            stateManager.detach(debugAppState);
-            debugAppState = null;
+            // Stop debug visualization.
+            this.stateManager.detach(debugAppState);
+            this.debugAppState = null;
         }
 
         PhysicsSpace pSpace = debugConfig.getSpace();
@@ -897,8 +923,8 @@ public class BulletAppState
      * Callback from Bullet, invoked just after the physics is stepped. A good
      * time to clear/apply forces. Meant to be overridden.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -909,8 +935,8 @@ public class BulletAppState
      * Callback from Bullet, invoked just before the physics is stepped. A good
      * time to clear/apply forces. Meant to be overridden.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {

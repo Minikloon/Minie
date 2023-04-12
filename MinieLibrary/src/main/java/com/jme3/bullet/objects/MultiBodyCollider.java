@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 jMonkeyEngine
+ * Copyright (c) 2020-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,8 @@ import com.jme3.export.OutputCapsule;
 import com.jme3.math.Matrix3f;
 import com.jme3.math.Vector3f;
 import com.jme3.util.clone.Cloner;
+import com.simsilica.mathd.Matrix3d;
+import com.simsilica.mathd.Vec3d;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -164,22 +166,52 @@ public class MultiBodyCollider extends PhysicsCollisionObject {
      * Directly alter the location of this collider's center.
      *
      * @param location the desired location (in physics-space coordinates, not
-     * null, unaffected)
+     * null, finite, unaffected)
      */
     public void setPhysicsLocation(Vector3f location) {
+        Validate.finite(location, "location");
+
         long objectId = nativeId();
         setPhysicsLocation(objectId, location);
     }
 
     /**
+     * Directly alter the location of this collider's center.
+     *
+     * @param location the desired location (in physics-space coordinates, not
+     * null, unaffected)
+     */
+    public void setPhysicsLocationDp(Vec3d location) {
+        Validate.nonNull(location, "location");
+
+        long objectId = nativeId();
+        setPhysicsLocationDp(objectId, location);
+    }
+
+    /**
      * Directly alter this collider's orientation.
      *
-     * @param rotation the desired orientation (a rotation matrix in
+     * @param orientation the desired orientation (a rotation matrix in
      * physics-space coordinates, not null, unaffected)
      */
-    public void setPhysicsRotation(Matrix3f rotation) {
+    public void setPhysicsRotation(Matrix3f orientation) {
+        Validate.nonNull(orientation, "orientation");
+
         long objectId = nativeId();
-        setPhysicsRotation(objectId, rotation);
+        setPhysicsRotation(objectId, orientation);
+    }
+
+    /**
+     * Directly alter this collider's orientation.
+     *
+     * @param orientation the desired orientation (a rotation matrix in
+     * physics-space coordinates, not null, unaffected)
+     */
+    public void setPhysicsRotationDp(Matrix3d orientation) {
+        Validate.nonNull(orientation, "orientation");
+
+        long objectId = nativeId();
+        setPhysicsRotationDp(objectId, orientation);
     }
     // *************************************************************************
     // PhysicsCollisionObject methods
@@ -198,7 +230,7 @@ public class MultiBodyCollider extends PhysicsCollisionObject {
         super.cloneFields(cloner, original);
         unassignNativeObject();
 
-        multiBody = cloner.clone(multiBody);
+        this.multiBody = cloner.clone(multiBody);
         buildObject();
 
         MultiBodyCollider old = (MultiBodyCollider) original;
@@ -207,21 +239,6 @@ public class MultiBodyCollider extends PhysicsCollisionObject {
 
         setPhysicsLocation(old.getPhysicsLocation(null));
         setPhysicsRotation(old.getPhysicsRotationMatrix(null));
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public MultiBodyCollider jmeClone() {
-        try {
-            MultiBodyCollider clone = (MultiBodyCollider) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -236,7 +253,7 @@ public class MultiBodyCollider extends PhysicsCollisionObject {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        multiBody = (MultiBody) capsule.readSavable(tagMultiBody, null);
+        this.multiBody = (MultiBody) capsule.readSavable(tagMultiBody, null);
         buildObject();
         readPcoProperties(capsule);
 
@@ -286,9 +303,15 @@ public class MultiBodyCollider extends PhysicsCollisionObject {
 
     native private static long createCollider(long multiBodyId, int linkIndex);
 
-    native private static void setPhysicsLocation(long objectId,
-            Vector3f location);
+    native private static void
+            setPhysicsLocation(long colliderId, Vector3f locationVector);
 
-    native private static void setPhysicsRotation(long objectId,
-            Matrix3f rotation);
+    native private static void
+            setPhysicsLocationDp(long colliderId, Vec3d locationVector);
+
+    native private static void
+            setPhysicsRotation(long colliderId, Matrix3f rotationMatrix);
+
+    native private static void
+            setPhysicsRotationDp(long colliderId, Matrix3d rotationMatrix);
 }

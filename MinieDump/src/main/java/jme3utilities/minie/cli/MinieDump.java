@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, Stephen Gold
+ Copyright (c) 2021-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,7 @@ import com.jme3.material.plugins.J3MLoader;
 import com.jme3.scene.Spatial;
 import com.jme3.system.NativeLibraryLoader;
 import com.jme3.texture.plugins.AWTLoader;
+import java.util.logging.Logger;
 import jme3utilities.minie.DumpFlags;
 import jme3utilities.minie.PhysicsDumper;
 
@@ -46,7 +47,15 @@ import jme3utilities.minie.PhysicsDumper;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MinieDump {
+final public class MinieDump {
+    // *************************************************************************
+    // constants and loggers
+
+    /**
+     * message logger for this class
+     */
+    final static Logger logger
+            = Logger.getLogger(MinieDump.class.getName());
     // *************************************************************************
     // fields
 
@@ -55,9 +64,18 @@ public class MinieDump {
      */
     final private static AssetManager assetManager = new DesktopAssetManager();
     /**
-     * dump asset descriptions to System.out
+     * dump asset descriptions to {@code System.out}
      */
     final private static PhysicsDumper dumper = new PhysicsDumper();
+    // *************************************************************************
+    // constructors
+
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private MinieDump() {
+        // do nothing
+    }
     // *************************************************************************
     // new methods exposed
 
@@ -69,9 +87,8 @@ public class MinieDump {
     public static void main(String[] arguments) {
         setupAssetManager();
         setupNativeLibrary();
-        /*
-         * Process the command-line arguments.
-         */
+
+        // Process the command-line arguments.
         for (String argument : arguments) {
             if (argument.equals("--verbose") || argument.equals("-v")) {
                 dumper.setEnabled(DumpFlags.ChildShapes, true);
@@ -130,15 +147,12 @@ public class MinieDump {
      * Configure the AssetManager.
      */
     private static void setupAssetManager() {
-        /*
-         * Register loaders.
-         */
+        // Register loaders.
         assetManager.registerLoader(AWTLoader.class, "jpg", "png");
         assetManager.registerLoader(BinaryLoader.class, "j3o");
         assetManager.registerLoader(J3MLoader.class, "j3m", "j3md");
-        /*
-         * Register locators.
-         */
+
+        // Register locators.
         assetManager.registerLocator(".", FileLocator.class);
         assetManager.registerLocator(null, ClasspathLocator.class);
     }
@@ -147,9 +161,7 @@ public class MinieDump {
      * Load and configure the native library for this platform.
      */
     private static void setupNativeLibrary() {
-        /*
-         * Don't extract to the working directory!
-         */
+        // Don't extract to the working directory!
         NativeLibraryLoader.setCustomExtractionFolder("/tmp");
 
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);

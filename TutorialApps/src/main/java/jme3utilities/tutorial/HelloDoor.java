@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,6 @@ import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
 import com.jme3.bullet.collision.shapes.PlaneCollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.joints.HingeJoint;
 import com.jme3.bullet.joints.JointEnd;
@@ -60,10 +59,11 @@ import com.jme3.shadow.DirectionalLightShadowRenderer;
 import com.jme3.shadow.EdgeFilteringMode;
 import com.jme3.system.AppSettings;
 import com.jme3.texture.Texture;
+import jme3utilities.MeshNormals;
 
 /**
  * Simulate a swinging door using a single-ended HingeJoint.
- *
+ * <p>
  * Builds upon HelloJoint.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -77,47 +77,51 @@ public class HelloDoor
     /**
      * half the height of the door (in physics-space units)
      */
-    private final float doorHalfHeight = 4f;
+    private final static float doorHalfHeight = 4f;
     /**
      * half the width of the door (in physics-space units)
      */
-    private final float doorHalfWidth = 2f;
+    private final static float doorHalfWidth = 2f;
     /**
      * physics-space Y coordinate of the ground plane
      */
-    private final float groundY = -4f;
+    private final static float groundY = -4f;
     /**
      * half the thickness of the door and door frame (in physics-space units)
      */
-    private final float halfThickness = 0.3f;
+    private final static float halfThickness = 0.3f;
     // *************************************************************************
     // fields
 
     /**
      * mouse-controlled kinematic ball
      */
-    private PhysicsRigidBody ballBody;
+    private static PhysicsRigidBody ballBody;
     /**
      * dynamic swinging door
      */
-    private PhysicsRigidBody doorBody;
+    private static PhysicsRigidBody doorBody;
     /**
      * static door frame
      */
-    private PhysicsRigidBody doorFrameBody;
+    private static PhysicsRigidBody doorFrameBody;
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
     /**
      * latest ground location indicated by the mouse cursor
      */
-    private final Vector3f mouseLocation = new Vector3f();
+    final private static Vector3f mouseLocation = new Vector3f();
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloDoor application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloDoor application = new HelloDoor();
 
         boolean loadDefaults = true;
@@ -141,16 +145,16 @@ public class HelloDoor
     @Override
     public void simpleInitApp() {
         configureCamera();
-        PhysicsSpace physicsSpace = configurePhysics();
+        physicsSpace = configurePhysics();
 
         // Add a static plane to represent the floor.
-        addPlane(groundY, physicsSpace);
+        addPlane(groundY);
 
         // Add a static body for the door frame.
-        addDoorFrame(physicsSpace);
+        addDoorFrame();
 
         // Add a dynamic body for the door.
-        addDoor(physicsSpace);
+        addDoor();
 
         // Add a single-ended physics joint to constrain the door's motion.
         Vector3f pivotInDoor = new Vector3f(-doorHalfWidth, 0f, 0f);
@@ -166,7 +170,7 @@ public class HelloDoor
         doorBody.addToIgnoreList(doorFrameBody);
 
         // Add a kinematic, yellow ball.
-        ballBody = addBall(physicsSpace);
+        ballBody = addBall();
     }
 
     /**
@@ -176,44 +180,40 @@ public class HelloDoor
      */
     @Override
     public void simpleUpdate(float tpf) {
-        /*
-         * Calculate the ground location (if any) selected by the mouse cursor.
-         */
-        Vector2f screenXY = inputManager.getCursorPosition();
+        // Calculate the ground location (if any) selected by the mouse cursor.
+        Vector2f screenXy = inputManager.getCursorPosition();
         float nearZ = 0f;
-        Vector3f nearLocation = cam.getWorldCoordinates(screenXY, nearZ);
+        Vector3f nearLocation = cam.getWorldCoordinates(screenXy, nearZ);
         float farZ = 1f;
-        Vector3f farLocation = cam.getWorldCoordinates(screenXY, farZ);
+        Vector3f farLocation = cam.getWorldCoordinates(screenXy, farZ);
         if (nearLocation.y > groundY && farLocation.y < groundY) {
             float dy = nearLocation.y - farLocation.y;
             float t = (nearLocation.y - groundY) / dy;
-            FastMath.interpolateLinear(t, nearLocation, farLocation,
-                    mouseLocation);
+            FastMath.interpolateLinear(
+                    t, nearLocation, farLocation, mouseLocation);
         }
     }
     // *************************************************************************
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the simulation is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param ignored the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
-    public void prePhysicsTick(PhysicsSpace ignored, float timeStep) {
-        /*
-         * Reposition the ball based on the mouse location.
-         */
+    public void prePhysicsTick(PhysicsSpace space, float timeStep) {
+        // Reposition the ball based on the mouse location.
         Vector3f bodyLocation = mouseLocation.add(0f, doorHalfHeight, 0f);
         ballBody.setPhysicsLocation(bodyLocation);
     }
 
     /**
-     * Callback from Bullet, invoked just after the simulation has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
-     * @param space ignored
-     * @param timeStep ignored
+     * @param space the space that was just stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -226,10 +226,9 @@ public class HelloDoor
      * Create a kinematic rigid body with a sphere shape and add it to the
      * space.
      *
-     * @param physicsSpace (not null)
      * @return the new body
      */
-    private PhysicsRigidBody addBall(PhysicsSpace physicsSpace) {
+    private PhysicsRigidBody addBall() {
         float radius = 0.4f;
         SphereCollisionShape shape = new SphereCollisionShape(radius);
 
@@ -245,14 +244,11 @@ public class HelloDoor
     }
 
     /**
-     * Create a dynamic body with a box shape and add it to the specified
-     * PhysicsSpace.
-     *
-     * @param physicsSpace (not null)
+     * Create a dynamic body with a box shape and add it to the space.
      */
-    private void addDoor(PhysicsSpace physicsSpace) {
-        BoxCollisionShape shape = new BoxCollisionShape(doorHalfWidth,
-                doorHalfHeight, halfThickness);
+    private void addDoor() {
+        BoxCollisionShape shape = new BoxCollisionShape(
+                doorHalfWidth, doorHalfHeight, halfThickness);
         float mass = 1f;
         doorBody = new PhysicsRigidBody(shape, mass);
         physicsSpace.addCollisionObject(doorBody);
@@ -262,80 +258,40 @@ public class HelloDoor
 
         Material redMaterial = createLitMaterial(1f, 0.1f, 0.1f);
         doorBody.setDebugMaterial(redMaterial);
-        doorBody.setDebugMeshNormals(DebugMeshNormals.Facet);
+        doorBody.setDebugMeshNormals(MeshNormals.Facet);
     }
 
     /**
-     * Add a static door frame to the specified PhysicsSpace.
-     *
-     * @param physicsSpace (not null)
+     * Add a static door frame to the space.
      */
-    private void addDoorFrame(PhysicsSpace physicsSpace) {
+    private void addDoorFrame() {
         float frameHalfWidth = 0.5f;
-        BoxCollisionShape jambShape = new BoxCollisionShape(frameHalfWidth,
-                doorHalfHeight, halfThickness);
+        BoxCollisionShape jambShape = new BoxCollisionShape(
+                frameHalfWidth, doorHalfHeight, halfThickness);
 
         float lintelLength = doorHalfWidth + 2 * frameHalfWidth;
-        BoxCollisionShape lintelShape = new BoxCollisionShape(lintelLength,
-                frameHalfWidth, halfThickness);
+        BoxCollisionShape lintelShape = new BoxCollisionShape(
+                lintelLength, frameHalfWidth, halfThickness);
 
         CompoundCollisionShape shape = new CompoundCollisionShape();
         shape.addChildShape(jambShape, doorHalfWidth + frameHalfWidth, 0f, 0f);
         shape.addChildShape(jambShape, -doorHalfWidth - frameHalfWidth, 0f, 0f);
-        shape.addChildShape(lintelShape,
-                0f, doorHalfHeight + frameHalfWidth, 0f);
+        shape.addChildShape(
+                lintelShape, 0f, doorHalfHeight + frameHalfWidth, 0f);
 
         doorFrameBody = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
         Material grayMaterial = createLitMaterial(0.5f, 0.5f, 0.5f);
         doorFrameBody.setDebugMaterial(grayMaterial);
-        doorFrameBody.setDebugMeshNormals(DebugMeshNormals.Facet);
+        doorFrameBody.setDebugMeshNormals(MeshNormals.Facet);
 
         physicsSpace.addCollisionObject(doorFrameBody);
     }
 
     /**
-     * Add a horizontal plane body to the specified PhysicsSpace.
-     *
-     * @param y (the desired elevation, in physics-space coordinates)
-     * @param physicsSpace (not null)
-     */
-    private void addPlane(float y, PhysicsSpace physicsSpace) {
-        Plane plane = new Plane(Vector3f.UNIT_Y, y);
-        PlaneCollisionShape shape = new PlaneCollisionShape(plane);
-        PhysicsRigidBody floorBody
-                = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
-
-        // Load a repeating tile texture.
-        String assetPath = "Textures/greenTile.png";
-        boolean flipY = false;
-        TextureKey key = new TextureKey(assetPath, flipY);
-        boolean generateMips = true;
-        key.setGenerateMips(generateMips);
-        Texture texture = assetManager.loadTexture(key);
-        texture.setMinFilter(Texture.MinFilter.Trilinear);
-        texture.setWrap(Texture.WrapMode.Repeat);
-
-        // Enable anisotropic filtering, to reduce blurring.
-        int maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
-        int degree = Math.min(8, maxDegree);
-        texture.setAnisotropicFilter(degree);
-
-        // Apply a tiled, unshaded debug material to the body.
-        Material material = new Material(assetManager, Materials.UNSHADED);
-        material.setTexture("ColorMap", texture);
-        floorBody.setDebugMaterial(material);
-
-        // Generate texture coordinates during debug-mesh initialization.
-        float tileSize = 1f;
-        PlaneDmiListener planeDmiListener = new PlaneDmiListener(tileSize);
-        floorBody.setDebugMeshInitListener(planeDmiListener);
-
-        physicsSpace.addCollisionObject(floorBody);
-    }
-
-    /**
      * Add lighting and shadows to the specified scene.
+     *
+     * @param scene the scene to augment (not null)
      */
     private void addLighting(Spatial scene) {
         ColorRGBA ambientColor = new ColorRGBA(0.03f, 0.03f, 0.03f, 1f);
@@ -354,13 +310,52 @@ public class HelloDoor
         int shadowMapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager,
-                        shadowMapSize, numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, shadowMapSize, numSplits);
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
         dlsr.setEdgesThickness(5);
         dlsr.setLight(sun);
         dlsr.setShadowIntensity(0.6f);
         viewPort.addProcessor(dlsr);
+    }
+
+    /**
+     * Add a horizontal plane body to the space.
+     *
+     * @param y (the desired elevation, in physics-space coordinates)
+     */
+    private void addPlane(float y) {
+        Plane plane = new Plane(Vector3f.UNIT_Y, y);
+        PlaneCollisionShape shape = new PlaneCollisionShape(plane);
+        PhysicsRigidBody floorBody
+                = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
+
+        // Load a repeating tile texture.
+        String assetPath = "Textures/greenTile.png";
+        boolean flipY = false;
+        TextureKey key = new TextureKey(assetPath, flipY);
+        boolean generateMips = true;
+        key.setGenerateMips(generateMips);
+        Texture texture = assetManager.loadTexture(key);
+        texture.setMinFilter(Texture.MinFilter.Trilinear);
+        texture.setWrap(Texture.WrapMode.Repeat);
+
+        // Enable anisotropic filtering, to reduce blurring.
+        Integer maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
+        int degree = (maxDegree == null) ? 1 : Math.min(8, maxDegree);
+        texture.setAnisotropicFilter(degree);
+
+        // Apply a tiled, unshaded debug material to the body.
+        Material material = new Material(assetManager, Materials.UNSHADED);
+        material.setTexture("ColorMap", texture);
+        floorBody.setDebugMaterial(material);
+
+        // Generate texture coordinates during debug-mesh initialization.
+        float tileSize = 1f;
+        PlaneDmiListener planeDmiListener = new PlaneDmiListener(tileSize);
+        floorBody.setDebugMeshInitListener(planeDmiListener);
+
+        physicsSpace.addCollisionObject(floorBody);
     }
 
     /**
@@ -375,6 +370,8 @@ public class HelloDoor
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
@@ -395,7 +392,7 @@ public class HelloDoor
 
         PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
-        // To enable the callbacks, add this application as a tick listener.
+        // To enable the callbacks, register the application as a tick listener.
         result.addTickListener(this);
 
         // Reduce the time step for better accuracy.

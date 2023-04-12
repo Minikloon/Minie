@@ -50,8 +50,8 @@ import jme3utilities.math.MyVector3f;
 import jme3utilities.math.MyVolume;
 
 /**
- * A simple point, line-segment, triangle, or tetrahedron CollisionShape based
- * on Bullet's btBU_Simplex1to4. These shapes cannot be scaled.
+ * A simple point, line-segment, triangle, or tetrahedron collision shape based
+ * on Bullet's {@code btBU_Simplex1to4}. These shapes cannot be scaled.
  *
  * @author normenhansen
  */
@@ -98,7 +98,7 @@ public class SimplexCollisionShape extends ConvexShape {
      * null, unaffected)
      */
     public SimplexCollisionShape(Vector3f location) {
-        locations = new Vector3f[1];
+        this.locations = new Vector3f[1];
         locations[0] = location.clone();
         createShape();
     }
@@ -112,7 +112,7 @@ public class SimplexCollisionShape extends ConvexShape {
      * null, unaffected)
      */
     public SimplexCollisionShape(Vector3f point1, Vector3f point2) {
-        locations = new Vector3f[2];
+        this.locations = new Vector3f[2];
         locations[0] = point1.clone();
         locations[1] = point2.clone();
         createShape();
@@ -130,7 +130,7 @@ public class SimplexCollisionShape extends ConvexShape {
      */
     public SimplexCollisionShape(Vector3f vertex1, Vector3f vertex2,
             Vector3f vertex3) {
-        locations = new Vector3f[3];
+        this.locations = new Vector3f[3];
         locations[0] = vertex1.clone();
         locations[1] = vertex2.clone();
         locations[2] = vertex3.clone();
@@ -151,7 +151,7 @@ public class SimplexCollisionShape extends ConvexShape {
      */
     public SimplexCollisionShape(Vector3f vertex1, Vector3f vertex2,
             Vector3f vertex3, Vector3f vertex4) {
-        locations = new Vector3f[4];
+        this.locations = new Vector3f[4];
         locations[0] = vertex1.clone();
         locations[1] = vertex2.clone();
         locations[2] = vertex3.clone();
@@ -167,7 +167,7 @@ public class SimplexCollisionShape extends ConvexShape {
     public SimplexCollisionShape(AbstractTriangle triangle) {
         Validate.nonNull(triangle, "triangle");
 
-        locations = new Vector3f[3];
+        this.locations = new Vector3f[3];
         locations[0] = triangle.get1().clone();
         locations[1] = triangle.get2().clone();
         locations[2] = triangle.get3().clone();
@@ -197,7 +197,7 @@ public class SimplexCollisionShape extends ConvexShape {
         assert numVertices >= 1 : numVertices;
         assert numVertices <= 4 : numVertices;
 
-        locations = new Vector3f[numVertices];
+        this.locations = new Vector3f[numVertices];
         for (int vertexIndex = 0; vertexIndex < numVertices; ++vertexIndex) {
             locations[vertexIndex] = new Vector3f();
             MyBuffer.get(buffer, startPosition + vertexIndex * numAxes,
@@ -215,7 +215,7 @@ public class SimplexCollisionShape extends ConvexShape {
     public SimplexCollisionShape(LineSegment segment) {
         Validate.nonNull(segment, "segment");
 
-        locations = new Vector3f[2];
+        this.locations = new Vector3f[2];
         locations[0] = segment.getNegativeEnd(null);
         locations[1] = segment.getPositiveEnd(null);
 
@@ -233,7 +233,7 @@ public class SimplexCollisionShape extends ConvexShape {
         int numVertices = vertices.length;
         assert numVertices <= 4 : numVertices;
 
-        locations = new Vector3f[numVertices];
+        this.locations = new Vector3f[numVertices];
         for (int vertexIndex = 0; vertexIndex < numVertices; ++vertexIndex) {
             locations[vertexIndex] = vertices[vertexIndex].clone();
         }
@@ -254,11 +254,14 @@ public class SimplexCollisionShape extends ConvexShape {
         int numVertices = locations.length;
         Validate.inRange(index, "index", 0, numVertices - 1);
 
+        Vector3f result;
         if (storeResult == null) {
-            return locations[index].clone();
+            result = locations[index].clone();
         } else {
-            return storeResult.set(locations[index]);
+            result = storeResult.set(locations[index]);
         }
+
+        return result;
     }
 
     /**
@@ -326,7 +329,7 @@ public class SimplexCollisionShape extends ConvexShape {
     /**
      * Calculate the unscaled volume of the simplex.
      *
-     * @return the volume (&ge;0)
+     * @return the volume (in shape units cubed, &ge;0)
      */
     public float unscaledVolume() {
         float volume = 0f;
@@ -339,7 +342,7 @@ public class SimplexCollisionShape extends ConvexShape {
         return volume;
     }
     // *************************************************************************
-    // CollisionShape methods
+    // ConvexShape methods
 
     /**
      * Test whether the specified scale factors can be applied to this shape.
@@ -369,23 +372,8 @@ public class SimplexCollisionShape extends ConvexShape {
     @Override
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
-        locations = cloner.clone(locations);
+        this.locations = cloner.clone(locations);
         createShape();
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public SimplexCollisionShape jmeClone() {
-        try {
-            SimplexCollisionShape clone = (SimplexCollisionShape) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -426,13 +414,13 @@ public class SimplexCollisionShape extends ConvexShape {
         Vector3f v4 = (Vector3f) capsule.readSavable(tagSimplexPoint4, null);
 
         if (v2 == null) {
-            locations = new Vector3f[]{v1};
+            this.locations = new Vector3f[]{v1};
         } else if (v3 == null) {
-            locations = new Vector3f[]{v1, v2};
+            this.locations = new Vector3f[]{v1, v2};
         } else if (v4 == null) {
-            locations = new Vector3f[]{v1, v2, v3};
+            this.locations = new Vector3f[]{v1, v2, v3};
         } else {
-            locations = new Vector3f[]{v1, v2, v3, v4};
+            this.locations = new Vector3f[]{v1, v2, v3, v4};
         }
 
         createShape();
@@ -445,6 +433,20 @@ public class SimplexCollisionShape extends ConvexShape {
     protected void recalculateAabb() {
         long shapeId = nativeId();
         recalcAabb(shapeId);
+    }
+
+    /**
+     * Approximate this shape with a HullCollisionShape.
+     *
+     * @return a new shape
+     */
+    @Override
+    public HullCollisionShape toHullShape() {
+        assert MyVector3f.isScaleIdentity(scale) : scale;
+        HullCollisionShape result = new HullCollisionShape(locations);
+        result.setMargin(margin);
+
+        return result;
     }
 
     /**
@@ -511,8 +513,8 @@ public class SimplexCollisionShape extends ConvexShape {
 
     native private static long createShape(Vector3f vector1, Vector3f vector2);
 
-    native private static long createShape(Vector3f vector1, Vector3f vector2,
-            Vector3f vector3);
+    native private static long
+            createShape(Vector3f vector1, Vector3f vector2, Vector3f vector3);
 
     native private static long createShape(Vector3f vector1, Vector3f vector2,
             Vector3f vector3, Vector3f vector4);

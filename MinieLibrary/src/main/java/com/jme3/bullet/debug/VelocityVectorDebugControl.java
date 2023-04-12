@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 jMonkeyEngine
+ * Copyright (c) 2020-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,14 +87,14 @@ class VelocityVectorDebugControl extends AbstractPhysicsDebugControl {
      * @param debugAppState which app state (not null, alias created)
      * @param pco which rigid body to visualize (not null, alias created)
      */
-    VelocityVectorDebugControl(BulletDebugAppState debugAppState,
-            PhysicsCollisionObject pco) {
+    VelocityVectorDebugControl(
+            BulletDebugAppState debugAppState, PhysicsCollisionObject pco) {
         super(debugAppState);
-        rigidBody = (PhysicsRigidBody) pco;
+        this.rigidBody = (PhysicsRigidBody) pco;
 
         rigidBody.getLinearVelocity(tmpExtent);
         Arrow mesh = new Arrow(tmpExtent);
-        geom = new Geometry("velocity of " + rigidBody, mesh);
+        this.geom = new Geometry("velocity of " + rigidBody, mesh);
 
         rigidBody.getPhysicsLocation(tmpCenter);
         geom.setLocalTranslation(tmpCenter);

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,9 @@ public class TestIssue894 {
     // *************************************************************************
     // new methods exposed
 
+    /**
+     * Test to verify that the issue remains solved.
+     */
     @Test
     public void testIssue894() {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
@@ -56,8 +59,7 @@ public class TestIssue894 {
         rb2.setPhysicsLocation(new Vector3f(4f, 0f, 0f));
 
         SliderJoint joint = new SliderJoint(rb1, rb2,
-                new Vector3f(2f, 0f, 0f),
-                new Vector3f(-2f, 0f, 0f), true);
+                new Vector3f(2f, 0f, 0f), new Vector3f(-2f, 0f, 0f), true);
 
         joint.setLowerAngLimit(-0.01f);
         joint.setLowerLinLimit(-0.02f);

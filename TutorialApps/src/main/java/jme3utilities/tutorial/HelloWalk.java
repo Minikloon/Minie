@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -33,8 +33,6 @@ import com.jme3.bullet.PhysicsTickListener;
 import com.jme3.bullet.collision.shapes.CapsuleCollisionShape;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.HeightfieldCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
-import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.bullet.objects.PhysicsCharacter;
@@ -42,6 +40,7 @@ import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.input.controls.ActionListener;
+import com.jme3.input.controls.InputListener;
 import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.AmbientLight;
 import com.jme3.light.DirectionalLight;
@@ -59,40 +58,45 @@ import com.jme3.terrain.heightmap.HeightMap;
 import com.jme3.terrain.heightmap.ImageBasedHeightMap;
 import com.jme3.texture.Image;
 import com.jme3.texture.Texture;
+import jme3utilities.MeshNormals;
 
 /**
  * A simple example of character physics.
- *
+ * <p>
  * Press the W key to walk. Press the space bar to jump.
- *
+ * <p>
  * Builds upon HelloCharacter.
  *
  * @author Stephen Gold sgold@sonic.net
  */
 public class HelloWalk
         extends SimpleApplication
-        implements ActionListener, PhysicsTickListener {
+        implements PhysicsTickListener {
     // *************************************************************************
     // fields
 
     /**
      * true when the spacebar is pressed, otherwise false
      */
-    private volatile boolean jumpRequested;
+    private static volatile boolean jumpRequested;
     /**
      * true when the W key is pressed, otherwise false
      */
-    private volatile boolean walkRequested;
-    private PhysicsCharacter character;
+    private static volatile boolean walkRequested;
+    private static PhysicsCharacter character;
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloWalk application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloWalk application = new HelloWalk();
 
         // Enable gamma correction for accurate lighting.
@@ -113,7 +117,7 @@ public class HelloWalk
     public void simpleInitApp() {
         configureCamera();
         configureInput();
-        PhysicsSpace physicsSpace = configurePhysics();
+        physicsSpace = configurePhysics();
 
         // Create a character with a capsule shape and add it to the space.
         float capsuleRadius = 3f;
@@ -129,7 +133,7 @@ public class HelloWalk
         character.setPhysicsLocation(new Vector3f(-73.6f, 19.09f, -45.58f));
 
         // Add a static heightmap to represent the ground.
-        addTerrain(physicsSpace);
+        addTerrain();
     }
 
     /**
@@ -139,53 +143,31 @@ public class HelloWalk
      */
     @Override
     public void simpleUpdate(float tpf) {
-        // Synchronize the (first-person) camera location
-        // with the PhysicsCharacter.
-        // This overrides any translation requested by FlyByCamera.
+        /*
+         * Synchronize the (first-person) camera location
+         * with the PhysicsCharacter.
+         * This overrides any translation requested by FlyByCamera.
+         */
         Vector3f location = character.getPhysicsLocation(null);
         cam.setLocation(location);
-    }
-    // *************************************************************************
-    // ActionListener methods
-
-    /**
-     * Callback to handle keyboard input events.
-     *
-     * @param action the name of the input event
-     * @param ongoing true &rarr; pressed, false &rarr; released
-     * @param tpf the time per frame (in seconds, &ge;0)
-     */
-    @Override
-    public void onAction(String action, boolean ongoing, float tpf) {
-        switch (action) {
-            case CameraInput.FLYCAM_FORWARD:
-                walkRequested = ongoing;
-                return;
-
-            case "jump":
-                jumpRequested = ongoing;
-                return;
-
-            default:
-                System.out.println("Unknown action: " + action);
-        }
     }
     // *************************************************************************
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the physics is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
-        // Clear any motion from the previous tick.
+        // Clear any motion from the previous simulation step.
         character.setWalkDirection(Vector3f.ZERO);
-
-        // If the character is touching the ground,
-        // cause it respond to keyboard input.
+        /*
+         * If the character is touching the ground,
+         * cause it respond to keyboard input.
+         */
         if (character.onGround()) {
             if (jumpRequested) {
                 character.jump();
@@ -201,10 +183,10 @@ public class HelloWalk
     }
 
     /**
-     * Callback from Bullet, invoked just after the physics has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
      * @param space the space that was just stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -214,7 +196,10 @@ public class HelloWalk
     // private methods
 
     /**
-     * Add lighting and shadows to the specified scene.
+     * Add lighting and shadows to the specified scene and set the background
+     * color.
+     *
+     * @param scene the scene to augment (not null)
      */
     private void addLighting(Spatial scene) {
         ColorRGBA ambientColor = new ColorRGBA(0.03f, 0.03f, 0.03f, 1f);
@@ -233,8 +218,8 @@ public class HelloWalk
         int shadowMapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager,
-                        shadowMapSize, numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, shadowMapSize, numSplits);
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
         dlsr.setEdgesThickness(5);
         dlsr.setLight(sun);
@@ -247,11 +232,9 @@ public class HelloWalk
     }
 
     /**
-     * Add a heightfield body to the specified PhysicsSpace.
-     *
-     * @param physicsSpace (not null)
+     * Add a heightfield body to the space.
      */
-    private void addTerrain(PhysicsSpace physicsSpace) {
+    private void addTerrain() {
         // Generate a HeightMap from jme3-testdata-3.1.0-stable.jar
         String assetPath = "Textures/Terrain/splat/mountains512.png";
         Texture texture = assetManager.loadTexture(assetPath);
@@ -262,14 +245,14 @@ public class HelloWalk
         // Construct a static rigid body based on the HeightMap.
         CollisionShape shape = new HeightfieldCollisionShape(heightMap);
         PhysicsRigidBody body
-                = new RigidBodyControl(shape, PhysicsBody.massForStatic);
+                = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
         physicsSpace.addCollisionObject(body);
 
         // Customize its debug visualization.
         Material greenMaterial = createLitMaterial(0f, 0.5f, 0f);
         body.setDebugMaterial(greenMaterial);
-        body.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        body.setDebugMeshNormals(MeshNormals.Smooth);
     }
 
     /**
@@ -292,11 +275,30 @@ public class HelloWalk
      */
     private void configureInput() {
         inputManager.addMapping("jump", new KeyTrigger(KeyInput.KEY_SPACE));
-        inputManager.addListener(this, "jump", CameraInput.FLYCAM_FORWARD);
+        InputListener input = new ActionListener() {
+            @Override
+            public void onAction(String action, boolean isPressed, float tpf) {
+                switch (action) {
+                    case "jump":
+                        jumpRequested = isPressed;
+                        return;
+
+                    case CameraInput.FLYCAM_FORWARD:
+                        walkRequested = isPressed;
+                        return;
+
+                    default:
+                        System.out.println("Unknown action: " + action);
+                }
+            }
+        };
+        inputManager.addListener(input, "jump", CameraInput.FLYCAM_FORWARD);
     }
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
@@ -317,7 +319,7 @@ public class HelloWalk
 
         PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
-        // Activate the PhysicsTickListener interface.
+        // To enable the callbacks, register the application as a tick listener.
         result.addTickListener(this);
 
         return result;

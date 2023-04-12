@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,8 @@ import jme3utilities.mesh.DividedLine;
 
 /**
  * A simple rope simulation using a soft body.
+ * <p>
+ * Builds upon HelloPin.
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -48,9 +50,9 @@ public class HelloSoftRope extends SimpleApplication {
     /**
      * Main entry point for the HelloSoftRope application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloSoftRope application = new HelloSoftRope();
         application.start();
     }
@@ -64,8 +66,8 @@ public class HelloSoftRope extends SimpleApplication {
     public void simpleInitApp() {
         // Set up Bullet physics (with debug enabled).
         SoftPhysicsAppState bulletAppState = new SoftPhysicsAppState();
-        bulletAppState.setDebugEnabled(true);
         stateManager.attach(bulletAppState);
+        bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSoftSpace physicsSpace = bulletAppState.getPhysicsSoftSpace();
 
         // Relocate the camera.

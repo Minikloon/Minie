@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -31,26 +31,48 @@ import com.jme3.bullet.PhysicsSpace;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.objects.PhysicsGhostObject;
+import java.util.logging.Logger;
 
 /**
  * Test case for JME issue #1351: native Bullet crash during garbage collection.
  *
- * If successful, the app will complete normally.
+ * If successful, the application will complete normally.
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class TestIssue1351 extends SimpleApplication {
+final public class TestIssue1351 extends SimpleApplication {
+    // *************************************************************************
+    // constants and loggers
+
+    /**
+     * message logger for this class
+     */
+    final public static Logger logger
+            = Logger.getLogger(TestIssue1351.class.getName());
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue1351 application.
+     */
+    public TestIssue1351() { // explicit to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
+    // new methods exposed
 
     /**
      * Main entry point for the TestIssue1351 application.
      *
-     * @param ignored unused
+     * @param arguments unused
      */
-    public static void main(String[] ignored) {
-        TestIssue1351 app = new TestIssue1351();
-        app.start();
+    public static void main(String[] arguments) {
+        TestIssue1351 application = new TestIssue1351();
+        application.start();
     }
 
+    /**
+     * Initialize this application.
+     */
     @Override
     public void simpleInitApp() {
         CollisionShape shape = new SphereCollisionShape(1f);

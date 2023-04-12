@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -90,27 +90,18 @@ public class ImportCgms extends SimpleApplication {
      * @param arguments array of command-line arguments (not null)
      */
     public static void main(String[] arguments) {
-        /*
-         * Mute the chatty loggers found in some imported packages.
-         */
+        // Mute the chatty loggers found in some imported packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Set the logging level for this class.
-         */
-        //logger.setLevel(Level.INFO);
-        /*
-         * Instantiate the application.
-         */
+
+        // Instantiate the application.
         ImportCgms application = new ImportCgms();
-        /*
-         * Log the working directory.
-         */
+
+        // Log the working directory.
         String userDir = System.getProperty("user.dir");
         logger.log(Level.INFO, "working directory is {0}",
                 MyString.quote(userDir));
-        /*
-         * Import the C-G models.
-         */
+
+        // Import the C-G models.
         application.start(JmeContext.Type.Headless);
     }
     // *************************************************************************
@@ -125,9 +116,8 @@ public class ImportCgms extends SimpleApplication {
         Logger.getLogger(MaterialLoader.class.getName()).setLevel(Level.SEVERE);
         Logger.getLogger(MeshLoader.class.getName()).setLevel(Level.SEVERE);
         Logger.getLogger(TemporalMesh.class.getName()).setLevel(Level.SEVERE);
-        /*
-         * Import the BaseMesh model from jme3-testdata-3.1.0-stable.jar:
-         */
+
+        // Import the BaseMesh model from jme3-testdata-3.1.0-stable.jar:
         assetManager.registerLoader(BlenderLoader.class, "blend");
         BlenderKey blendKey = new BlenderKey("Blender/2.4x/BaseMesh_249.blend");
         Spatial baseMesh = assetManager.loadModel(blendKey);
@@ -152,9 +142,8 @@ public class ImportCgms extends SimpleApplication {
         Spatial duck = assetManager.loadModel("Models/Duck/Duck.gltf");
         writeToJ3O(duck, "Models/Duck/Duck.j3o");
         writeTextures(duck);
-        /*
-         * Import the Elephant model from jme3-testdata-3.1.0-stable.jar:
-         */
+
+        // Import the Elephant model from jme3-testdata-3.1.0-stable.jar:
         Spatial elephant
                 = assetManager.loadModel("Models/Elephant/Elephant.mesh.xml");
         writeToJ3O(elephant, "Models/Elephant/Elephant.j3o");
@@ -174,9 +163,14 @@ public class ImportCgms extends SimpleApplication {
                 = assetManager.loadModel("Models/MhGame/MhGame.mesh.xml");
         writeToJ3O(mhGame, "Models/MhGame/MhGame.j3o");
         writeTextures(mhGame);
-        /*
-         * Import the Ninja model from jme3-testdata-3.1.0-stable.jar:
-         */
+
+        // Import the MonkeyHead model from jme3-testdata-3.1.0-stable.jar:
+        Spatial monkeyHead = assetManager.loadModel(
+                "Models/MonkeyHead/MonkeyHead.mesh.xml");
+        writeToJ3O(monkeyHead, "Models/MonkeyHead/MonkeyHead.j3o");
+        writeTextures(monkeyHead);
+
+        // Import the Ninja model from jme3-testdata-3.1.0-stable.jar:
         Spatial ninja = assetManager.loadModel("Models/Ninja/Ninja.mesh.xml");
         writeToJ3O(ninja, "Models/Ninja/Ninja.j3o");
         writeTextures(ninja);
@@ -215,6 +209,8 @@ public class ImportCgms extends SimpleApplication {
 
     /**
      * Write the image of a texture to JPG or PNG file.
+     *
+     * @param key access the texture to be written (not null)
      */
     private void writeImage(TextureKey key) {
         String suffix = key.getExtension();
@@ -223,7 +219,7 @@ public class ImportCgms extends SimpleApplication {
         AssetInfo info = assetManager.locateAsset(key);
         InputStream stream = info.openStream();
 
-        BufferedImage image = null;
+        BufferedImage image;
         try {
             image = ImageIO.read(stream);
         } catch (IOException exception) {
@@ -234,9 +230,8 @@ public class ImportCgms extends SimpleApplication {
 
         String writeFilePath = String.format("%s/%s", assetDirPath, assetPath);
         File file = new File(writeFilePath);
-        /*
-         * Create the parent folder.
-         */
+
+        // Create the parent folder.
         File parent = file.getParentFile();
         if (parent != null && !parent.exists()) {
             boolean success = parent.mkdirs();
@@ -253,8 +248,6 @@ public class ImportCgms extends SimpleApplication {
         try {
             ImageIO.write(image, suffix, file);
         } catch (IOException exception) {
-            String message = "write() failed while saving "
-                    + MyString.quote(writeFilePath);
             throw new RuntimeException(exception);
         }
         logger.log(Level.INFO, "wrote file {0}", MyString.quote(writeFilePath));
@@ -262,11 +255,11 @@ public class ImportCgms extends SimpleApplication {
 
     /**
      * Write the image of each 2-D texture used in the specified model.
+     *
+     * @param model the scene-graph subtree to analyze (may be null)
      */
     private void writeTextures(Spatial model) {
-        /*
-         * Collect all unique 2-D textures used in the model.
-         */
+        // Collect all unique 2-D textures used in the model.
         Set<TextureKey> textureKeys = new HashSet<>(20);
         for (Material materials : MySpatial.listMaterials(model, null)) {
             for (MatParam matParam : materials.getParams()) {
@@ -277,9 +270,8 @@ public class ImportCgms extends SimpleApplication {
                 }
             }
         }
-        /*
-         * Write each texture to a JPG file.
-         */
+
+        // Write each texture to a JPG file.
         for (TextureKey textureKey : textureKeys) {
             writeImage(textureKey);
         }
@@ -287,8 +279,12 @@ public class ImportCgms extends SimpleApplication {
 
     /**
      * Write the specified model to a J3O file.
+     *
+     * @param model the scene-graph subtree to write (not null)
+     * @param writeAssetPath the asset-path portion of the filename (not null,
+     * not empty, should end in ".j3o")
      */
-    private void writeToJ3O(Spatial model, String writeAssetPath) {
+    private static void writeToJ3O(Spatial model, String writeAssetPath) {
         String writeFilePath
                 = String.format("%s/%s", assetDirPath, writeAssetPath);
         Heart.writeJ3O(writeFilePath, model);

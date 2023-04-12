@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021-2022, Stephen Gold
+ Copyright (c) 2021-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -36,50 +36,73 @@ import com.jme3.bullet.control.BetterCharacterControl;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.bullet.objects.PhysicsRigidBody;
-import com.jme3.math.FastMath;
-import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
+import java.util.logging.Logger;
 
 /**
  * Test for Minie issue #18 (BetterCharacterController hops across seams) using
  * a HeightfieldCollisionShape. If the issue is present, numeric data will be
- * printed to System.out .
+ * printed to {@code System.out}.
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class TestIssue18Heightfield
+final public class TestIssue18Heightfield
         extends SimpleApplication
         implements PhysicsTickListener {
+    // *************************************************************************
+    // constants and loggers
+
+    /**
+     * message logger for this class
+     */
+    final public static Logger logger
+            = Logger.getLogger(TestIssue18Heightfield.class.getName());
     // *************************************************************************
     // fields
 
     /**
      * control under test
      */
-    private BetterCharacterControl bcc;
+    private static BetterCharacterControl bcc;
     /**
      * true if character will move toward +X, false if it will move toward -X
      */
-    private boolean increasingX;
+    private static boolean increasingX;
     /**
      * largest Y value seen so far: anything larger than 0.05 is an issue
      */
-    private float maxElevation = 0.05f;
+    private static float maxElevation = 0.05f;
     /**
      * count of physics timesteps simulated
      */
-    private int tickCount = 0;
+    private static int tickCount = 0;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue18Heightfield application.
+     */
+    public TestIssue18Heightfield() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
-    public static void main(String[] ignored) {
+    /**
+     * Main entry point for the TestIssue18Heightfield application.
+     *
+     * @param arguments unused
+     */
+    public static void main(String[] arguments) {
         TestIssue18Heightfield application = new TestIssue18Heightfield();
         application.start();
     }
     // *************************************************************************
     // SimpleApplication methods
 
+    /**
+     * Initialize this application.
+     */
     @Override
     public void simpleInitApp() {
         PhysicsSpace physicsSpace = configurePhysics();
@@ -91,17 +114,20 @@ public class TestIssue18Heightfield
         float characterRadius = 1f;
         float characterHeight = 4f;
         float characterMass = 1f;
-        bcc = new BetterCharacterControl(characterRadius, characterHeight,
-                characterMass);
+        bcc = new BetterCharacterControl(
+                characterRadius, characterHeight, characterMass);
         controlledNode.addControl(bcc);
         physicsSpace.add(bcc);
     }
 
+    /**
+     * Callback invoked once per frame.
+     *
+     * @param tpf the time interval between frames (in seconds, &ge;0)
+     */
     @Override
     public void simpleUpdate(float tpf) {
-        /*
-         * Terminate the test after 200 time steps.
-         */
+        // Terminate the test after 200 time steps.
         if (tickCount > 200) {
             stop();
         }
@@ -109,11 +135,15 @@ public class TestIssue18Heightfield
     // *************************************************************************
     // PhysicsTickListener methods
 
+    /**
+     * Callback from Bullet, invoked just after the physics has been stepped.
+     *
+     * @param space the space that was just stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
+     */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
-        /*
-         * Determine the character's elevation and print it if it's a new high.
-         */
+        // Determine the character's elevation and print it if it's a new high.
         PhysicsRigidBody body = bcc.getRigidBody();
         Vector3f location = body.getPhysicsLocation();
         if (location.y > maxElevation) {
@@ -122,12 +152,17 @@ public class TestIssue18Heightfield
         }
     }
 
+    /**
+     * Callback from Bullet, invoked just before the physics is stepped.
+     *
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
+     */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
         ++tickCount;
-        /*
-         * Walk rapidly back and forth across the seam between the 2 triangles.
-         */
+
+        // Walk rapidly back and forth across the seam between the 2 triangles.
         Vector3f desiredVelocity = new Vector3f();
         float walkSpeed = 99f;
         if (increasingX) {
@@ -157,22 +192,22 @@ public class TestIssue18Heightfield
      *
      * @param physicsSpace (not null)
      */
-    private void addGround(PhysicsSpace physicsSpace) {
+    private static void addGround(PhysicsSpace physicsSpace) {
         float[] heightmap = {0f, 0f, 0f, 0f};
         Vector3f scale = new Vector3f(1000f, 1f, 1000f);
         CollisionShape shape = new HeightfieldCollisionShape(heightmap, scale);
+        // shape.setContactFilterEnabled(false); // to make the test fail
 
         RigidBodyControl rbc
                 = new RigidBodyControl(shape, PhysicsBody.massForStatic);
-        Quaternion rotation = new Quaternion();
-        rotation.fromAngles(-FastMath.HALF_PI, 0f, 0f);
-        rbc.setPhysicsRotation(rotation);
         rbc.setPhysicsSpace(physicsSpace);
         new Node().addControl(rbc);
     }
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();

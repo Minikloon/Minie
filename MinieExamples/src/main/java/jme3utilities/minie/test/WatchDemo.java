@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,6 @@ import com.jme3.bullet.animation.ShapeHeuristic;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.objects.PhysicsRigidBody;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.light.AmbientLight;
@@ -71,6 +70,7 @@ import jme3utilities.InfluenceUtil;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
 import jme3utilities.MySpatial;
+import jme3utilities.MyString;
 import jme3utilities.debug.PointVisualizer;
 import jme3utilities.debug.SkeletonVisualizer;
 import jme3utilities.math.MyVector3f;
@@ -119,68 +119,71 @@ public class WatchDemo extends PhysicsDemo {
     /**
      * true once {@link #initWhenReady()} has been invoked for the latest model
      */
-    private boolean dacReadyInitDone = false;
+    private static boolean dacReadyInitDone = false;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * Control being tested
      */
-    private DynamicAnimControl dac;
+    private static DynamicAnimControl dac;
     /**
      * root node of the C-G model on which the Control is being tested
      */
-    private Node cgModel;
+    private static Node cgModel;
 
-    private PhysicsRigidBody targetBody;
+    private static PhysicsRigidBody targetBody;
     /**
      * visualizer for the target
      */
-    private PointVisualizer targetPoint;
+    private static PointVisualizer targetPoint;
     /**
      * visualizer for the skeleton of the C-G model
      */
-    private SkeletonVisualizer sv;
+    private static SkeletonVisualizer sv;
 
-    private TrackController leftWatch = null;
-    private TrackController rightWatch = null;
-    private TrackController watch = null;
+    private static TrackController leftWatch = null;
+    private static TrackController rightWatch = null;
+    private static TrackController watch = null;
     /**
      * locations of grid corners in world coordinates
      */
-    final private Vector3f gridBottomLeft = new Vector3f();
-    final private Vector3f gridBottomRight = new Vector3f();
-    private Vector3f gridTopLeft;
-    private Vector3f gridTopRight;
+    final private static Vector3f gridBottomLeft = new Vector3f();
+    final private static Vector3f gridBottomRight = new Vector3f();
+    private static Vector3f gridTopLeft;
+    private static Vector3f gridTopRight;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the WatchDemo application.
+     */
+    public WatchDemo() { // made explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the WatchDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new WatchDemo();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new WatchDemo();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -190,7 +193,8 @@ public class WatchDemo extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        super.acorusInit();
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -200,9 +204,8 @@ public class WatchDemo extends PhysicsDemo {
         viewPort.setBackgroundColor(skyColor);
 
         addLighting();
-        /*
-         * Hide the render-statistics overlay.
-         */
+
+        // Hide the render-statistics overlay.
         stateManager.getState(StatsAppState.class).toggleStats();
 
         float length = 4f;
@@ -213,16 +216,15 @@ public class WatchDemo extends PhysicsDemo {
         attachCubePlatform(halfExtent, topY);
 
         int indicatorSize = 16; // in pixels
-        targetPoint = new PointVisualizer(assetManager, indicatorSize,
-                ColorRGBA.Red, "ring");
+        targetPoint = new PointVisualizer(
+                assetManager, indicatorSize, ColorRGBA.Red, "ring");
         rootNode.attachChild(targetPoint);
 
         //addModel("Sinbad");
         //addModel("MhGame");
         addModel("SinbadWith1Sword");
-        /*
-         * Add a target rigid body, to be moved by dragging RMB.
-         */
+
+        // Add a target rigid body, to be moved by dragging RMB.
         CollisionShape shape = new SphereCollisionShape(0.1f);
         targetBody = new PhysicsRigidBody(shape);
         targetBody.setKinematic(true);
@@ -234,7 +236,7 @@ public class WatchDemo extends PhysicsDemo {
     }
 
     /**
-     * Configure the PhysicsDumper.
+     * Configure the PhysicsDumper during startup.
      */
     @Override
     public void configureDumper() {
@@ -256,7 +258,7 @@ public class WatchDemo extends PhysicsDemo {
     }
 
     /**
-     * Determine the length of debug axis arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -266,7 +268,8 @@ public class WatchDemo extends PhysicsDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -297,15 +300,6 @@ public class WatchDemo extends PhysicsDemo {
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind("toggle skeleton", KeyInput.KEY_V);
-
-        float margin = 10f;
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - 2f * margin;
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -325,6 +319,7 @@ public class WatchDemo extends PhysicsDemo {
                 case "toggle skeleton":
                     toggleSkeleton();
                     return;
+                default:
             }
 
             String[] words = actionString.split(" ");
@@ -395,7 +390,7 @@ public class WatchDemo extends PhysicsDemo {
     }
 
     /**
-     * Add lighting and shadows to the scene.
+     * Add lighting and shadows to the main scene.
      */
     private void addLighting() {
         ColorRGBA ambientColor = new ColorRGBA(0.4f, 0.4f, 0.4f, 1f);
@@ -411,8 +406,8 @@ public class WatchDemo extends PhysicsDemo {
         int mapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                        numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, mapSize, numSplits);
         dlsr.setLight(sun);
         dlsr.setShadowIntensity(0.5f);
         viewPort.addProcessor(dlsr);
@@ -522,11 +517,10 @@ public class WatchDemo extends PhysicsDemo {
      * Initialization that takes place once all links are ready for dynamic
      * mode.
      */
-    private void initWhenReady() {
+    private static void initWhenReady() {
         Vector3f pivot = new Vector3f();
-        /*
-         * The face and neck track the target.
-         */
+
+        // The face and neck track the target.
         Face face = (Face) dac;
         Vector3f faceDirection = face.faceDirection(null);
         String noseSpec = face.faceCenterSpec();
@@ -539,33 +533,30 @@ public class WatchDemo extends PhysicsDemo {
         watch.setEnabled(false);
         watch.setErrorGainFactor(0.3f);
         targetPoint.setEnabled(false);
-        /*
-         * If the model's eyes are animated, each eye also tracks the target.
-         */
+
+        // If the model's eyes are animated, each eye also tracks the target.
         if (dac instanceof Binocular) {
             Binocular binocular = (Binocular) dac;
-            /*
-             * left eye
-             */
+
+            // left eye
             String spec = binocular.leftPupilSpec();
             PhysicsLink link = dac.findManagerForVertex(spec, null, pivot);
             link.setDynamic(Vector3f.ZERO);
             Vector3f lookDirection = binocular.leftEyeLookDirection(null);
-            leftWatch = new TrackController(link, pivot, lookDirection,
-                    targetBody);
+            leftWatch = new TrackController(
+                    link, pivot, lookDirection, targetBody);
             link.addIKController(leftWatch);
             leftWatch.setDeltaGainFactor(4f);
             leftWatch.setEnabled(false);
             leftWatch.setErrorGainFactor(1f);
-            /*
-             * right eye
-             */
+
+            // left eye
             spec = binocular.rightPupilSpec();
             link = dac.findManagerForVertex(spec, null, pivot);
             link.setDynamic(Vector3f.ZERO);
             binocular.leftEyeLookDirection(lookDirection);
-            rightWatch = new TrackController(link, pivot, lookDirection,
-                    targetBody);
+            rightWatch = new TrackController(
+                    link, pivot, lookDirection, targetBody);
             link.addIKController(rightWatch);
             rightWatch.setDeltaGainFactor(4f);
             rightWatch.setEnabled(false);
@@ -718,7 +709,7 @@ public class WatchDemo extends PhysicsDemo {
     /**
      * Toggle mesh rendering on/off.
      */
-    private void toggleMeshes() {
+    private static void toggleMeshes() {
         Spatial.CullHint hint = cgModel.getLocalCullHint();
         if (hint == Spatial.CullHint.Inherit
                 || hint == Spatial.CullHint.Never) {
@@ -732,7 +723,7 @@ public class WatchDemo extends PhysicsDemo {
     /**
      * Toggle the skeleton visualizer on/off.
      */
-    private void toggleSkeleton() {
+    private static void toggleSkeleton() {
         boolean enabled = sv.isEnabled();
         sv.setEnabled(!enabled);
     }
@@ -745,10 +736,10 @@ public class WatchDemo extends PhysicsDemo {
         Ray ray = MyCamera.mouseRay(cam, inputManager);
 
         Vector3f location = new Vector3f();
-        boolean isTopLeft = ray.intersectWhere(gridTopLeft,
-                gridTopRight, gridBottomLeft, location);
-        boolean isBottomRight = ray.intersectWhere(gridBottomRight,
-                gridTopRight, gridBottomLeft, location);
+        boolean isTopLeft = ray.intersectWhere(
+                gridTopLeft, gridTopRight, gridBottomLeft, location);
+        boolean isBottomRight = ray.intersectWhere(
+                gridBottomRight, gridTopRight, gridBottomLeft, location);
         if (isTopLeft || isBottomRight) {
             if (leftWatch != null) {
                 leftWatch.setEnabled(true);

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -77,8 +77,8 @@ public class BuoyController extends IKController {
      * @param surfaceY the Y coordinate of the surface (in physics-space
      * coordinates)
      */
-    public BuoyController(PhysicsLink controlledLink, float densityOfMedium,
-            float surfaceY) {
+    public BuoyController(
+            PhysicsLink controlledLink, float densityOfMedium, float surfaceY) {
         super(controlledLink);
         Validate.positive(densityOfMedium, "density of medium");
 
@@ -129,7 +129,7 @@ public class BuoyController extends IKController {
 
     /**
      * Apply an impulse to the controlled rigid body to simulate buoyancy. Meant
-     * to be invoked by the controlled link before each physics tick.
+     * to be invoked by the controlled link before each simulation step.
      *
      * @param timeStep the physics timestep (in seconds, &ge;0)
      */
@@ -148,9 +148,8 @@ public class BuoyController extends IKController {
         if (surfaceY < bottomY) {
             return;
         }
-        /*
-         * The bounding box is at least partly submerged.
-         */
+
+        // The bounding box is at least partly submerged.
         float topY = boundingBox.getMax(null).y;
         assert topY > bottomY : topY;
         float height = topY - bottomY;
@@ -162,9 +161,8 @@ public class BuoyController extends IKController {
         Vector3f acceleration = gravity.mult(-densityRatio * fractionSubmerged);
         float mass = rigidBody.getMass();
         Vector3f impulse = acceleration.mult(mass * timeStep);
-        /*
-         * Apply the (upward) impulse to the rigid body.
-         */
+
+        // Apply the (upward) impulse to the rigid body.
         rigidBody.applyCentralImpulse(impulse);
     }
 
@@ -180,8 +178,8 @@ public class BuoyController extends IKController {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        densityOfMedium = capsule.readFloat("densityOfMedium", 1f);
-        surfaceY = capsule.readFloat("surfaceY", 0f);
+        this.densityOfMedium = capsule.readFloat("densityOfMedium", 1f);
+        this.surfaceY = capsule.readFloat("surfaceY", 0f);
     }
 
     /**

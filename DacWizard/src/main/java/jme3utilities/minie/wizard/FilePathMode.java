@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -56,14 +56,14 @@ class FilePathMode extends InputMode {
      */
     final private static String assetPath = "Textures/cursors/default.cur";
     /**
-     * action-string prefix to alter the file-system path prefix
+     * action-string prefix to alter the filesystem path prefix
      */
-    final static String setPathPrefix = "set pathPrefix ";
+    final private static String setPathPrefix = "set pathPrefix ";
     // *************************************************************************
     // constructors
 
     /**
-     * Instantiate a disabled, uninitialized mode.
+     * Instantiate a disabled, uninitialized input mode.
      */
     FilePathMode() {
         super("filePath");
@@ -95,11 +95,9 @@ class FilePathMode extends InputMode {
      * @param application (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager,
-            Application application) {
-        /*
-         * Set the mouse cursor for this mode.
-         */
+    public void initialize(
+            AppStateManager stateManager, Application application) {
+        // Configure the mouse cursor for this mode.
         AssetManager manager = application.getAssetManager();
         JmeCursor cursor = (JmeCursor) manager.loadAsset(assetPath);
         setCursor(cursor);
@@ -118,9 +116,8 @@ class FilePathMode extends InputMode {
     public void onAction(String actionString, boolean ongoing, float tpf) {
         Validate.nonNull(actionString, "action string");
         if (logger.isLoggable(Level.INFO)) {
-            logger.log(Level.INFO, "Got action {0} ongoing={1}", new Object[]{
-                MyString.quote(actionString), ongoing
-            });
+            logger.log(Level.INFO, "Got action {0} ongoing={1}",
+                    new Object[]{MyString.quote(actionString), ongoing});
         }
 
         boolean handled = false;
@@ -151,11 +148,10 @@ class FilePathMode extends InputMode {
     // private methods
 
     /**
-     * Advance to the LoadScreen if possible.
+     * Proceed to the "load" screen if possible.
      */
     private void nextScreen() {
-        FilePathScreen screen = DacWizard.findAppState(FilePathScreen.class);
-        String feedback = screen.feedback();
+        String feedback = FilePathScreen.feedback();
         if (feedback.isEmpty()) {
             setEnabled(false);
             InputMode load = InputMode.findMode("load");

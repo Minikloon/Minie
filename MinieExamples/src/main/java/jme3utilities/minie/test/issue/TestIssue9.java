@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@ import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Mesh;
 import com.jme3.scene.debug.WireBox;
+import java.util.logging.Logger;
 import jme3utilities.Heart;
 
 /**
@@ -51,29 +52,48 @@ import jme3utilities.Heart;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class TestIssue9 extends SimpleApplication {
+final public class TestIssue9 extends SimpleApplication {
+    // *************************************************************************
+    // constants and loggers
+
+    /**
+     * message logger for this class
+     */
+    final public static Logger logger
+            = Logger.getLogger(TestIssue9.class.getName());
     // *************************************************************************
     // fields
 
     /**
      * wire mesh for generating soft bodies
      */
-    final private Mesh wireBox = new WireBox();
+    final static private Mesh wireBox = new WireBox();
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue9 application.
+     */
+    public TestIssue9() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestIssue9 application.
      *
-     * @param ignored unused
+     * @param arguments unused
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         TestIssue9 app = new TestIssue9();
         app.start();
     }
     // *************************************************************************
     // SimpleApplication methods
 
+    /**
+     * Initialize this application.
+     */
     @Override
     public void simpleInitApp() {
         for (int iteration = 0; iteration < 99; ++iteration) {
@@ -88,16 +108,13 @@ public class TestIssue9 extends SimpleApplication {
      * Clone soft bodies.
      */
     private void clonePsb() {
-        /*
-         * empty
-         */
+        // empty
         PhysicsSoftBody soft = new PhysicsSoftBody();
         setParameters(soft, 0f);
         PhysicsSoftBody softClone = Heart.deepCopy(soft);
         cloneTest(soft, softClone);
-        /*
-         * non-empty
-         */
+
+        // non-empty
         PhysicsSoftBody soft2 = new PhysicsSoftBody();
         NativeSoftBodyUtil.appendFromLineMesh(wireBox, soft2);
         setParameters(soft2, 0f);
@@ -112,8 +129,8 @@ public class TestIssue9 extends SimpleApplication {
         boolean localPhysics = false;
         boolean updateNormals = true;
         boolean mergeVertices = true;
-        SoftBodyControl sbc = new SoftBodyControl(localPhysics, updateNormals,
-                mergeVertices);
+        SoftBodyControl sbc = new SoftBodyControl(
+                localPhysics, updateNormals, mergeVertices);
         Geometry sbcGeom = new Geometry("sbcGeom", wireBox);
         sbcGeom.addControl(sbc);
         PhysicsSoftBody soft3 = sbc.getBody();
@@ -139,7 +156,7 @@ public class TestIssue9 extends SimpleApplication {
         BinaryExporter.saveAndLoad(assetManager, bodyClone);
     }
 
-    private void setParameters(PhysicsBody pco, float b) {
+    private static void setParameters(PhysicsBody pco, float b) {
         if (pco instanceof PhysicsSoftBody) {
             setSoft((PhysicsSoftBody) pco, b);
         } else {
@@ -147,7 +164,7 @@ public class TestIssue9 extends SimpleApplication {
         }
     }
 
-    private void setSoft(PhysicsSoftBody body, float b) {
+    private static void setSoft(PhysicsSoftBody body, float b) {
         boolean flag = (b > 0.15f && b < 0.45f);
         int n = Math.round(10f * b);
 

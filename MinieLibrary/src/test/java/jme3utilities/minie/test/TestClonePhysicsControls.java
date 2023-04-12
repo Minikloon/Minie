@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -26,12 +26,14 @@
  */
 package jme3utilities.minie.test;
 
+import com.jme3.anim.util.AnimMigrationUtils;
 import com.jme3.asset.AssetManager;
 import com.jme3.asset.DesktopAssetManager;
 import com.jme3.asset.ModelKey;
 import com.jme3.asset.plugins.ClasspathLocator;
 import com.jme3.bullet.RotationOrder;
 import com.jme3.bullet.animation.CenterHeuristic;
+import com.jme3.bullet.animation.DacConfiguration;
 import com.jme3.bullet.animation.DynamicAnimControl;
 import com.jme3.bullet.animation.LinkConfig;
 import com.jme3.bullet.animation.MassHeuristic;
@@ -55,7 +57,8 @@ import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * Test cloning/saving/loading abstract physics controls.
+ * Test cloning/saving/loading abstract physics controls. TODO replace asserts
+ * with JUnit Assert
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -66,7 +69,7 @@ public class TestClonePhysicsControls {
     /**
      * AssetManager required by the BinaryImporter
      */
-    final private AssetManager assetManager = new DesktopAssetManager();
+    final private static AssetManager assetManager = new DesktopAssetManager();
     // *************************************************************************
     // new methods exposed
 
@@ -80,9 +83,8 @@ public class TestClonePhysicsControls {
         assetManager.registerLoader(BinaryLoader.class, "j3o");
         assetManager.registerLoader(J3MLoader.class, "j3m", "j3md");
         assetManager.registerLocator(null, ClasspathLocator.class);
-        /*
-         * BetterCharacterControl
-         */
+
+        // BetterCharacterControl
         float radius = 1f;
         float height = 3f;
         float mass = 1f;
@@ -92,18 +94,16 @@ public class TestClonePhysicsControls {
         verifyParameters(bcc, 0f);
         BetterCharacterControl bccClone = Heart.deepCopy(bcc);
         cloneTest(bcc, bccClone);
-        /*
-         * CharacterControl
-         */
+
+        // CharacterControl
         SphereCollisionShape shape = new SphereCollisionShape(2f);
         CharacterControl cc = new CharacterControl(shape, 0.5f);
         setParameters(cc, 0f);
         verifyParameters(cc, 0f);
         CharacterControl ccClone = Heart.deepCopy(cc);
         cloneTest(cc, ccClone);
-        /*
-         * DynamicAnimControl
-         */
+
+        // DynamicAnimControl
         DynamicAnimControl dac = new DynamicAnimControl();
         setParameters(dac, 0f);
         verifyParameters(dac, 0f);
@@ -121,28 +121,12 @@ public class TestClonePhysicsControls {
         cloneTest(sbc, sbcClone);
         /*
          * Test cloning/saving/loading abstract physics controls
-         * that have been added to a Spatial.
+         * that have been added to a Spatial:
+         *
+         * DAC without PreComposer (old animation system)
          */
-        dac = new DynamicAnimControl();
-        LinkConfig hull = new LinkConfig(0.005f, MassHeuristic.Mass,
-                ShapeHeuristic.VertexHull, new Vector3f(1f, 1f, 1f),
-                CenterHeuristic.Mean, RotationOrder.XZY);
-        dac.setConfig(DynamicAnimControl.torsoName, hull);
-        dac.link("spine", hull, new RangeOfMotion(1f));
-        dac.link("ribs", hull, new RangeOfMotion(0.6f, 0.4f, 0.4f));
-        dac.link("head", hull,
-                new RangeOfMotion(0.3f, -0.6f, 0.5f, -0.5f, 0.5f, -0.5f));
-        dac.link("eye.L", hull, new RangeOfMotion(0.5f, 0f, 0.5f));
-        dac.link("eye.R", hull, new RangeOfMotion(0.5f, 0f, 0.5f));
-        dac.link("tail.001", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
-        dac.link("tail.002", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
-        dac.link("tail.003", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
-        dac.link("tail.004", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
-        dac.link("tail.005", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
-        dac.link("tail.007", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
-        dac.link("tail.009", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
-
         ModelKey key = new ModelKey("Models/Jaime/Jaime.j3o");
+        dac = createDac();
         Spatial jaime = assetManager.loadModel(key);
         jaime.addControl(dac);
         setParameters(dac, 0f);
@@ -150,12 +134,22 @@ public class TestClonePhysicsControls {
         Spatial jaimeClone = Heart.deepCopy(jaime);
         cloneTest(jaime, jaimeClone);
 
+        // DAC with PreComposer (new animation system)
+        dac = createDac();
+        Spatial newJaime = assetManager.loadModel(key);
+        AnimMigrationUtils.migrate(newJaime);
+        newJaime.addControl(dac);
+        setParameters(dac, 0f);
+        verifyParameters(dac, 0f);
+        Spatial newJaimeClone = Heart.deepCopy(newJaime);
+        cloneTest(newJaime, newJaimeClone);
+
         // TODO more types
     }
     // *************************************************************************
     // private methods
 
-    private void cloneTest(AbstractPhysicsControl control,
+    private static void cloneTest(AbstractPhysicsControl control,
             AbstractPhysicsControl controlClone) {
         verifyParameters(control, 0f);
         verifyParameters(controlClone, 0f);
@@ -177,11 +171,11 @@ public class TestClonePhysicsControls {
         verifyParameters(controlCloneCopy, 0.6f);
 
         AbstractPhysicsControl xmlCopy
-                = MinieTest.saveAndLoadXml(assetManager, control);
+                = Utils.saveAndLoadXml(assetManager, control);
         verifyParameters(xmlCopy, 0.3f);
     }
 
-    private void cloneTest(Spatial spatial, Spatial spatialClone) {
+    private static void cloneTest(Spatial spatial, Spatial spatialClone) {
         AbstractPhysicsControl control
                 = spatial.getControl(AbstractPhysicsControl.class);
         AbstractPhysicsControl controlClone
@@ -210,7 +204,35 @@ public class TestClonePhysicsControls {
         verifyParameters(controlCloneCopy, 0.6f);
     }
 
-    private void setParameters(AbstractPhysicsControl control, float b) {
+    /**
+     * Generate a DynamicAnimControl for Jaime.
+     *
+     * @return a new instance, not added to any Spatial
+     */
+    private static DynamicAnimControl createDac() {
+        DynamicAnimControl result = new DynamicAnimControl();
+        LinkConfig hull = new LinkConfig(0.005f, MassHeuristic.Mass,
+                ShapeHeuristic.VertexHull, new Vector3f(1f, 1f, 1f),
+                CenterHeuristic.Mean, RotationOrder.XZY);
+        result.setConfig(DacConfiguration.torsoName, hull);
+        result.link("spine", hull, new RangeOfMotion(1f));
+        result.link("ribs", hull, new RangeOfMotion(0.6f, 0.4f, 0.4f));
+        result.link("head", hull,
+                new RangeOfMotion(0.3f, -0.6f, 0.5f, -0.5f, 0.5f, -0.5f));
+        result.link("eye.L", hull, new RangeOfMotion(0.5f, 0f, 0.5f));
+        result.link("eye.R", hull, new RangeOfMotion(0.5f, 0f, 0.5f));
+        result.link("tail.001", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
+        result.link("tail.002", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
+        result.link("tail.003", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
+        result.link("tail.004", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
+        result.link("tail.005", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
+        result.link("tail.007", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
+        result.link("tail.009", hull, new RangeOfMotion(0.5f, 0.2f, 0.5f));
+
+        return result;
+    }
+
+    private static void setParameters(AbstractPhysicsControl control, float b) {
         boolean flag = (b > 0.15f && b < 0.45f);
         if (!(control instanceof DynamicAnimControl)) {
             control.setApplyPhysicsLocal(!flag);
@@ -237,7 +259,7 @@ public class TestClonePhysicsControls {
      * @param bcc the control to modify (not null)
      * @param b the key value
      */
-    private void setBcc(BetterCharacterControl bcc, float b) {
+    private static void setBcc(BetterCharacterControl bcc, float b) {
         bcc.setDuckedFactor(b + 0.01f);
         bcc.setJumpForce(new Vector3f(b + 0.05f, b + 0.06f, b + 0.07f));
         bcc.setPhysicsDamping(b + 0.08f);
@@ -245,14 +267,13 @@ public class TestClonePhysicsControls {
         bcc.setWalkDirection(new Vector3f(b + 0.13f, b + 0.14f, b + 0.15f));
     }
 
-    private void setCc(CharacterControl cc, float b) {
+    private static void setCc(CharacterControl cc, float b) {
         Vector3f upDirection
                 = new Vector3f(b - 0.2f, b + 0.8f, b - 0.6f).normalize();
         Vector3f viewDirection
                 = new Vector3f(b + 0.1f, b + 0.5f, b + 0.7f).normalizeLocal();
-        /*
-         * walk offset must be perpendicular to "up" direction
-         */
+
+        // Walk offset must be perpendicular to "up" direction.
         Vector3f walkOffset = new Vector3f(b + 0.6f, b + 0.2f, b + 0.4f)
                 .cross(upDirection);
 
@@ -283,17 +304,18 @@ public class TestClonePhysicsControls {
         cc.setWalkDirection(walkOffset);
     }
 
-    private void setDac(DynamicAnimControl dac, float b) {
+    private static void setDac(DynamicAnimControl dac, float b) {
         dac.setDamping(b + 0.01f);
         dac.setEventDispatchImpulseThreshold(b + 0.02f);
         dac.setGravity(new Vector3f(b + 0.03f, b + 0.04f, b + 0.05f));
     }
 
-    private void setSbc(SoftBodyControl sbc, float b) {
+    private static void setSbc(SoftBodyControl sbc, float b) {
         // TODO
     }
 
-    private void verifyParameters(AbstractPhysicsControl control, float b) {
+    private static void verifyParameters(
+            AbstractPhysicsControl control, float b) {
         boolean flag = (b > 0.15f && b < 0.45f);
         if (!(control instanceof DynamicAnimControl)) {
             assert control.isApplyPhysicsLocal() == !flag;
@@ -320,32 +342,31 @@ public class TestClonePhysicsControls {
      * @param bcc the control to verify (not null, unaffected)
      * @param b the key value
      */
-    private void verifyBcc(BetterCharacterControl bcc, float b) {
+    private static void verifyBcc(BetterCharacterControl bcc, float b) {
         assert bcc.getDuckedFactor() == b + 0.01f;
-        MinieTest.assertEquals(b + 0.05f, b + 0.06f, b + 0.07f,
-                bcc.getJumpForce(null), 0f);
+        Utils.assertEquals(
+                b + 0.05f, b + 0.06f, b + 0.07f, bcc.getJumpForce(null), 0f);
         assert bcc.getPhysicsDamping() == b + 0.08f;
-        MinieTest.assertEquals(b + 0.10f, b + 0.11f, b + 0.12f,
+        Utils.assertEquals(b + 0.10f, b + 0.11f, b + 0.12f,
                 bcc.getViewDirection(null), 0f);
-        MinieTest.assertEquals(b + 0.13f, b + 0.14f, b + 0.15f,
+        Utils.assertEquals(b + 0.13f, b + 0.14f, b + 0.15f,
                 bcc.getWalkDirection(null), 0f);
     }
 
-    private void verifyCc(CharacterControl cc, float b) {
+    private static void verifyCc(CharacterControl cc, float b) {
         Vector3f upDirection
                 = new Vector3f(b - 0.2f, b + 0.8f, b - 0.6f).normalize();
         Vector3f viewDirection
                 = new Vector3f(b + 0.1f, b + 0.5f, b + 0.7f).normalizeLocal();
-        /*
-         * walk offset must be perpendicular to "up" direction
-         */
+
+        // Walk offset must be perpendicular to "up" direction.
         Vector3f walkOffset = new Vector3f(b + 0.6f, b + 0.2f, b + 0.4f)
                 .cross(upDirection);
 
         PhysicsCharacter ch = cc.getCharacter();
 
         Assert.assertEquals(b + 0.01f, ch.getAngularDamping(), 0f);
-        MinieTest.assertEquals(b + 0.04f, b + 0.05f, b + 0.06f,
+        Utils.assertEquals(b + 0.04f, b + 0.05f, b + 0.06f,
                 ch.getAngularVelocity(null), 0f);
         Assert.assertEquals(b + 0.07f, ch.getCcdMotionThreshold(), 0f);
         Assert.assertEquals(b + 0.08f, ch.getCcdSweptSphereRadius(), 0f);
@@ -361,25 +382,25 @@ public class TestClonePhysicsControls {
         Assert.assertEquals(b + 0.03f, ch.getLinearDamping(), 0f);
         Assert.assertEquals(b + 0.281f, ch.getMaxPenetrationDepth(), 0f);
         Assert.assertEquals(b + 0.282f, ch.getMaxSlope(), 0f);
-        MinieTest.assertEquals(b + 0.18f, b + 0.19f, b + 0.20f,
+        Utils.assertEquals(b + 0.18f, b + 0.19f, b + 0.20f,
                 ch.getPhysicsLocation(null), 0f);
         Assert.assertEquals(b + 0.25f, ch.getRestitution(), 0f);
         Assert.assertEquals(b + 0.26f, ch.getRollingFriction(), 0f);
         Assert.assertEquals(b + 0.27f, ch.getSpinningFriction(), 0f);
         Assert.assertEquals(b + 0.29f, ch.getStepHeight(), 0f);
-        MinieTest.assertEquals(upDirection, ch.getUpDirection(null), 1e-5f);
-        MinieTest.assertEquals(viewDirection, cc.getViewDirection(null), 0f);
-        MinieTest.assertEquals(walkOffset, ch.getWalkDirection(null), 1e-5f);
+        Utils.assertEquals(upDirection, ch.getUpDirection(null), 1e-5f);
+        Utils.assertEquals(viewDirection, cc.getViewDirection(null), 0f);
+        Utils.assertEquals(walkOffset, ch.getWalkDirection(null), 1e-5f);
     }
 
-    private void verifyDac(DynamicAnimControl dac, float b) {
+    private static void verifyDac(DynamicAnimControl dac, float b) {
         assert dac.damping() == b + 0.01f;
         assert dac.eventDispatchImpulseThreshold() == b + 0.02f;
-        MinieTest.assertEquals(b + 0.03f, b + 0.04f, b + 0.05f,
-                dac.gravity(null), 0f);
+        Utils.assertEquals(
+                b + 0.03f, b + 0.04f, b + 0.05f, dac.gravity(null), 0f);
     }
 
-    private void verifySbc(SoftBodyControl sbc, float b) {
+    private static void verifySbc(SoftBodyControl sbc, float b) {
         // TODO
     }
 }

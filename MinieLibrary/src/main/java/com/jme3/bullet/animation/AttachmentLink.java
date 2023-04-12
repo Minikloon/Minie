@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021 jMonkeyEngine
+ * Copyright (c) 2018-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -198,7 +198,8 @@ public class AttachmentLink extends PhysicsLink {
     AttachmentLink(DacLinks control, Joint associatedJoint, PhysicsLink manager,
             Spatial attachModel, CollisionShape collisionShape,
             LinkConfig linkConfig, Vector3f localOffset) {
-        super(control, associatedJoint, collisionShape, linkConfig, localOffset);
+        super(control, associatedJoint, collisionShape, linkConfig,
+                localOffset);
         assert manager != null;
         assert attachModel != null;
 
@@ -252,21 +253,20 @@ public class AttachmentLink extends PhysicsLink {
      * model the blend completes or null for no change to local transform
      * (unaffected)
      */
-    public void blendToKinematicMode(float blendInterval,
-            Transform endModelTransform) {
+    public void blendToKinematicMode(
+            float blendInterval, Transform endModelTransform) {
         Validate.nonNegative(blendInterval, "blend interval");
         if (isReleased()) {
             throw new IllegalStateException(
                     "Cannot change modes once released.");
         }
 
-        super.blendToKinematicMode(blendInterval);
+        blendToKinematicMode(blendInterval);
         this.endModelTransform = endModelTransform;
-        /*
-         * Save initial transform for blending.
-         */
+
+        // Save initial transform for blending.
         if (endModelTransform != null) {
-            Transform current = attachedModel.getLocalTransform();
+            Transform current = attachedModel.getLocalTransform(); // alias
             startModelTransform.set(current);
         }
     }
@@ -318,9 +318,9 @@ public class AttachmentLink extends PhysicsLink {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
 
-        attachedModel = cloner.clone(attachedModel);
-        endModelTransform = cloner.clone(endModelTransform);
-        startModelTransform = cloner.clone(startModelTransform);
+        this.attachedModel = cloner.clone(attachedModel);
+        this.endModelTransform = cloner.clone(endModelTransform);
+        this.startModelTransform = cloner.clone(startModelTransform);
     }
 
     /**
@@ -366,21 +366,6 @@ public class AttachmentLink extends PhysicsLink {
     }
 
     /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public AttachmentLink jmeClone() {
-        try {
-            AttachmentLink clone = (AttachmentLink) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
-    }
-
-    /**
      * Update this link in blended Kinematic mode.
      *
      * @param tpf the time interval between frames (in seconds, &ge;0)
@@ -397,8 +382,8 @@ public class AttachmentLink extends PhysicsLink {
              * For a smooth transition, blend the saved model transform
              * (from the start of the blend interval) into the goal transform.
              */
-            Quaternion startQuat = startModelTransform.getRotation();
-            Quaternion endQuat = endModelTransform.getRotation();
+            Quaternion startQuat = startModelTransform.getRotation(); // alias
+            Quaternion endQuat = endModelTransform.getRotation(); // alias
             if (startQuat.dot(endQuat) < 0f) {
                 endQuat.multLocal(-1f);
             }
@@ -440,25 +425,22 @@ public class AttachmentLink extends PhysicsLink {
         result.setTranslation(localOffset(null));
         result.setRotation(rotateIdentity);
         result.setScale(1f);
-        /*
-         * Convert to bone local coordinates.
-         */
-        Transform tmp = attachedModel.getLocalTransform();
+
+        // Convert to bone local coordinates.
+        Transform tmp = attachedModel.getLocalTransform(); // alias
         result.combineWithParent(tmp);
-        /*
-         * Convert to mesh coordinates.
-         */
+
+        // Convert to mesh coordinates.
         Bone bone = getBone();
-        if (bone != null) {
+        if (bone != null) { // old animation system
             tmp = MySkeleton.copyMeshTransform(bone, null);
-        } else {
+        } else { // new animation system
             Joint armatureJoint = getArmatureJoint();
             tmp = armatureJoint.getModelTransform().clone();
         }
         result.combineWithParent(tmp);
-        /*
-         * Convert to physics/world coordinates.
-         */
+
+        // Convert to physics/world coordinates.
         getControl().meshTransform(tmp);
         result.combineWithParent(tmp);
 
@@ -474,7 +456,7 @@ public class AttachmentLink extends PhysicsLink {
     void postRebuild(AttachmentLink oldLink) {
         assert oldLink != null;
 
-        super.postRebuild(oldLink);
+        postRebuildLink(oldLink);
         if (oldLink.isReleased()) {
             setDynamic(translateIdentity);
             release();
@@ -486,8 +468,8 @@ public class AttachmentLink extends PhysicsLink {
             PhysicsRigidBody oldBody = oldLink.getRigidBody();
             setRigidBody(oldBody);
         }
-        endModelTransform = Heart.deepCopy(oldLink.endModelTransform);
-        startModelTransform.set(oldLink.startModelTransform);
+        this.endModelTransform = Heart.deepCopy(oldLink.endModelTransform);
+        this.startModelTransform.set(oldLink.startModelTransform);
     }
 
     /**
@@ -502,11 +484,12 @@ public class AttachmentLink extends PhysicsLink {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        attachedModel = (Spatial) capsule.readSavable(tagAttachedModel, null);
-        endModelTransform = (Transform) capsule.readSavable(
-                tagEndModelTransform, new Transform());
-        startModelTransform = (Transform) capsule.readSavable(
-                tagStartModelTransform, new Transform());
+        this.attachedModel
+                = (Spatial) capsule.readSavable(tagAttachedModel, null);
+        this.endModelTransform = (Transform) capsule
+                .readSavable(tagEndModelTransform, new Transform());
+        this.startModelTransform = (Transform) capsule
+                .readSavable(tagStartModelTransform, new Transform());
     }
 
     /**
@@ -553,34 +536,30 @@ public class AttachmentLink extends PhysicsLink {
     private Transform localModelTransform(Transform storeResult) {
         Transform result
                 = (storeResult == null) ? new Transform() : storeResult;
-        Vector3f location = result.getTranslation();
-        Quaternion orientation = result.getRotation();
-        Vector3f scale = result.getScale();
-        /*
-         * Start with the rigid body's Transform in physics/world coordinates.
-         */
+        Vector3f location = result.getTranslation(); // alias
+        Quaternion orientation = result.getRotation(); // alias
+        Vector3f scale = result.getScale(); // alias
+
+        // Start with the rigid body's Transform in physics/world coordinates.
         getRigidBody().getTransform(result);
-        /*
-         * Convert to mesh coordinates.
-         */
+
+        // Convert to mesh coordinates.
         Transform worldToMesh = getControl().meshTransform(null).invert();
         result.combineWithParent(worldToMesh);
-        /*
-         * Convert to bone local coordinates.
-         */
+
+        // Convert to bone local coordinates.
         Transform boneToMesh;
         Bone bone = getBone();
-        if (bone != null) {
+        if (bone != null) { // old animation system
             boneToMesh = MySkeleton.copyMeshTransform(bone, null);
-        } else {
+        } else { // new animation system
             Joint armatureJoint = getArmatureJoint();
             boneToMesh = armatureJoint.getModelTransform();
         }
         Transform meshToBone = boneToMesh.invert();
         result.combineWithParent(meshToBone);
-        /*
-         * Subtract the body's local offset, rotated and scaled.
-         */
+
+        // Subtract the body's local offset, rotated and scaled.
         Vector3f modelOffset = localOffset(null);
         modelOffset.multLocal(scale);
         orientation.mult(modelOffset, modelOffset);

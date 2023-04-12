@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2021 jMonkeyEngine
+ * Copyright (c) 2009-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,6 +57,7 @@ import com.jme3.system.AppSettings;
 import com.jme3.texture.Texture;
 import com.jme3.texture.Texture.WrapMode;
 import java.util.concurrent.Callable;
+import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.math.MyMath;
 
@@ -76,6 +77,11 @@ public class TowerPerformance
     final private static float radius = 3f;
     final private static int brickLayers = 30;
     final private static int bricksPerLayer = 8;
+    /**
+     * message logger for this class
+     */
+    final private static Logger logger
+            = Logger.getLogger(TowerPerformance.class.getName());
     // *************************************************************************
     // fields
 
@@ -92,9 +98,22 @@ public class TowerPerformance
     private Sphere bullet;
     private SphereCollisionShape bulletCollisionShape;
     // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TowerPerformance application.
+     */
+    public TowerPerformance() { // to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
     // new methods exposed
 
-    public static void main(String args[]) {
+    /**
+     * Main entry point for the TowerPerformance application.
+     *
+     * @param args array of command-line arguments (ignored)
+     */
+    public static void main(String[] args) {
         TowerPerformance f = new TowerPerformance();
         AppSettings s = new AppSettings(true);
         s.setAudioRenderer(null);
@@ -138,7 +157,7 @@ public class TowerPerformance
 
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
-        preTickNs = System.nanoTime();
+        this.preTickNs = System.nanoTime();
     }
     // *************************************************************************
     // SimpleApplication methods
@@ -152,15 +171,15 @@ public class TowerPerformance
             System.out.println("Warning: using a Debug native library.");
         }
 
-        bulletAppState = new BulletAppState();
+        this.bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
         getPhysicsSpace().addTickListener(this);
 
-        bullet = new Sphere(32, 32, bulletRadius, true, false);
+        this.bullet = new Sphere(32, 32, bulletRadius, true, false);
         bullet.setTextureMode(Sphere.TextureMode.Projected);
         bulletCollisionShape = new SphereCollisionShape(bulletRadius);
 
-        brick = new Box(brickWidth, brickHeight, brickDepth);
+        this.brick = new Box(brickWidth, brickHeight, brickDepth);
         brick.scaleTextureCoordinates(new Vector2f(1f, 0.5f));
         initMaterial();
         initTower();
@@ -196,21 +215,23 @@ public class TowerPerformance
     // private methods
 
     private void addBrick(Vector3f ori) {
-        Geometry reBoxg = new Geometry("brick", brick);
-        reBoxg.setMaterial(mat);
-        reBoxg.setLocalTranslation(ori);
-        reBoxg.rotate(0f, MyMath.toRadians(angleDegrees), 0f);
-        reBoxg.addControl(new RigidBodyControl(1.5f));
-        reBoxg.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
-        reBoxg.getControl(RigidBodyControl.class).setFriction(1.6f);
-        reBoxg.getControl(RigidBodyControl.class).setLinearSleepingThreshold(0f);
+        Geometry brickGeometry = new Geometry("brick", brick);
+        brickGeometry.setMaterial(mat);
+        brickGeometry.setLocalTranslation(ori);
+        brickGeometry.rotate(0f, MyMath.toRadians(angleDegrees), 0f);
+        brickGeometry.addControl(new RigidBodyControl(1.5f));
+        brickGeometry.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
+        brickGeometry.getControl(RigidBodyControl.class).setFriction(1.6f);
+        brickGeometry.getControl(RigidBodyControl.class)
+                .setLinearSleepingThreshold(0f);
 
-        batchNode.attachChild(reBoxg);
-        getPhysicsSpace().add(reBoxg);
+        batchNode.attachChild(brickGeometry);
+        getPhysicsSpace().add(brickGeometry);
     }
 
     private PhysicsSpace getPhysicsSpace() {
-        return bulletAppState.getPhysicsSpace();
+        PhysicsSpace result = bulletAppState.getPhysicsSpace();
+        return result;
     }
 
     private void initFloor() {
@@ -226,19 +247,23 @@ public class TowerPerformance
     }
 
     private void initMaterial() {
-        mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-        TextureKey key = new TextureKey("Textures/Terrain/BrickWall/BrickWall.jpg");
+        this.mat = new Material(
+                assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        TextureKey key
+                = new TextureKey("Textures/Terrain/BrickWall/BrickWall.jpg");
         key.setGenerateMips(true);
         Texture tex = assetManager.loadTexture(key);
         mat.setTexture("ColorMap", tex);
 
-        mat2 = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        this.mat2 = new Material(
+                assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
         TextureKey key2 = new TextureKey("Textures/Terrain/Rock/Rock.PNG");
         key2.setGenerateMips(true);
         Texture tex2 = assetManager.loadTexture(key2);
         mat2.setTexture("ColorMap", tex2);
 
-        mat3 = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        this.mat3 = new Material(
+                assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
         TextureKey key3 = new TextureKey("Textures/Terrain/Pond/Pond.jpg");
         key3.setGenerateMips(true);
         Texture tex3 = assetManager.loadTexture(key3);
@@ -250,7 +275,7 @@ public class TowerPerformance
         double tempX;
         double tempY = 0.0;
         double tempZ;
-        angleDegrees = 0f;
+        this.angleDegrees = 0f;
         for (int i = 0; i < brickLayers; i++) {
             // Increment rows
             if (i != 0) {
@@ -259,11 +284,12 @@ public class TowerPerformance
                 tempY = brickHeight;
             }
             // Alternate brick seams
-            angleDegrees = 360f / bricksPerLayer * i / 2f;
+            this.angleDegrees = 360f / bricksPerLayer * i / 2f;
             for (int j = 0; j < bricksPerLayer; j++) {
                 tempZ = Math.cos(Math.toRadians(angleDegrees)) * radius;
                 tempX = Math.sin(Math.toRadians(angleDegrees)) * radius;
-                Vector3f vt = new Vector3f((float) tempX, (float) tempY, (float) tempZ);
+                Vector3f vt = new Vector3f(
+                        (float) tempX, (float) tempY, (float) tempZ);
                 // Add crenelation
                 if (i == brickLayers - 1) {
                     if (j % 2 == 0) {
@@ -272,22 +298,22 @@ public class TowerPerformance
                 } else { // Create main tower
                     addBrick(vt);
                 }
-                angleDegrees += 360f / bricksPerLayer;
+                this.angleDegrees += 360f / bricksPerLayer;
             }
         }
     }
 
     private void shoot() {
-        Geometry bulletg = new Geometry("bullet", bullet);
-        bulletg.setMaterial(mat2);
-        bulletg.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
-        bulletg.setLocalTranslation(cam.getLocation());
+        Geometry geometry = new Geometry("bullet", bullet);
+        geometry.setMaterial(mat2);
+        geometry.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
+        geometry.setLocalTranslation(cam.getLocation());
 
         RigidBodyControl bulletNode
                 = new BombControl(assetManager, bulletCollisionShape, 1f);
         bulletNode.setLinearVelocity(cam.getDirection().mult(25f));
-        bulletg.addControl(bulletNode);
-        rootNode.attachChild(bulletg);
+        geometry.addControl(bulletNode);
+        rootNode.attachChild(geometry);
         getPhysicsSpace().add(bulletNode);
 
         System.out.println("shoot");

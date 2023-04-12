@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -32,13 +32,14 @@ import com.jme3.app.state.AppStateManager;
 import com.jme3.asset.AssetManager;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.PhysicsSpace;
+import com.jme3.bullet.RotationOrder;
 import com.jme3.bullet.animation.BoneLink;
 import com.jme3.bullet.animation.DacConfiguration;
-import com.jme3.bullet.animation.DacLinks;
 import com.jme3.bullet.animation.DynamicAnimControl;
 import com.jme3.bullet.animation.KinematicSubmode;
 import com.jme3.bullet.animation.LinkConfig;
 import com.jme3.bullet.animation.PhysicsLink;
+import com.jme3.bullet.animation.RagUtils;
 import com.jme3.bullet.animation.RangeOfMotion;
 import com.jme3.bullet.animation.TorsoLink;
 import com.jme3.bullet.collision.PhysicsCollisionObject;
@@ -53,11 +54,11 @@ import com.jme3.math.Transform;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Spatial;
+import com.jme3.scene.control.AbstractControl;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Calendar;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -66,11 +67,12 @@ import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
-import jme3utilities.MySpatial;
 import jme3utilities.MyString;
 import jme3utilities.Validate;
 import jme3utilities.nifty.dialog.AllowNull;
+import jme3utilities.nifty.dialog.DialogController;
 import jme3utilities.nifty.dialog.FloatDialog;
+import jme3utilities.ui.ActionApplication;
 import jme3utilities.ui.InputMode;
 
 /**
@@ -90,6 +92,9 @@ class TestMode extends InputMode {
      * asset path to the cursor for this mode
      */
     final private static String assetPath = "Textures/cursors/default.cur";
+    // *************************************************************************
+    // fields
+
     /**
      * local transform of the controlled spatial when entering/exiting ragdoll
      * mode
@@ -99,7 +104,7 @@ class TestMode extends InputMode {
     // constructors
 
     /**
-     * Instantiate a disabled, uninitialized mode.
+     * Instantiate a disabled, uninitialized input mode.
      */
     TestMode() {
         super("test");
@@ -143,11 +148,9 @@ class TestMode extends InputMode {
      * @param application (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager,
-            Application application) {
-        /*
-         * Configure the GUI cursor.
-         */
+    public void initialize(
+            AppStateManager stateManager, Application application) {
+        // Configure the mouse cursor for this mode.
         AssetManager manager = application.getAssetManager();
         JmeCursor cursor = (JmeCursor) manager.loadAsset(assetPath);
         setCursor(cursor);
@@ -166,15 +169,15 @@ class TestMode extends InputMode {
     public void onAction(String actionString, boolean ongoing, float tpf) {
         Validate.nonNull(actionString, "action string");
         if (logger.isLoggable(Level.INFO)) {
-            logger.log(Level.INFO, "Got action {0} ongoing={1}", new Object[]{
-                MyString.quote(actionString), ongoing
-            });
+            logger.log(Level.INFO, "Got action {0} ongoing={1}",
+                    new Object[]{MyString.quote(actionString), ongoing});
         }
 
         boolean handled = false;
         if (ongoing) {
             handled = true;
             DacWizard app = DacWizard.getApplication();
+            Model model = DacWizard.getModel();
             switch (actionString) {
                 case Action.pickLink:
                     pickLink();
@@ -192,12 +195,15 @@ class TestMode extends InputMode {
                     saveJ3o();
                     break;
 
+                case Action.setAnimationTime:
+                    setAnimationTime();
+                    break;
+
                 case Action.setMargin:
                     setMargin();
                     break;
 
                 case Action.toggleAxes:
-                    Model model = DacWizard.getModel();
                     model.toggleShowingAxes();
                     break;
 
@@ -214,22 +220,30 @@ class TestMode extends InputMode {
                     break;
 
                 case Action.toggleSkeleton:
-                    app.toggleSkeletonVisualizer();
+                    model.toggleShowingSkeleton();
                     break;
 
                 default:
                     handled = false;
             }
-        }
-        if (!handled) {
-            if (actionString.startsWith(Action.setMargin + " ")) {
-                String arg = MyString.remainder(actionString,
-                        Action.setMargin + " ");
+
+            String prefix = Action.setAnimationTime + " ";
+            if (!handled && actionString.startsWith(prefix)) {
+                String argument = MyString.remainder(actionString, prefix);
+                float time = Float.parseFloat(argument);
+                model.setAnimationTime(time);
+                handled = true;
+            }
+
+            prefix = Action.setMargin + " ";
+            if (!handled && actionString.startsWith(prefix)) {
+                String arg = MyString.remainder(actionString, prefix);
                 float newMargin = Float.parseFloat(arg);
                 setMargin(newMargin);
                 handled = true;
             }
         }
+
         if (!handled) {
             getActionApplication().onAction(actionString, ongoing, tpf);
         }
@@ -244,7 +258,7 @@ class TestMode extends InputMode {
      * @param fValue the value to describe
      * @return a description (not null, not empty)
      */
-    private static String describeAngle(float fValue) {
+    private static String describeAngle(float fValue) { // TODO use MyString
         String raw = String.format(Locale.US, "%.2f", fValue);
         String result = MyString.trimFloat(raw);
 
@@ -257,6 +271,7 @@ class TestMode extends InputMode {
      * Format a LinkConfig as Java source code.
      *
      * @param config (not null, unaffected)
+     * @return formatted text (not null, not empty)
      */
     private static String format(LinkConfig config) {
         Vector3f scale = config.shapeScale(null);
@@ -267,32 +282,20 @@ class TestMode extends InputMode {
         float massP = config.massParameter();
         String massPString = MyString.describe(massP);
 
+        RotationOrder ro = config.rotationOrder();
+        String orderString = (ro == null) ? "null" : "RotationOrder." + ro;
+
         String code = String.format(
                 "new LinkConfig(%sf, MassHeuristic.%s,%n"
                 + "                ShapeHeuristic.%s, "
                 + "new Vector3f(%sf, %sf, %sf),%n"
-                + "                CenterHeuristic.%s)",
+                + "                CenterHeuristic.%s, %s)",
                 massPString, config.massHeuristic(),
                 config.shapeHeuristic(),
                 scaleXString, scaleYString, scaleZString,
-                config.centerHeuristic());
+                config.centerHeuristic(), orderString);
 
         return code;
-    }
-
-    /**
-     * Generate a timestamp.
-     *
-     * @return the timestamp value
-     */
-    private static String hhmmss() {
-        Calendar rightNow = Calendar.getInstance();
-        int hours = rightNow.get(Calendar.HOUR_OF_DAY);
-        int minutes = rightNow.get(Calendar.MINUTE);
-        int seconds = rightNow.get(Calendar.SECOND);
-        String result = String.format("%02d%02d%02d", hours, minutes, seconds);
-
-        return result;
     }
 
     /**
@@ -309,7 +312,7 @@ class TestMode extends InputMode {
         PhysicsSpace physicsSpace = bulletAppState.getPhysicsSpace();
 
         List<PhysicsRayTestResult> rayTest = physicsSpace.rayTest(from, to);
-        if (rayTest.size() > 0) {
+        if (!rayTest.isEmpty()) {
             PhysicsRayTestResult nearestHit = rayTest.get(0);
             PhysicsCollisionObject pco = nearestHit.getCollisionObject();
             Object user = pco.getUserObject();
@@ -322,14 +325,14 @@ class TestMode extends InputMode {
                     model.selectLink(boneName);
                 } else {
                     assert link instanceof TorsoLink;
-                    model.selectLink(DacLinks.torsoName);
+                    model.selectLink(DacConfiguration.torsoName);
                 }
             }
         }
     }
 
     /**
-     * Go back to the previous screen.
+     * Go back to the "links" screen.
      */
     private void previousScreen() {
         setEnabled(false);
@@ -340,7 +343,7 @@ class TestMode extends InputMode {
     /**
      * Write the model to a file, along with a configured control.
      */
-    private void saveJ3o() {
+    private static void saveJ3o() {
         Model model = DacWizard.getModel();
 
         String originalPath = model.filePath();
@@ -349,15 +352,14 @@ class TestMode extends InputMode {
         if (modelName.endsWith(".j3o")) {
             modelName = MyString.removeSuffix(modelName, ".j3o");
         }
-        String hhmmss = hhmmss();
+        String hhmmss = ActionApplication.hhmmss();
         String outputFileName = String.format("%s-%s.j3o", modelName, hhmmss);
-        String outputFilePath = DacWizard.filePath(outputFileName);
+        String outputFilePath = ActionApplication.filePath(outputFileName);
 
         Spatial modelRoot = model.getRootSpatial();
         modelRoot = Heart.deepCopy(modelRoot);
-        List<Spatial> list = MySpatial.listAnimationSpatials(modelRoot, null);
-        assert list.size() == 1 : list.size();
-        Spatial controlledSpatial = list.get(0);
+        AbstractControl sControl = RagUtils.findSControl(modelRoot);
+        Spatial controlledSpatial = sControl.getSpatial();
         DynamicAnimControl dac = model.copyRagdoll();
         controlledSpatial.addControl(dac);
 
@@ -370,9 +372,8 @@ class TestMode extends InputMode {
             screen.showInfoDialog("Exception", exception.toString());
             return;
         }
-        /*
-         * Display a confirmation dialog.
-         */
+
+        // Display a confirmation dialog.
         String message = String.format(
                 "The model and configured control have been written to%n%s.",
                 MyString.quote(outputFilePath));
@@ -382,25 +383,24 @@ class TestMode extends InputMode {
     /**
      * Write the control configuration to a file.
      */
-    private void saveJava() {
-        String hhmmss = hhmmss();
-        String fileName = String.format("configure%s.java", hhmmss);
+    private static void saveJava() {
+        String hhmmss = ActionApplication.hhmmss();
+        String className = "Dac" + hhmmss;
+        String fileName = className + ".java";
 
-        DacWizard wizard = DacWizard.getApplication();
-        DynamicAnimControl dac = wizard.findDac();
+        DynamicAnimControl dac = DacWizard.findDac();
         TestScreen screen = DacWizard.findAppState(TestScreen.class);
 
-        String path = DacWizard.filePath(fileName);
+        String path = ActionApplication.filePath(fileName);
         File file = new File(path);
         try (PrintStream stream = new PrintStream(file)) {
-            write(dac, stream);
+            write(dac, className, stream);
         } catch (FileNotFoundException exception) {
             screen.showInfoDialog("Exception", exception.toString());
             return;
         }
-        /*
-         * Display a confirmation dialog.
-         */
+
+        // Display a confirmation dialog.
         String message = String.format(
                 "The configuration has been written to%n%s.",
                 MyString.quote(path));
@@ -408,18 +408,38 @@ class TestMode extends InputMode {
     }
 
     /**
-     * Open a dialog box to change the collision margin.
+     * Process a "set animationTime" action: display a dialog to enter a new
+     * animation time.
      */
-    private void setMargin() {
-        float oldValue = CollisionShape.getDefaultMargin();
-        String defaultValue = Float.toString(oldValue);
-        FloatDialog controller = new FloatDialog("Set", Float.MIN_VALUE,
-                Float.MAX_VALUE, AllowNull.No);
+    private static void setAnimationTime() {
+        Model model = DacWizard.getModel();
+        float duration = model.animationDuration();
+        DialogController controller
+                = new FloatDialog("Set", 0f, duration, AllowNull.No);
+
+        float oldTime = model.animationTime();
+        String defaultText = Float.toString(oldTime);
 
         TestScreen screen = DacWizard.findAppState(TestScreen.class);
         screen.closeAllPopups();
-        screen.showTextEntryDialog("Enter new margin:",
-                defaultValue, Action.setMargin + " ", controller);
+        screen.showTextEntryDialog("Enter the animation time (in seconds):",
+                defaultText, Action.setAnimationTime + " ", controller);
+    }
+
+    /**
+     * Process a "set margin" action: display a dialog to enter the a collision
+     * margin.
+     */
+    private static void setMargin() {
+        float oldValue = CollisionShape.getDefaultMargin();
+        String defaultValue = Float.toString(oldValue);
+        FloatDialog controller = new FloatDialog(
+                "Set", Float.MIN_VALUE, Float.MAX_VALUE, AllowNull.No);
+
+        TestScreen screen = DacWizard.findAppState(TestScreen.class);
+        screen.closeAllPopups();
+        screen.showTextEntryDialog("Enter new margin:", defaultValue,
+                Action.setMargin + " ", controller);
     }
 
     /**
@@ -427,7 +447,7 @@ class TestMode extends InputMode {
      *
      * @param newMargin the desired value (&gt;0)
      */
-    private void setMargin(float newMargin) {
+    private static void setMargin(float newMargin) {
         CollisionShape.setDefaultMargin(newMargin);
 
         BulletAppState bulletAppState
@@ -443,7 +463,7 @@ class TestMode extends InputMode {
     /**
      * Toggle physics-debug visualization on/off.
      */
-    private void togglePhysicsDebug() {
+    private static void togglePhysicsDebug() {
         BulletAppState bulletAppState
                 = DacWizard.findAppState(BulletAppState.class);
         boolean enabled = bulletAppState.isDebugEnabled();
@@ -458,77 +478,112 @@ class TestMode extends InputMode {
         DynamicAnimControl dac = wizard.findDac();
         TorsoLink torso = dac.getTorsoLink();
         if (torso.isKinematic()) {
+            // Save the local transform of the controlled spatial.
             Spatial controlledSpatial = dac.getSpatial();
-            Transform local = controlledSpatial.getLocalTransform();
+            Transform local = controlledSpatial.getLocalTransform(); // alias
             resetTransform.set(local);
+            dac.saveCurrentPose();
             dac.setRagdollMode();
 
-        } else { // reset to bind pose
-            KinematicSubmode bindPose = KinematicSubmode.Bound;
+        } else { // Gradually blend to the saved local transform and pose.
             float blendInterval = 1f; // in seconds
-            torso.blendToKinematicMode(bindPose, blendInterval, resetTransform);
-            Collection<BoneLink> boneLinks = dac.listLinks(BoneLink.class);
-            for (BoneLink boneLink : boneLinks) {
-                boneLink.blendToKinematicMode(bindPose, blendInterval);
-            }
+            dac.blendToKinematicMode(
+                    KinematicSubmode.Reset, blendInterval, resetTransform);
         }
     }
 
     /**
      * Write the control configuration to a stream, as Java source code.
      *
-     * @param dac a configured control to use as a model (not null, unaffected)
+     * @param dac a configured control to reproduce (not null, unaffected)
+     * @param className name for the Java class (not null, not empty)
      * @param stream the output stream (not null)
      */
-    private void write(DynamicAnimControl dac, PrintStream stream) {
-        stream.printf("import com.jme3.bullet.animation.CenterHeuristic;%n"
+    private static void write(
+            DacConfiguration dac, String className, PrintStream stream) {
+        stream.printf("import com.jme3.bullet.RotationOrder;%n"
+                + "import com.jme3.bullet.animation.CenterHeuristic;%n"
+                + "import com.jme3.bullet.animation.DacConfiguration;%n"
                 + "import com.jme3.bullet.animation.DynamicAnimControl;%n"
                 + "import com.jme3.bullet.animation.LinkConfig;%n"
                 + "import com.jme3.bullet.animation.MassHeuristic;%n"
                 + "import com.jme3.bullet.animation.RangeOfMotion;%n"
                 + "import com.jme3.bullet.animation.ShapeHeuristic;%n"
                 + "import com.jme3.math.Vector3f;%n%n");
-        stream.printf("public class WControl extends DynamicAnimControl {%n%n"
-                + "    public WControl() {%n"
-                + "        super();%n");
+        stream.printf("public class %s extends DynamicAnimControl ", className);
+        stream.printf("{%n%n    public %s() {%n", className);
+        stream.println("        super();");
 
-        String[] lbNames = dac.listLinkedBoneNames();
+        // Write each unique LinkConfig.
+        Map<LinkConfig, Integer> configs = writeLinkConfigs(dac, stream);
+
+        // Configure the torso of the ragdoll.
         String torsoName = DacConfiguration.torsoName;
-        /*
-         * Write each unique LinkConfig.
-         */
-        int nextConfigIndex = 1;
-        Map<LinkConfig, Integer> configs = new TreeMap<>();
-
         LinkConfig config = dac.config(torsoName);
-        if (!configs.containsKey(config)) {
-            configs.put(config, nextConfigIndex);
-            writeConfig(config, nextConfigIndex, stream);
-            ++nextConfigIndex;
-        }
-
-        for (String lbName : lbNames) {
-            config = dac.config(lbName);
-            if (!configs.containsKey(config)) {
-                configs.put(config, nextConfigIndex);
-                writeConfig(config, nextConfigIndex, stream);
-                ++nextConfigIndex;
-            }
-        }
-        /*
-         * Configure the torso of the ragdoll.
-         */
-        config = dac.config(torsoName);
         int configIndex = configs.get(config);
         String code = String.format("        super.setConfig(%s, config%d);%n",
                 MyString.quote(torsoName), configIndex);
         stream.print(code);
-        /*
-         * Configure each linked bone in the ragdoll.
-         */
+        writeConfigureMainBone(dac, "super", stream);
+
+        writeConfigureBoneLinks(dac, "super", configs, stream);
+        stream.printf("    }%n%n");
+
+        stream.println(
+                "    public static void configure(DacConfiguration dac) {");
+
+        // Write each unique LinkConfig.
+        configs = writeLinkConfigs(dac, stream);
+
+        // Configure the torso of the ragdoll.
+        config = dac.config(torsoName);
+        configIndex = configs.get(config);
+        code = String.format("        dac.setConfig(%s, config%d);%n",
+                MyString.quote(torsoName), configIndex);
+        stream.print(code);
+        writeConfigureMainBone(dac, "dac", stream);
+
+        writeConfigureBoneLinks(dac, "dac", configs, stream);
+        stream.printf("    }%n}%n");
+    }
+
+    /**
+     * Write a LinkConfig definition to a stream, as Java source code.
+     *
+     * @param config a LinkConfig to use as a model (not null)
+     * @param configIndex the index into unique link configurations (&gt;0)
+     * @param stream the output stream (not null)
+     */
+    private static void writeConfig(
+            LinkConfig config, int configIndex, PrintStream stream) {
+        assert config != null;
+        assert configIndex > 0 : configIndex;
+
+        String newValue = format(config);
+        stream.printf(
+                "        LinkConfig config%d = %s;%n", configIndex, newValue);
+    }
+
+    /**
+     * Write code to configure each linked bone in the ragdoll.
+     *
+     * @param dac a configured control to reproduce (not null, unaffected)
+     * @param varName the name of the Java variable to configure (not null, not
+     * empty)
+     * @param configs map from unique link configurations to indices (not null,
+     * unaffected)
+     * @param stream the output stream (not null)
+     */
+    private static void writeConfigureBoneLinks(
+            DacConfiguration dac, String varName,
+            Map<LinkConfig, Integer> configs, PrintStream stream) {
+        String[] lbNames = dac.listLinkedBoneNames();
+
         for (String lbName : lbNames) {
-            config = dac.config(lbName);
-            configIndex = configs.get(config);
+            LinkConfig config = dac.config(lbName);
+            int configIndex = configs.get(config);
+            stream.printf("        %s.link(%s, config%d,%n",
+                    varName, MyString.quote(lbName), configIndex);
 
             RangeOfMotion range = dac.getJointLimits(lbName);
 
@@ -552,30 +607,55 @@ class TestMode extends InputMode {
                     maxXString, minXString,
                     maxYString, minYString,
                     maxZString, minZString);
-
-            code = String.format("        super.link(%s, config%d,%n"
-                    + "                %s);%n",
-                    MyString.quote(lbName), configIndex, newRange);
-            stream.print(code);
+            stream.printf("                %s);%n", newRange);
         }
-
-        stream.printf("    }%n}%n");
     }
 
     /**
-     * Write a LinkConfig definition to a stream, as Java source code.
+     * Write code to configure the torso's main bone.
      *
-     * @param config a LinkConfig to use as a model (not null)
-     * @param configIndex the index into unique link configurations (&gt;0)
+     * @param dac a configured control to reproduce (not null, unaffected)
+     * @param varName the name of the Java variable to configure (not null, not
+     * empty)
      * @param stream the output stream (not null)
      */
-    private void writeConfig(LinkConfig config, int configIndex,
-            PrintStream stream) {
-        assert config != null;
-        assert configIndex > 0 : configIndex;
+    private static void writeConfigureMainBone(
+            DacConfiguration dac, String varName, PrintStream stream) {
+        String mbName = dac.mainBoneName();
+        stream.printf("        %s.setMainBoneName(%s);%n", varName,
+                MyString.quote(mbName));
+    }
 
-        String newValue = format(config);
-        stream.printf("        LinkConfig config%d = %s;%n",
-                configIndex, newValue);
+    /**
+     * Assign an index to each unique link configuration in the specified
+     * control and write generative Java code to the specified stream.
+     *
+     * @param dac the control to analyze
+     * @param stream the output stream (not null)
+     * @return a new map from link configurations to indices (not null)
+     */
+    private static Map<LinkConfig, Integer> writeLinkConfigs(
+            DacConfiguration dac, PrintStream stream) {
+        int nextConfigIndex = 1;
+        Map<LinkConfig, Integer> result = new TreeMap<>();
+
+        LinkConfig config = dac.config(DacConfiguration.torsoName);
+        if (!result.containsKey(config)) {
+            result.put(config, nextConfigIndex);
+            writeConfig(config, nextConfigIndex, stream);
+            ++nextConfigIndex;
+        }
+
+        String[] lbNames = dac.listLinkedBoneNames();
+        for (String lbName : lbNames) {
+            config = dac.config(lbName);
+            if (!result.containsKey(config)) {
+                result.put(config, nextConfigIndex);
+                writeConfig(config, nextConfigIndex, stream);
+                ++nextConfigIndex;
+            }
+        }
+
+        return result;
     }
 }

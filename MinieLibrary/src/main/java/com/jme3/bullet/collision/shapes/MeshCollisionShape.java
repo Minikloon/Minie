@@ -38,6 +38,7 @@ import com.jme3.export.InputCapsule;
 import com.jme3.export.JmeExporter;
 import com.jme3.export.JmeImporter;
 import com.jme3.export.OutputCapsule;
+import com.jme3.math.Triangle;
 import com.jme3.scene.Mesh;
 import com.jme3.system.JmeSystem;
 import com.jme3.system.Platform;
@@ -48,12 +49,12 @@ import java.util.logging.Logger;
 import jme3utilities.Validate;
 
 /**
- * A mesh CollisionShape that uses a Bounding Value Hierarchy (BVH), based on
- * Bullet's btBvhTriangleMeshShape. Not for use in dynamic bodies. Collisions
- * between HeightfieldCollisionShape, MeshCollisionShape, and
+ * A mesh collision shape that uses a Bounding Value Hierarchy (BVH), based on
+ * Bullet's {@code btBvhTriangleMeshShape}. Not for use in dynamic bodies.
+ * Collisions between HeightfieldCollisionShape, MeshCollisionShape, and
  * PlaneCollisionShape objects are never detected.
- *
- * TODO add a shape based on btScaledBvhTriangleMeshShape
+ * <p>
+ * TODO add a shape based on {@code btScaledBvhTriangleMeshShape}
  *
  * @author normenhansen
  */
@@ -104,16 +105,31 @@ public class MeshCollisionShape extends CollisionShape {
      * @param meshes the collection on which to base the shape (must contain at
      * least one triangle)
      */
-    public MeshCollisionShape(boolean useCompression,
-            Collection<IndexedMesh> meshes) {
+    public MeshCollisionShape(
+            boolean useCompression, Collection<IndexedMesh> meshes) {
         Validate.nonEmpty(meshes, "meshes");
-        nativeMesh = new CompoundMesh();
+        this.nativeMesh = new CompoundMesh();
         for (IndexedMesh submesh : meshes) {
             nativeMesh.add(submesh);
         }
-        Validate.require(nativeMesh.countTriangles() > 0,
-                "at least one triangle");
+        Validate.require(
+                nativeMesh.countTriangles() > 0, "at least one triangle");
 
+        this.useCompression = useCompression;
+        createShape();
+    }
+
+    /**
+     * Instantiate a shape based on the specified CompoundMesh.
+     *
+     * @param useCompression true to use quantized AABB compression
+     * @param mesh the mesh on which to base the shape (not null, must contain
+     * at least one triangle, unaffected)
+     */
+    public MeshCollisionShape(boolean useCompression, CompoundMesh mesh) {
+        Validate.require(mesh.countTriangles() > 0, "at least one triangle");
+
+        this.nativeMesh = new CompoundMesh(mesh);
         this.useCompression = useCompression;
         createShape();
     }
@@ -125,15 +141,15 @@ public class MeshCollisionShape extends CollisionShape {
      * @param submeshes the mesh(es) on which to base the shape (must contain at
      * least one triangle)
      */
-    public MeshCollisionShape(boolean useCompression,
-            IndexedMesh... submeshes) {
+    public MeshCollisionShape(
+            boolean useCompression, IndexedMesh... submeshes) {
         Validate.nonEmpty(submeshes, "submeshes");
-        nativeMesh = new CompoundMesh();
+        this.nativeMesh = new CompoundMesh();
         for (IndexedMesh submesh : submeshes) {
             nativeMesh.add(submesh);
         }
-        Validate.require(nativeMesh.countTriangles() > 0,
-                "at least one triangle");
+        Validate.require(
+                nativeMesh.countTriangles() > 0, "at least one triangle");
 
         this.useCompression = useCompression;
         createShape();
@@ -150,15 +166,15 @@ public class MeshCollisionShape extends CollisionShape {
     public MeshCollisionShape(byte[] bvhBytes, IndexedMesh... submeshes) {
         Validate.nonNull(bvhBytes, "BVH data");
         Validate.nonEmpty(submeshes, "submeshes");
-        nativeMesh = new CompoundMesh();
+        this.nativeMesh = new CompoundMesh();
         for (IndexedMesh submesh : submeshes) {
             nativeMesh.add(submesh);
         }
-        Validate.require(nativeMesh.countTriangles() > 0,
-                "at least one triangle");
+        Validate.require(
+                nativeMesh.countTriangles() > 0, "at least one triangle");
 
-        useCompression = true;
-        bvh = new BoundingValueHierarchy(bvhBytes);
+        this.useCompression = true;
+        this.bvh = new BoundingValueHierarchy(bvhBytes);
         createShape();
     }
 
@@ -171,11 +187,11 @@ public class MeshCollisionShape extends CollisionShape {
      */
     public MeshCollisionShape(Mesh... jmeMeshes) {
         Validate.nonEmpty(jmeMeshes, "JME meshes");
-        nativeMesh = new CompoundMesh(jmeMeshes);
+        this.nativeMesh = new CompoundMesh(jmeMeshes);
         Validate.require(nativeMesh.countTriangles() > 0,
                 "at least one triangle");
 
-        useCompression = true;
+        this.useCompression = true;
         createShape();
     }
 
@@ -188,7 +204,7 @@ public class MeshCollisionShape extends CollisionShape {
      */
     public MeshCollisionShape(Mesh mesh, boolean useCompression) {
         Validate.nonNull(mesh, "mesh");
-        nativeMesh = new CompoundMesh(mesh);
+        this.nativeMesh = new CompoundMesh(mesh);
         Validate.require(nativeMesh.countTriangles() > 0,
                 "at least one triangle");
 
@@ -227,8 +243,53 @@ public class MeshCollisionShape extends CollisionShape {
         byte[] result = bvh.serialize();
         return result;
     }
+
+    /**
+     * Attempt to divide this shape into 2 shapes.
+     *
+     * @param splittingTriangle to define the splitting plane (in shape
+     * coordinates, not null, unaffected)
+     * @return a pair of mesh shapes, the first shape generated by the plane's
+     * minus side and the 2nd shape generated by its plus side; either shape may
+     * be null, indicating an empty shape
+     */
+    public MeshCollisionShape[] split(Triangle splittingTriangle) {
+        Validate.nonNull(splittingTriangle, "splitting triangle");
+
+        CompoundMesh[] mp = nativeMesh.split(splittingTriangle);
+        MeshCollisionShape[] result = new MeshCollisionShape[2];
+        int numMinus = (mp[0] == null) ? 0 : mp[0].countTriangles();
+        int numPlus = (mp[1] == null) ? 0 : mp[1].countTriangles();
+        if (numMinus == 0 || numPlus == 0) {
+            // Degenerate case:  all triangles lie to one side of the plane.
+            if (numMinus > 0) {
+                result[0] = this;
+            } else if (numPlus > 0) {
+                result[1] = this;
+            }
+
+        } else {
+            result[0] = new MeshCollisionShape(useCompression, mp[0]);
+            result[0].setScale(scale);
+
+            result[1] = new MeshCollisionShape(useCompression, mp[1]);
+            result[1].setScale(scale);
+        }
+
+        return result;
+    }
     // *************************************************************************
     // CollisionShape methods
+
+    /**
+     * Test whether this shape can be split by an arbitrary plane.
+     *
+     * @return true if splittable, false otherwise
+     */
+    @Override
+    public boolean canSplit() {
+        return true;
+    }
 
     /**
      * Callback from {@link com.jme3.util.clone.Cloner} to convert this
@@ -243,24 +304,9 @@ public class MeshCollisionShape extends CollisionShape {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
 
-        nativeMesh = cloner.clone(nativeMesh);
-        bvh = cloner.clone(bvh);
+        this.nativeMesh = cloner.clone(nativeMesh);
+        this.bvh = cloner.clone(bvh);
         createShape();
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public MeshCollisionShape jmeClone() {
-        try {
-            MeshCollisionShape clone = (MeshCollisionShape) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -278,13 +324,15 @@ public class MeshCollisionShape extends CollisionShape {
         Platform writePlatform
                 = capsule.readEnum(tagNativePlatform, Platform.class, null);
         if (writePlatform == null || writePlatform != JmeSystem.getPlatform()) {
-            bvh = null; // will re-generate the BVH for the new platform
+            this.bvh = null; // will re-generate the BVH for the new platform
         } else {
-            bvh = (BoundingValueHierarchy) capsule.readSavable(tagBvh, null);
+            this.bvh = (BoundingValueHierarchy) capsule
+                    .readSavable(tagBvh, null);
         }
 
-        nativeMesh = (CompoundMesh) capsule.readSavable(tagNativeMesh, null);
-        useCompression = capsule.readBoolean(tagUseCompression, true);
+        this.nativeMesh
+                = (CompoundMesh) capsule.readSavable(tagNativeMesh, null);
+        this.useCompression = capsule.readBoolean(tagUseCompression, true);
 
         createShape();
     }
@@ -322,7 +370,7 @@ public class MeshCollisionShape extends CollisionShape {
     // Java private methods
 
     /**
-     * Instantiate the configured btBvhTriangleMeshShape.
+     * Instantiate the configured {@code btBvhTriangleMeshShape}.
      */
     private void createShape() {
         int numTriangles = nativeMesh.countTriangles();
@@ -347,8 +395,8 @@ public class MeshCollisionShape extends CollisionShape {
     // *************************************************************************
     // native private methods
 
-    native private static long createShape(boolean useCompression,
-            boolean buildBvh, long meshId);
+    native private static long
+            createShape(boolean useCompression, boolean buildBvh, long meshId);
 
     native private static void recalcAabb(long shapeId);
 

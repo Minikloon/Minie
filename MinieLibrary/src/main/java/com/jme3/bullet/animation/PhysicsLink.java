@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021 jMonkeyEngine
+ * Copyright (c) 2018-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,6 +80,7 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
     final private static String tagBone = "bone";
     final private static String tagChildren = "children";
     final private static String tagControl = "control";
+    final private static String tagDensity = "density";
     final private static String tagIkControllers = "ikControllers";
     final private static String tagJoint = "joint";
     final private static String tagKinematicWeight = "kinematicWeight";
@@ -152,6 +153,10 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
      * coordinates)
      */
     private Vector3f localOffset;
+    /**
+     * temporary scale vector
+     */
+    private Vector3f tmpScale = new Vector3f();
     // *************************************************************************
     // constructors
 
@@ -183,7 +188,7 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
 
         this.control = control;
         this.bone = bone;
-        rigidBody = createRigidBody(linkConfig, collisionShape);
+        this.rigidBody = createRigidBody(linkConfig, collisionShape);
 
         if (logger.isLoggable(Level.FINE)) {
             logger.log(Level.FINE, "Creating link for bone {0} with mass={1}",
@@ -219,12 +224,13 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
 
         this.control = control;
         this.armatureJoint = armatureJoint;
-        rigidBody = createRigidBody(linkConfig, collisionShape);
+        this.rigidBody = createRigidBody(linkConfig, collisionShape);
 
         if (logger.isLoggable(Level.FINE)) {
             logger.log(Level.FINE, "Creating link for joint {0} with mass={1}",
                     new Object[]{
-                        MyString.quote(armatureJoint.getName()), rigidBody.getMass()
+                        MyString.quote(armatureJoint.getName()),
+                        rigidBody.getMass()
                     });
         }
 
@@ -254,9 +260,9 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
      */
     public String boneName() {
         String name;
-        if (bone != null) {
+        if (bone != null) { // old animation system
             name = bone.getName();
-        } else {
+        } else { // new animation system
             name = armatureJoint.getName();
         }
 
@@ -449,16 +455,16 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
      *
      * @param oldLink the link to copy from (not null, unaffected)
      */
-    void postRebuild(PhysicsLink oldLink) {
+    void postRebuildLink(PhysicsLink oldLink) {
         assert oldLink != null;
         assert oldLink.getBone() == bone;
 
         if (oldLink.isKinematic()) {
-            blendInterval = oldLink.blendInterval;
-            kinematicWeight = oldLink.kinematicWeight();
+            this.blendInterval = oldLink.blendInterval;
+            this.kinematicWeight = oldLink.kinematicWeight();
         } else {
-            blendInterval = 0f;
-            kinematicWeight = 1f;
+            this.blendInterval = 0f;
+            this.kinematicWeight = 1f;
         }
     }
 
@@ -476,7 +482,7 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
      */
     void preTick(float timeStep) {
         if (isKinematic()) {
-            rigidBody.setPhysicsTransform(kpTransform);
+            updateRigidBodyTransform();
         } else {
             for (IKController controller : ikControllers) {
                 controller.preTick(timeStep);
@@ -545,7 +551,7 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
      * @param storeResult storage for the result (modified if not null)
      * @return a new velocity vector (psu/sec in physics-space coordinates)
      */
-    Vector3f velocity(Vector3f storeResult) {
+    public Vector3f velocity(Vector3f storeResult) {
         Vector3f result = (storeResult == null) ? new Vector3f() : storeResult;
         if (isKinematic()) {
             result.set(kpVelocity);
@@ -586,9 +592,8 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
     protected void kinematicUpdate(float tpf) {
         assert tpf >= 0f : tpf;
         assert rigidBody.isKinematic();
-        /*
-         * If blending, increase the kinematic weight.
-         */
+
+        // If blending, increase the kinematic weight.
         if (blendInterval == 0f) {
             setKinematicWeight(1f); // done blending
         } else {
@@ -649,7 +654,7 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
     protected void setRigidBody(PhysicsRigidBody body) {
         assert body != null;
         assert rigidBody != null;
-        rigidBody = body;
+        this.rigidBody = body;
     }
     // *************************************************************************
     // JmeCloneable methods
@@ -665,17 +670,18 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        armatureJoint = cloner.clone(armatureJoint);
-        bone = cloner.clone(bone);
-        control = cloner.clone(control);
-        ikControllers = cloner.clone(ikControllers);
-        children = cloner.clone(children);
-        joint = cloner.clone(joint);
-        parent = cloner.clone(parent);
-        rigidBody = cloner.clone(rigidBody);
-        kpTransform = cloner.clone(kpTransform);
-        kpVelocity = cloner.clone(kpVelocity);
-        localOffset = cloner.clone(localOffset);
+        this.armatureJoint = cloner.clone(armatureJoint);
+        this.bone = cloner.clone(bone);
+        this.control = cloner.clone(control);
+        this.ikControllers = cloner.clone(ikControllers);
+        this.children = cloner.clone(children);
+        this.joint = cloner.clone(joint);
+        this.parent = cloner.clone(parent);
+        this.rigidBody = cloner.clone(rigidBody);
+        this.kpTransform = cloner.clone(kpTransform);
+        this.kpVelocity = cloner.clone(kpVelocity);
+        this.localOffset = cloner.clone(localOffset);
+        this.tmpScale = cloner.clone(tmpScale);
     }
 
     /**
@@ -686,7 +692,7 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
     @Override
     public PhysicsLink jmeClone() {
         try {
-            PhysicsLink clone = (PhysicsLink) super.clone();
+            PhysicsLink clone = (PhysicsLink) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -707,23 +713,27 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        ikControllers = capsule.readSavableArrayList(tagIkControllers,
-                new ArrayList(1));
-        children = capsule.readSavableArrayList(tagChildren, new ArrayList(1));
-        armatureJoint = (Joint) capsule.readSavable(tagArmatureJoint, null);
-        bone = (Bone) capsule.readSavable(tagBone, null);
-        control = (DacLinks) capsule.readSavable(tagControl, null);
-        blendInterval = capsule.readFloat(tagBlendInterval, 1f);
-        kinematicWeight = capsule.readFloat(tagKinematicWeight, 1f);
-        joint = (PhysicsJoint) capsule.readSavable(tagJoint, null);
-        parent = (PhysicsLink) capsule.readSavable(tagParent, null);
-        rigidBody = (PhysicsRigidBody) capsule.readSavable(tagRigidBody, null);
-        kpTransform = (Transform) capsule.readSavable(tagKpTransform,
-                new Transform());
-        kpVelocity
+        this.ikControllers = capsule.readSavableArrayList(
+                tagIkControllers, new ArrayList(1));
+        this.children
+                = capsule.readSavableArrayList(tagChildren, new ArrayList(1));
+        this.armatureJoint
+                = (Joint) capsule.readSavable(tagArmatureJoint, null);
+        this.bone = (Bone) capsule.readSavable(tagBone, null);
+        this.control = (DacLinks) capsule.readSavable(tagControl, null);
+        this.blendInterval = capsule.readFloat(tagBlendInterval, 1f);
+        this.density = capsule.readFloat(tagDensity, 1f);
+        this.kinematicWeight = capsule.readFloat(tagKinematicWeight, 1f);
+        this.joint = (PhysicsJoint) capsule.readSavable(tagJoint, null);
+        this.parent = (PhysicsLink) capsule.readSavable(tagParent, null);
+        this.rigidBody
+                = (PhysicsRigidBody) capsule.readSavable(tagRigidBody, null);
+        this.kpTransform = (Transform) capsule.readSavable(
+                tagKpTransform, new Transform());
+        this.kpVelocity
                 = (Vector3f) capsule.readSavable(tagKpVelocity, new Vector3f());
-        localOffset = (Vector3f) capsule.readSavable(tagLocalOffset,
-                new Vector3f());
+        this.localOffset = (Vector3f) capsule.readSavable(
+                tagLocalOffset, new Vector3f());
 
         rigidBody.setUserObject(this);
     }
@@ -745,6 +755,7 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
         capsule.write(bone, tagBone, null);
         capsule.write(control, tagControl, null);
         capsule.write(blendInterval, tagBlendInterval, 1f);
+        capsule.write(density, tagDensity, 1f);
         capsule.write(kinematicWeight, tagKinematicWeight, 1f);
         capsule.write(joint, tagJoint, null);
         capsule.write(parent, tagParent, null);
@@ -752,6 +763,7 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
         capsule.write(kpTransform, tagKpTransform, null);
         capsule.write(kpVelocity, tagKpVelocity, null);
         capsule.write(localOffset, tagLocalOffset, null);
+        // tmpScale is never written.
     }
     // *************************************************************************
     // private methods
@@ -763,13 +775,13 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
      * @param collisionShape the desired shape (not null, alias created)
      * @return a new instance, not in any PhysicsSpace
      */
-    private PhysicsRigidBody createRigidBody(LinkConfig linkConfig,
-            CollisionShape collisionShape) {
+    private PhysicsRigidBody createRigidBody(
+            LinkConfig linkConfig, CollisionShape collisionShape) {
         assert collisionShape != null;
 
         float volume = MyShape.volume(collisionShape);
         float mass = linkConfig.mass(volume);
-        density = mass / volume;
+        this.density = mass / volume;
         PhysicsRigidBody body = new PhysicsRigidBody(collisionShape, mass);
 
         float viscousDamping = control.damping();
@@ -791,12 +803,12 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
         assert weight >= 0f : weight;
 
         boolean wasKinematic = (kinematicWeight > 0f);
-        kinematicWeight = (weight > 1f) ? 1f : weight;
+        this.kinematicWeight = (weight > 1f) ? 1f : weight;
         boolean isKinematic = (kinematicWeight > 0f);
 
         if (wasKinematic && !isKinematic) {
             rigidBody.setKinematic(false);
-            rigidBody.setPhysicsTransform(kpTransform);
+            updateRigidBodyTransform();
             rigidBody.setLinearVelocity(kpVelocity);
         } else if (isKinematic && !wasKinematic) {
             rigidBody.getTransform(kpTransform);
@@ -809,10 +821,24 @@ abstract public class PhysicsLink implements JmeCloneable, Savable {
      * Update the kinematic physics transform.
      */
     private void updateKPTransform() {
-        if (bone != null) {
+        if (bone != null) { // old animation system
             control.physicsTransform(bone, localOffset, kpTransform);
-        } else {
+        } else { // new animation system
             control.physicsTransform(armatureJoint, localOffset, kpTransform);
+        }
+    }
+
+    /**
+     * Update the rigid-body transform based on the kinematic-physics transform.
+     */
+    private void updateRigidBodyTransform() {
+        rigidBody.setPhysicsLocation(kpTransform.getTranslation());
+        rigidBody.setPhysicsRotation(kpTransform.getRotation());
+
+        Vector3f kpScale = kpTransform.getScale(); // alias
+        rigidBody.getScale(tmpScale);
+        if (!control.areWithinTolerance(kpScale, tmpScale)) {
+            rigidBody.setPhysicsScale(kpScale);
         }
     }
 }

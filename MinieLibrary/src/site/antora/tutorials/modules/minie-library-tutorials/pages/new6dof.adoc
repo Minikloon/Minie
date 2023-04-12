@@ -1,4 +1,5 @@
 = An introduction to New6Dof constraints
+:Project: Minie
 :experimental:
 :page-pagination:
 :url-api: https://stephengold.github.io/Minie/javadoc/master/com/jme3/bullet
@@ -27,14 +28,15 @@ To simulate this, you'd use a joint with 3 rotational DOFs,
 called a _point-to-point joint_.
 
 Some physics joints can connect soft bodies or portions thereof.
-A joint that can only connect rigid bodies is called a _constraint_.
+In {Project}, a joint that can only connect rigid bodies
+is called a _constraint_.
 
 {url-api}/joints/New6Dof.html[`New6Dof`] is a constraint
 that replaces the older {url-api}/joints/SixDofJoint.html[`SixDofJoint`]
 and {url-api}/joints/SixDofSpringJoint.html[`SixDofSpringJoint`] constraints.
 As its name implies,
-{url-api}/joints/New6Dof.html[`New6Dof`] can simulate up to 6 DOFs.
-It's so versatile, it can also emulate Minie's other 4 constraints:
+`New6Dof` can simulate up to 6 DOFs.
+It's so versatile, it can also emulate 4 other constraints:
 
 . {url-api}/joints/ConeJoint.html[`ConeJoint`]
 . {url-api}/joints/HingeJoint.html[`HingeJoint`]
@@ -45,16 +47,16 @@ It might be the only physics joint you'll ever need.
 
 == Features
 
-A {url-api}/joints/New6Dof.html[`New6Dof`] constraint can be instantiated
+A `New6Dof` constraint can be instantiated
 either as a _double-ended_ constraint (connecting 2 rigid bodies)
 or as a _single-ended_ constraint (connecting a rigid body to a fixed point).
 
-{url-api}/joints/New6Dof.html[`New6Dof`] can simulate up to 3 rotation DOFs
+`New6Dof` can simulate up to 3 rotation DOFs
 and up to 3 translation DOFs, so an instance
 can potentially rotate or slide on any axis or axes.
 By default, the translation DOFs are _locked_ at a zero,
-while the rotation DOFs are _free_ to assume any angular value:
-in other words, a point-to-point joint.
+while the rotation DOFs are _free_ to assume any angular value.
+In other words, it defaults to a point-to-point joint.
 
 By locking and/or unlocking DOFs, you simulate different types of joints:
 
@@ -67,14 +69,14 @@ a DOF can be _limited_:  allowed to assume values only in a specific range.
 By imposing limits, you can prevent a door from sliding or swinging
 beyond certain points.
 
-In addition to limits, {url-api}/joints/New6Dof.html[`New6Dof`]
-also implements springs, motors, and servos:
+In addition to limits, `New6Dof`
+also implements motors, servos, and springs:
 
+* Using a _motor_, you can apply forces to open or close a door.
+* Using a _servo_, you can cause a door
+  to move smoothly to a specific position, as if under remote control.
 * Using a _spring_, you can cause a door to automatically return
   to a neutral position when released.
-* Using a _motor_, you can control the rate at which a door opens and closes.
-* Using a _servo_, you can cause a robot arm to turn smoothly from one
-  orientation to another, as if under remote control.
 
 You can also:
 
@@ -88,7 +90,7 @@ You can also:
 
 == Caveats
 
-A {url-api}/joints/New6Dof.html[`New6Dof`] constraint
+A `New6Dof` constraint
 can only connect rigid bodies (including RBCs and vehicles):
 no ghost objects, characters, multibodies, or soft bodies.
 
@@ -101,6 +103,19 @@ For a constraint to be effective:
 Even when locked, constraints exhibit some softness.
 A strong force, torque, or impulse can drag a locked DOF out of position
 or overpower the limits of a limited DOF.
+This is because the contact-and-constraint solver
+doesn't immediately correct all position errors in physics joints.
+During each time step, it corrects only a fraction of each error,
+by default, 20%.
+This fraction is the solver's _error-reduction parameter_ (ERP).
+
+For faster corrections (with more risk of instability) increase the ERP.
+For instance, to correct 90% of joint-position errors during each time step:
+
+[source,java]
+----
+physicsSpace.getSolverInfo().setJointErp(0.9f); // default=0.2
+----
 
 == Constructors
 
@@ -108,14 +123,14 @@ The ends of a double-ended physics joint are denoted "A" and "B",
 based on their order of appearance in the constructor.
 
 By convention, the body connected to a single-ended
-{url-api}/joints/New6Dof.html[`New6Dof`] is denoted "B".
+`New6Dof` is denoted "B".
 In effect, the "A" end of a single-ended constraint
 connects to the physics space itself.
 
 NOTE: Different {url-api}/joints/Constraint.html[`Constraint`]
 subclasses use different end-naming conventions for single-ended constraints.
 
-There are 2 {url-api}/joints/New6Dof.html[`New6Dof`] constructors,
+There are 2 `New6Dof` constructors,
 one for a single-ended constraint:
 
 [source,java]
@@ -166,11 +181,10 @@ the constraint and its end body(s) so that their local coordinate systems
 all share the same orientation.
 Then you can specify `Matrix3f.IDENTITY` for each "rot" parameter.
 
-=== Examples
+=== Example apps
 
-{url-tutorial}/HelloJoint.java[HelloJoint] is a simple
-application that demonstrates a single-ended
-{url-api}/joints/New6Dof.html[`New6Dof`] constraint.
+{url-tutorial}/HelloJoint.java[HelloJoint] is a simple application
+that demonstrates a single-ended `New6Dof` constraint.
 
 Things to notice while running the app:
 
@@ -180,20 +194,19 @@ Things to notice while running the app:
 . If you strike the ball with the paddle, it swings around, maintaining
   a constant distance from the pivot point.
 
-{url-tutorial}/HelloDoubleEnded.java[HelloDoubleEnded] is a simple
-application that demonstrates a double-ended
-{url-api}/joints/New6Dof.html[`New6Dof`] constraint.
+{url-tutorial}/HelloDoubleEnded.java[HelloDoubleEnded] is a simple application
+that demonstrates a double-ended `New6Dof` constraint.
 
 Things to notice while running the app:
 
 . The red paddle is moved by the mouse.
 . A double-ended point-to-point joint (indicated by red and green arrows)
   connects the ball to the paddle.
-. If the ball moves fast enough, the red and green arrows no longer meet.
-  Even though all 3 translation DOFs are locked, the ball's
+. If the paddle moves fast enough, the red and green arrows no longer meet.
+  Even though all 3 translation DOFs are locked, the paddle's
   motion drags them out of position.
 
-== Limiting DOFs
+== Limits
 
 The degrees of freedom are indexed as follows...
 
@@ -217,29 +230,72 @@ To lock a DOF that is limited or free, set both limits to the same value.
 
 To free a DOF that is limited or locked,
 use the `set()` method with lowerLimit &gt; upperLimit.
-(For a free DOF, the limits themselves have no significance.)
+(For a free DOF, the precise limit values have no significance.)
 
 NOTE: The limits of a rotational DOF are measured in radians.
 
-{url-tutorial}/HelloLimit.java[HelloLimit] is a simple
-application that demonstrates a single-ended
-{url-api}/joints/New6Dof.html[`New6Dof`] constraint
+{url-tutorial}/HelloLimit.java[HelloLimit] is a simple application
+that demonstrates a single-ended `New6Dof` constraint
 with limited translation DOFs.
 The joint's translations are limited,
 confining the ball to a 6x6 horizontal square centered on the origin.
 
 == Motors
 
-Each DOF has a motor, which is disabled by default.
+Motors are used to apply forces to a constraint.
+In `New6Dof`, each DOF has its own motor, which is disabled by default.
 
 {url-tutorial}/HelloMotor.java[HelloMotor] is a simple application
-that demonstrates a double-ended {url-api}/joints/New6Dof.html[`New6Dof`]
-with its Y rotation motor enabled.
+that demonstrates a double-ended `New6Dof`
+with its Y-rotation motor enabled.
 
 . All DOFs except Y rotation are locked at zero.
 . Y rotation is limited between 0 and 1.2 radians.
 . The pivot is located just to the left of the door.
 . Press kbd:[Space bar] to reverse the direction of the motor.
+
+The force (or torque) applied by each motor is limited.
+To change this limit,
+use the `set()` method with `MotorParam.MaxMotorForce`:
+
+[source,java]
+----
+constraint.set(MotorParam.MaxMotorForce, dofIndex, force);
+----
+
+NOTE: For translation DOFs, the default maximum force is zero!
+
+== Servos
+
+It's difficult to position a constraint using motors alone.
+Without positional feedback,
+the constraint tends to keep accelerating until some limit is hit.
+Servos implement feedback, allowing for smooth, gradual motion.
+In `New6Dof`, each DOF has its own servo, which is disabled by default.
+
+NOTE: For a servo to be effective, its corresponding motor must also be enabled.
+
+{url-tutorial}/HelloServo.java[HelloServo] is a simple application
+that demonstrates a double-ended `New6Dof` constraint
+with its Y-rotation servo enabled.
+
+. All DOFs except Y rotation are locked at zero.
+. Y rotation is limited between 0 and 1.2 radians.
+. The pivot is located just to the left of the door.
+. Press kbd:[1] to gradually open the door all the way.
+. Press kbd:[3] to gradually rotate the door
+  to the one-third open position.
+. Press kbd:[4] to gradually close the door all the way.
+
+To adjust a servo's rate of motion,
+use the `set()` method with `MotorParam.TargetVelocity`:
+
+[source,java]
+----
+constraint.set(MotorParam.TargetVelocity, dofIndex, velocity);
+----
+
+NOTE: The default target velocity is zero!
 
 == Springs
 
@@ -249,22 +305,23 @@ and set its stiffness to a positive value.
 If desired, you can also configure
 the spring's equilibrium value and damping ratio.
 
-{url-tutorial}/HelloSpring.java[HelloSpring] is a simple
-application that demonstrates a single-ended constraint with springs.
+{url-tutorial}/HelloSpring.java[HelloSpring] is a simple application
+that demonstrates a single-ended constraint with springs.
 
 Things to notice while running the app:
 
 . The joint's X and Z translation DOFs are free.
 . Springs on the X and Z translation DOFs
   cause the ball to accelerate toward its equilibrium location.
-. Because there's no damping, the ball tends to oscillate.
+. Since there's no damping, the ball tends to oscillate.
 
 == Summary
 
 * Physics joints constrain the motion of connected bodies.
-* Joints for rigid bodies are called constraints.
-* {url-api}/joints/New6Dof.html[`New6Dof`] is a versatile constraint
+* In {Project}, joints for rigid bodies are called constraints.
+* `New6Dof` is a versatile constraint
   with 6 degrees of freedom (DOFs).
   It can emulate hinges, sliders, and point-to-point joints.
-* New6Dof also implements limits, springs, motors, and servos.
 * Constraint DOFs will exhibit some softness, even when locked.
+  This can be mitigated by increasing the error-reduction parameter (ERP).
+* `New6Dof` also implements limits, motors, servos, and springs.

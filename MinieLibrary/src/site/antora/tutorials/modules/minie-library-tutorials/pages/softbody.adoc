@@ -1,31 +1,39 @@
 = An introduction to soft-body physics
+:Project: Minie
+:experimental:
 :page-pagination:
+:url-api: https://stephengold.github.io/Minie/javadoc/master/com/jme3/bullet
 :url-tutorial: https://github.com/stephengold/Minie/blob/master/TutorialApps/src/main/java/jme3utilities/tutorial
 
 While rope, cloth, and foam rubber
 can be simulated using many small rigid bodies,
 it is more convenient and efficient to treat them
 as individual bodies that can be deformed.
-To this end, Minie supports simulation of soft bodies
+To this end, {Project} supports simulation of soft bodies
 in a manner roughly analogous to rigid bodies:
 
-* In place of `BulletAppState`, use `SoftPhysicsAppState`.
-* In place of `PhysicsSpace`, use `PhysicsSoftSpace`.
-* In place of `PhysicsRigidBody`, use `PhysicsSoftBody`.
-* In place of `RigidBodyControl`, use `SoftBodyControl`.
+* In place of {url-api}/BulletAppState.html[`BulletAppState`],
+  use {url-api}/SoftPhysicsAppState.html[`SoftPhysicsAppState`].
+* In place of {url-api}/PhysicsSpace.html[`PhysicsSpace`],
+  use {url-api}/PhysicsSoftSpace.html[`PhysicsSoftSpace`].
+* In place of {url-api}/objects/PhysicsRigidBody.html[`PhysicsRigidBody`],
+  use {url-api}/objects/PhysicsSoftBody.html[`PhysicsSoftBody`].
+* In place of {url-api}/control/RigidBodyControl.html[`RigidBodyControl`],
+  use {url-api}/control/SoftBodyControl.html[`SoftBodyControl`].
 
 `PhysicsSoftSpace` is a subclass of `PhysicsSpace`.
 It implements soft-body physics in addition to all the
 features of an ordinary `PhysicsSpace` (such as rigid bodies).
 
-The abstract class `PhysicsBody` is a superclass of both `PhysicsRigidBody`
-and `PhysicsSoftBody`.
+The abstract class {url-api}/PhysicsBody.html[`PhysicsBody`]
+is a superclass of both `PhysicsRigidBody` and `PhysicsSoftBody`.
 It provides access to properties that rigid bodies and soft bodies
 have in common, such as gravity, location, mass, and joints.
 
 Soft bodies can collide with both rigid bodies and other soft bodies.
-They can also be joined to other bodies of both types, using special subclasses
+They can also be joined to bodies of both types, using special subclasses
 of `PhysicsJoint`.
+
 
 == A comparison of soft bodies and rigid bodies
 
@@ -59,7 +67,7 @@ softBody.setMargin(0.1f);
 
 Soft bodies lack many other features of rigid bodies, including:
 
-* motion state (for extrapolating between time steps),
+* motion state (for extrapolating between simulation steps),
 * deactivation/sleeping (for efficient simulation), and
 * continuous collision detection (CCD) (for fast-moving objects).
 
@@ -69,9 +77,10 @@ that tie them to one or more spatials in the scene graph.
 However, unlike a `RigidBodyControl`, a `SoftBodyControl` can only be
 dynamic (`Spatial` follows body) never kinematic (body follows `Spatial`).
 
+
 == Constructing a soft body
 
-To construct a soft body directly, start with the null constructor:
+To construct a soft body directly, start with the no-argument constructor:
 
 [source,java]
 ----
@@ -88,9 +97,9 @@ with the desired shape and topology and append it to the body
 using a utility method:
 
 * `NativeSoftBodyUtil.appendFromTriMesh()`
-  to append nodes and faces from a mesh with Mode.Triangles
+  to append nodes and faces from a mesh with `Mode.Triangles`
 * `NativeSoftBodyUtil.appendFromLineMesh()`
-  to append nodes and links from a mesh with Mode.Lines
+  to append nodes and links from a mesh with `Mode.Lines`
 
 Be aware that meshes intended for graphics rendering often prove
 unsuitable for soft-body simulation.
@@ -111,6 +120,7 @@ Access the newly-constructed `PhysicsSoftBody` using `sbc.getBody()`.
 If you add the control to a scene-graph `Node` instead of a `Geometry`,
 it will traverse the node's subtree and use the first `Geometry` it finds.
 
+
 == Soft-body configuration and pose matching
 
 Each soft body has numerous properties that can affect its behavior.
@@ -129,6 +139,7 @@ For a simple example using `SoftPhysicsAppState`, `SoftBodyControl`, and
 pose matching, see
 {url-tutorial}/HelloSoftBody.java[HelloSoftBody].
 
+
 == Soft-soft collisions
 
 By default, collisions between soft bodies are not handled (ignored).
@@ -145,9 +156,10 @@ config.setCollisionFlags(oldFlags, ConfigFlag.VF_SS);
 For a simple example of a collision between 2 soft bodies, see
 {url-tutorial}/HelloSoftSoft.java[HelloSoftSoft].
 
+
 == Solver iterations
 
-During each time step, the simulator applies a series of
+During each simulation step, Bullet applies a series of
 iterative solvers to each soft body:
 
 * a cluster solver
@@ -165,6 +177,7 @@ number of position-solver iterations:
 SoftBodyConfig config = softBody.getSoftConfig();
 config.setPositionIterations(numIterations);  // default=1
 ----
+
 
 == Stiffness coefficients
 
@@ -188,6 +201,7 @@ softMaterial.setAngularStiffness(0f); // default=1
 For a simple example of cloth simulation, see
 {url-tutorial}/HelloCloth.java[HelloCloth].
 
+
 == Mass distribution
 
 When a node is appended to a soft body, it has mass=1.
@@ -207,13 +221,33 @@ the pre-existing nodes in various ways:
 
 `softBody.setMass()` is equivalent to `setMassByCurrent()`.
 
-If a soft-body node has mass=0, it becomes pinned/immovable, like a static
-`PhysicsRigidBody`.
+If a soft-body node has mass=0, it becomes _pinned_ (immovable, like a static
+rigid body).
 
 For a simple example of a pinned node, see
 {url-tutorial}/HelloPin.java[HelloPin.java].
 
-TODO: ropes, applying forces, anchors, soft joints, world info, aerodynamics
+
+== Simulating a rope
+
+{url-tutorial}/HelloSoftRope.java[HelloSoftRope] is a simple application
+that demonstrates one way to simulate rope using a soft body.
+
+TODO: applying forces, anchors, soft joints, world info
+
+
+== Aerodynamics
+
+{url-tutorial}/HelloWind.java[HelloWind] is a simple application
+that simulates the effect of wind on a flag.
+
+Things notice while running the app:
+
+. The flag is a piece of cloth with 2 of its corners pinned.
+. Wind direction is indicated by the white arrow.
+. Initially, the wind blows from left to right.
+. Press kbd:[F1] and kbd:[F2] to alter the wind direction.
+
 
 == Clusters
 

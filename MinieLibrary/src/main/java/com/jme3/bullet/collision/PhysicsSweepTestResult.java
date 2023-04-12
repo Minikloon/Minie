@@ -39,7 +39,7 @@ import java.util.logging.Logger;
  *
  * @author normenhansen
  */
-public class PhysicsSweepTestResult {
+final public class PhysicsSweepTestResult {
     // *************************************************************************
     // constants and loggers
 
@@ -113,11 +113,13 @@ public class PhysicsSweepTestResult {
      * or a new vector, not null)
      */
     public Vector3f getHitNormalLocal(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return normal.clone();
+            result = normal.clone();
         } else {
-            return storeResult.set(normal);
+            result = storeResult.set(normal);
         }
+        return result;
     }
 
     /**

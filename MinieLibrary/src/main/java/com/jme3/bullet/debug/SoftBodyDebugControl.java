@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2016 jMonkeyEngine
+ * Copyright (c) 2009-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,6 @@
  */
 package com.jme3.bullet.debug;
 
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.objects.PhysicsSoftBody;
 import com.jme3.bullet.util.NativeSoftBodyUtil;
 import com.jme3.material.Material;
@@ -49,6 +48,7 @@ import com.jme3.util.BufferUtils;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.logging.Logger;
+import jme3utilities.MeshNormals;
 import jme3utilities.math.MyBuffer;
 import jme3utilities.math.MyVector3f;
 
@@ -121,8 +121,8 @@ class SoftBodyDebugControl extends AbstractPhysicsDebugControl {
      * @param debugAppState which app state (not null, alias created)
      * @param body which body to visualize (not null, alias created)
      */
-    SoftBodyDebugControl(BulletDebugAppState debugAppState,
-            PhysicsSoftBody body) {
+    SoftBodyDebugControl(
+            BulletDebugAppState debugAppState, PhysicsSoftBody body) {
         super(debugAppState);
         this.body = body;
     }
@@ -139,61 +139,56 @@ class SoftBodyDebugControl extends AbstractPhysicsDebugControl {
     @Override
     protected void controlUpdate(float tpf) {
         Node node = (Node) spatial;
-        /*
-         * Ensure that the clustersGeometry mesh is correctly sized.
-         */
+
+        // Ensure that the clustersGeometry mesh is correctly sized.
         if (!isClustersGeometrySized()) {
             if (clustersGeometry != null) {
                 node.detachChild(clustersGeometry);
             }
-            clustersGeometry = createClustersGeometry();
+            this.clustersGeometry = createClustersGeometry();
             assert isClustersGeometrySized();
             if (clustersGeometry != null) {
                 node.attachChild(clustersGeometry);
             }
         }
-        /*
-         * Ensure that the facesGeometry mesh is correctly sized.
-         */
+
+        // Ensure that the facesGeometry mesh is correctly sized.
         if (!isFacesGeometrySized()) {
             if (facesGeometry != null) {
                 node.detachChild(facesGeometry);
             }
-            facesGeometry = createFacesGeometry();
+            this.facesGeometry = createFacesGeometry();
             assert isFacesGeometrySized();
             if (facesGeometry != null) {
                 node.attachChild(facesGeometry);
             }
         }
-        /*
-         * Ensure that the linksGeometry mesh is correctly sized.
-         */
+
+        // Ensure that the linksGeometry mesh is correctly sized.
         if (!isLinksGeometrySized()) {
             if (linksGeometry != null) {
                 node.detachChild(linksGeometry);
             }
-            linksGeometry = createLinksGeometry();
+            this.linksGeometry = createLinksGeometry();
             assert isLinksGeometrySized();
             if (linksGeometry != null) {
                 node.attachChild(linksGeometry);
             }
         }
-        /*
-         * Ensure that the pinsGeometry mesh is correctly sized.
-         */
+
+        // Ensure that the pinsGeometry mesh is correctly sized.
         if (!isPinsGeometrySized()) {
             if (pinsGeometry != null) {
                 node.detachChild(pinsGeometry);
             }
-            pinsGeometry = createPinsGeometry();
+            this.pinsGeometry = createPinsGeometry();
             assert isPinsGeometrySized();
             if (pinsGeometry != null) {
                 node.attachChild(pinsGeometry);
             }
         }
-        /*
-         * Ensure that the velocityGeometries array is correctly sized.
-         */
+
+        // Ensure that the velocityGeometries array is correctly sized.
         if (!areVelocitiesSized()) {
             if (velocityGeometries != null) {
                 for (Geometry geometry : velocityGeometries) {
@@ -215,9 +210,9 @@ class SoftBodyDebugControl extends AbstractPhysicsDebugControl {
             NativeSoftBodyUtil.updateClusterMesh(body, mesh, localFlag);
         }
 
-        DebugMeshNormals normals = body.debugMeshNormals();
+        MeshNormals normals = body.debugMeshNormals();
         IntBuffer noIndexMap = null; // node indices = vertex indices
-        boolean normalsFlag = (normals != DebugMeshNormals.None);
+        boolean normalsFlag = (normals != MeshNormals.None);
         Transform noTransform = null; // physics locations = mesh positions
 
         if (linksGeometry != null) {
@@ -467,27 +462,23 @@ class SoftBodyDebugControl extends AbstractPhysicsDebugControl {
         mesh.setBuffer(VertexBuffer.Type.Index, 3, body.copyFaces(null));
 
         DebugMeshInitListener listener = body.debugMeshInitListener();
-        DebugMeshNormals option = body.debugMeshNormals();
+        MeshNormals option = body.debugMeshNormals();
         if (listener == null) {
-            /*
-             * Allocate buffers for positions and normals.
-             */
+            // Allocate buffers for positions and normals.
             int numNodes = body.countNodes();
             int numFloats = 3 * numNodes;
             FloatBuffer pos = BufferUtils.createFloatBuffer(numFloats);
             mesh.setBuffer(VertexBuffer.Type.Position, 3, pos);
-            if (option != DebugMeshNormals.None) {
+            if (option != MeshNormals.None) {
                 FloatBuffer norm = BufferUtils.createFloatBuffer(numFloats);
                 mesh.setBuffer(VertexBuffer.Type.Normal, 3, norm);
             }
 
         } else {
-            /*
-             * Calculate positions, normals, and bounds in world coords.
-             */
+            // Calculate positions, normals, and bounds in world coords.
             FloatBuffer pos = body.copyLocations(null);
             mesh.setBuffer(VertexBuffer.Type.Position, 3, pos);
-            if (option != DebugMeshNormals.None) {
+            if (option != MeshNormals.None) {
                 FloatBuffer norm = body.copyNormals(null);
                 mesh.setBuffer(VertexBuffer.Type.Normal, 3, norm);
             }
@@ -580,8 +571,8 @@ class SoftBodyDebugControl extends AbstractPhysicsDebugControl {
 
         int numFloats = MyVector3f.numAxes * numPoints;
         FloatBuffer centers = BufferUtils.createFloatBuffer(numFloats);
-        result.setBuffer(VertexBuffer.Type.Position, MyVector3f.numAxes,
-                centers);
+        result.setBuffer(
+                VertexBuffer.Type.Position, MyVector3f.numAxes, centers);
 
         result.setMode(Mesh.Mode.Points);
         result.setStreamed();

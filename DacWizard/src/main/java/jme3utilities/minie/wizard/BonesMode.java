@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,6 @@ import com.jme3.app.Application;
 import com.jme3.app.SimpleApplication;
 import com.jme3.app.state.AppStateManager;
 import com.jme3.asset.AssetManager;
-import com.jme3.bullet.animation.DacConfiguration;
 import com.jme3.cursors.plugins.JmeCursor;
 import com.jme3.input.KeyInput;
 import java.util.logging.Level;
@@ -60,7 +59,7 @@ class BonesMode extends InputMode {
     // constructors
 
     /**
-     * Instantiate a disabled, uninitialized mode.
+     * Instantiate a disabled, uninitialized input mode.
      */
     BonesMode() {
         super("bones");
@@ -95,11 +94,9 @@ class BonesMode extends InputMode {
      * @param application (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager,
-            Application application) {
-        /*
-         * Set the mouse cursor for this mode.
-         */
+    public void initialize(
+            AppStateManager stateManager, Application application) {
+        // Set the mouse cursor for this mode.
         AssetManager manager = application.getAssetManager();
         JmeCursor cursor = (JmeCursor) manager.loadAsset(assetPath);
         setCursor(cursor);
@@ -118,19 +115,13 @@ class BonesMode extends InputMode {
     public void onAction(String actionString, boolean ongoing, float tpf) {
         Validate.nonNull(actionString, "action string");
         if (logger.isLoggable(Level.INFO)) {
-            logger.log(Level.INFO, "Got action {0} ongoing={1}", new Object[]{
-                MyString.quote(actionString), ongoing
-            });
+            logger.log(Level.INFO, "Got action {0} ongoing={1}",
+                    new Object[]{MyString.quote(actionString), ongoing});
         }
 
         boolean handled = false;
         if (ongoing) {
             switch (actionString) {
-                case Action.editLinks:
-                    goLinks();
-                    handled = true;
-                    break;
-
                 case Action.nextScreen:
                     nextScreen();
                     handled = true;
@@ -140,6 +131,8 @@ class BonesMode extends InputMode {
                     previousScreen();
                     handled = true;
                     break;
+
+                default:
             }
         }
         if (!handled) {
@@ -150,32 +143,19 @@ class BonesMode extends InputMode {
     // private methods
 
     /**
-     * Bypass RoM estimation and go directly to the "links" screen.
-     */
-    private void goLinks() {
-        setEnabled(false);
-        Model model = DacWizard.getModel();
-        model.selectLink(DacConfiguration.torsoName);
-        InputMode links = InputMode.findMode("links");
-        links.setEnabled(true);
-    }
-
-    /**
-     * If possible, initiate range-of-motion estimation before advancing to the
-     * LinksScreen.
+     * Proceed to the "torso" screen if possible.
      */
     private void nextScreen() {
-        BonesScreen screen = DacWizard.findAppState(BonesScreen.class);
-        String feedback = screen.feedback();
+        String feedback = BonesScreen.feedback();
         if (feedback.isEmpty()) {
             setEnabled(false);
-            Model model = DacWizard.getModel();
-            model.startRomTask();
+            InputMode load = InputMode.findMode("torso");
+            load.setEnabled(true);
         }
     }
 
     /**
-     * Go back to the LoadScreen.
+     * Go back to the "load" screen.
      */
     private void previousScreen() {
         setEnabled(false);

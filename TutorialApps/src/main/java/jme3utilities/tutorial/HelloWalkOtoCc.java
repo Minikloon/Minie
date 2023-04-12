@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -60,9 +60,9 @@ import com.jme3.texture.Texture;
 
 /**
  * An example of character physics using Oto and CharacterControl.
- *
+ * <p>
  * Press the U/H/J/K keys to walk. Press the space bar to jump.
- *
+ * <p>
  * Builds upon HelloWalk.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -73,40 +73,44 @@ public class HelloWalkOtoCc
     // *************************************************************************
     // fields
 
-    private Action standAction;
-    private Action walkAction;
-    private AnimComposer composer;
+    private static Action standAction;
+    private static Action walkAction;
+    private static AnimComposer composer;
     /**
      * true when the spacebar is pressed, otherwise false
      */
-    private volatile boolean jumpRequested;
+    private static volatile boolean jumpRequested;
     /**
      * true when the U key is pressed, otherwise false
      */
-    private volatile boolean walkAway;
+    private static volatile boolean walkAway;
     /**
      * true when the H key is pressed, otherwise false
      */
-    private volatile boolean walkLeft;
+    private static volatile boolean walkLeft;
     /**
      * true when the K key is pressed, otherwise false
      */
-    private volatile boolean walkRight;
+    private static volatile boolean walkRight;
     /**
      * true when the J key is pressed, otherwise false
      */
-    private volatile boolean walkToward;
+    private static volatile boolean walkToward;
 
-    private CharacterControl character;
+    private static CharacterControl character;
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloWalkOtoCc application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloWalkOtoCc application = new HelloWalkOtoCc();
 
         // Enable gamma correction for accurate lighting.
@@ -128,7 +132,7 @@ public class HelloWalkOtoCc
         addLighting(rootNode);
         configureCamera();
         configureInput();
-        PhysicsSpace physicsSpace = configurePhysics();
+        physicsSpace = configurePhysics();
 
         // Load the Oto model and find its animation actions.
         Spatial oto = assetManager.loadModel("Models/Oto/Oto.mesh.xml");
@@ -153,7 +157,7 @@ public class HelloWalkOtoCc
         character.setPhysicsLocation(new Vector3f(-73.6f, 19.09f, -45.58f));
 
         // Add a static heightmap to represent the ground.
-        addTerrain(physicsSpace);
+        addTerrain();
     }
 
     /**
@@ -251,7 +255,10 @@ public class HelloWalkOtoCc
     // private methods
 
     /**
-     * Add lighting and shadows to the specified scene.
+     * Add lighting and shadows to the specified scene and set the background
+     * color.
+     *
+     * @param scene the scene to augment (not null)
      */
     private void addLighting(Spatial scene) {
         scene.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
@@ -272,8 +279,8 @@ public class HelloWalkOtoCc
         int shadowMapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager,
-                        shadowMapSize, numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, shadowMapSize, numSplits);
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
         dlsr.setEdgesThickness(5);
         dlsr.setLight(sun);
@@ -286,11 +293,9 @@ public class HelloWalkOtoCc
     }
 
     /**
-     * Add a heightfield body to the specified PhysicsSpace.
-     *
-     * @param physicsSpace (not null)
+     * Add a heightfield body to the space.
      */
-    private void addTerrain(PhysicsSpace physicsSpace) {
+    private void addTerrain() {
         // Generate a HeightMap from jme3-testdata-3.1.0-stable.jar
         String assetPath = "Textures/Terrain/splat/mountains512.png";
         Texture texture = assetManager.loadTexture(assetPath);
@@ -338,10 +343,13 @@ public class HelloWalkOtoCc
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
+        //bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
         return result;

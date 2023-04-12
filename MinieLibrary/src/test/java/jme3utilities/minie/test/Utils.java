@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021-2022, Stephen Gold
+ Copyright (c) 2021-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -32,10 +32,13 @@ import com.jme3.export.xml.XMLExporter;
 import com.jme3.export.xml.XMLImporter;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
+import com.simsilica.mathd.Quatd;
+import com.simsilica.mathd.Vec3d;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.logging.Logger;
 import org.junit.Assert;
 
 /**
@@ -43,51 +46,97 @@ import org.junit.Assert;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-final public class MinieTest {
+final public class Utils {
+    // *************************************************************************
+    // constants and loggers
+
+    /**
+     * message logger for this class
+     */
+    final public static Logger logger
+            = Logger.getLogger(Utils.class.getName());
     // *************************************************************************
     // constructors
 
     /**
      * A private constructor to inhibit instantiation of this class.
      */
-    private MinieTest() {
+    private Utils() {
         // do nothing
     }
     // *************************************************************************
     // new methods exposed
 
     /**
-     * Verify that 2 quaternions are equal to within some tolerance.
+     * Verify that 2 double-precision quaternions are equal to within some
+     * tolerance.
      *
      * @param x the expected X component
      * @param y the expected Y component
      * @param z the expected Z component
      * @param w the expected W component
      * @param actual the Quaternion to test (not null, unaffected)
-     * @param tolerance the allowable difference for each component
+     * @param tolerance the allowable difference for each component (&ge;0)
      */
-    public static void assertEquals(float x, float y, float z, float w,
-            Quaternion actual, float tolerance) {
-        Assert.assertEquals(x, actual.getX(), tolerance);
-        Assert.assertEquals(y, actual.getY(), tolerance);
-        Assert.assertEquals(z, actual.getZ(), tolerance);
-        Assert.assertEquals(w, actual.getW(), tolerance);
+    public static void assertEquals(double x, double y, double z, double w,
+            Quatd actual, double tolerance) {
+        Assert.assertEquals("x component", x, actual.x, tolerance);
+        Assert.assertEquals("y component", y, actual.y, tolerance);
+        Assert.assertEquals("z component", z, actual.z, tolerance);
+        Assert.assertEquals("w component", w, actual.w, tolerance);
     }
 
     /**
-     * Verify that 2 vectors are equal to within some tolerance.
+     * Verify that 2 single-precision quaternions are equal to within some
+     * tolerance.
+     *
+     * @param x the expected X component
+     * @param y the expected Y component
+     * @param z the expected Z component
+     * @param w the expected W component
+     * @param actual the Quaternion to test (not null, unaffected)
+     * @param tolerance the allowable difference for each component (&ge;0)
+     */
+    public static void assertEquals(float x, float y, float z, float w,
+            Quaternion actual, float tolerance) {
+        Assert.assertEquals("x component", x, actual.getX(), tolerance);
+        Assert.assertEquals("y component", y, actual.getY(), tolerance);
+        Assert.assertEquals("z component", z, actual.getZ(), tolerance);
+        Assert.assertEquals("w component", w, actual.getW(), tolerance);
+    }
+
+    /**
+     * Verify that 2 double-precision vectors are equal to within some
+     * tolerance.
      *
      * @param x the expected X component
      * @param y the expected Y component
      * @param z the expected Z component
      * @param actual the vector to test (not null, unaffected)
-     * @param tolerance the allowable difference for each component
+     * @param tolerance the allowable difference for each component (&ge;0)
      */
-    public static void assertEquals(float x, float y, float z, Vector3f actual,
-            float tolerance) {
-        Assert.assertEquals(x, actual.x, tolerance);
-        Assert.assertEquals(y, actual.y, tolerance);
-        Assert.assertEquals(z, actual.z, tolerance);
+    public static void assertEquals(
+            double x, double y, double z, Vec3d actual, double tolerance) {
+        Assert.assertEquals("x component", x, actual.x, tolerance);
+        Assert.assertEquals("y component", y, actual.y, tolerance);
+        Assert.assertEquals("z component", z, actual.z, tolerance);
+    }
+
+    /**
+     * Verify that 2 single-precision vectors are equal to within some
+     * tolerance.
+     *
+     * @param x the expected X component
+     * @param y the expected Y component
+     * @param z the expected Z component
+     * @param actual the vector to test (not null, unaffected)
+     * @param tolerance the allowable difference for each component (&ge;0)
+     */
+    public static void assertEquals(
+            float x, float y, float z, Vector3f actual, float tolerance) {
+        Assert.assertEquals("x component", x, actual.x, tolerance);
+        Assert.assertEquals("y component", y, actual.y, tolerance);
+        Assert.assertEquals("z component", z, actual.z, tolerance);
     }
 
     /**
@@ -95,10 +144,10 @@ final public class MinieTest {
      *
      * @param expected the expected value (not null, unaffected)
      * @param actual the vector to test (not null, unaffected)
-     * @param tolerance the allowable difference for each component
+     * @param tolerance the allowable difference for each component (&ge;0)
      */
-    public static void assertEquals(Vector3f expected, Vector3f actual,
-            float tolerance) {
+    public static void assertEquals(
+            Vector3f expected, Vector3f actual, float tolerance) {
         assertEquals(expected.x, expected.y, expected.z, actual, tolerance);
     }
 

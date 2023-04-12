@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -39,16 +39,14 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.MyString;
-import vhacd.VHACD;
 import vhacd.VHACDParameters;
-import vhacd.VHACDProgressListener;
 
 /**
  * A console application to generate the collision-shape asset "ankh.j3o".
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MakeAnkh {
+final public class MakeAnkh {
     // *************************************************************************
     // constants and loggers
 
@@ -67,6 +65,15 @@ public class MakeAnkh {
     final private static String assetDirPath
             = "../MinieExamples/src/main/resources";
     // *************************************************************************
+    // constructors
+
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private MakeAnkh() {
+        // do nothing
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
@@ -76,28 +83,17 @@ public class MakeAnkh {
      */
     public static void main(String[] arguments) {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
-        /*
-         * Mute the chatty loggers found in some imported packages.
-         */
+
+        // Mute the chatty loggers found in some imported packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Set the logging level for this class.
-         */
-        //logger.setLevel(Level.INFO);
-        /*
-         * Instantiate the application.
-         */
-        MakeAnkh application = new MakeAnkh();
-        /*
-         * Log the working directory.
-         */
+
+        // Log the working directory.
         String userDir = System.getProperty("user.dir");
         logger.log(Level.INFO, "working directory is {0}",
                 MyString.quote(userDir));
-        /*
-         * Generate the collision shape.
-         */
-        application.makeAnkh();
+
+        // Generate the collision shape.
+        makeAnkh();
     }
     // *************************************************************************
     // private methods
@@ -105,7 +101,7 @@ public class MakeAnkh {
     /**
      * Generate a collision shape for an ankh.
      */
-    private void makeAnkh() {
+    private static void makeAnkh() {
         AssetManager assetManager = new DesktopAssetManager();
         assetManager.registerLoader(GlbLoader.class, "glb");
         assetManager.registerLoader(J3MLoader.class, "j3md");
@@ -115,44 +111,20 @@ public class MakeAnkh {
          * from src/main/resources:
          */
         Spatial cgmRoot = assetManager.loadModel("Models/Ankh/Ankh.glb");
-        /*
-         * Generate a CollisionShape to approximate the Mesh.
-         */
+
+        // Generate a CollisionShape to approximate the Mesh.
         CompoundCollisionShape shape;
         if (useManualDecomposition) {
             shape = (CompoundCollisionShape)
                     CollisionShapeFactory.createDynamicMeshShape(cgmRoot);
         } else {
-            VHACD.addProgressListener(new VHACDProgressListener() {
-                private double lastOP = -1.0;
-
-                @Override
-                public void update(double overallPercent, double stagePercent,
-                        double operationPercent, String stageName,
-                        String operationName) {
-                    if (overallPercent != lastOP) {
-                        System.out.printf("MakeAnkh %.0f%% complete%n",
-                                overallPercent);
-                        lastOP = overallPercent;
-                    }
-                }
-            });
-            VHACDParameters parms = new VHACDParameters();
-            //parms.setMaxConcavity(0.04);
-            parms.setVoxelResolution(30_000);
-            long startTime = System.nanoTime();
-            shape = CollisionShapeFactory.createVhacdShape(cgmRoot, parms,
-                    null);
-            long elapsedNsec = System.nanoTime() - startTime;
-            if (shape.countChildren() == 0) {
-                throw new RuntimeException("V-HACD failed!");
-            }
-            System.out.printf("MakeAnkh number of hulls = %d (%.3f sec)%n",
-                    shape.countChildren(), elapsedNsec * 1e-9f);
+            VHACDParameters parameters = new VHACDParameters();
+            parameters.setVoxelResolution(30_000);
+            shape = ShapeUtils.createVhacdShape(
+                    cgmRoot, parameters, "MakeAnkh");
         }
-        /*
-         * Write the shape to the asset file.
-         */
+
+        // Write the shape to the asset file.
         String assetPath = "CollisionShapes/ankh.j3o";
         String writeFilePath = String.format("%s/%s", assetDirPath, assetPath);
         Heart.writeJ3O(writeFilePath, shape);

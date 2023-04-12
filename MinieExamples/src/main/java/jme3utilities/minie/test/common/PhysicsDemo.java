@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2022, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,6 @@ import com.jme3.bullet.collision.shapes.ConeCollisionShape;
 import com.jme3.bullet.collision.shapes.CylinderCollisionShape;
 import com.jme3.bullet.collision.shapes.HullCollisionShape;
 import com.jme3.bullet.collision.shapes.PlaneCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.joints.PhysicsJoint;
 import com.jme3.bullet.objects.PhysicsBody;
@@ -51,23 +50,16 @@ import com.jme3.math.Plane;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
-import com.jme3.post.SceneProcessor;
-import com.jme3.profile.AppProfiler;
-import com.jme3.renderer.RenderManager;
-import com.jme3.renderer.ViewPort;
 import com.jme3.renderer.queue.RenderQueue;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Mesh;
 import com.jme3.scene.shape.Box;
-import com.jme3.texture.FrameBuffer;
 import com.jme3.texture.Texture;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.prefs.BackingStoreException;
-import java.util.prefs.Preferences;
+import jme3utilities.MeshNormals;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
 import jme3utilities.MyString;
@@ -78,17 +70,15 @@ import jme3utilities.minie.FilterAll;
 import jme3utilities.minie.PhysicsDumper;
 import jme3utilities.minie.test.shape.MinieTestShapes;
 import jme3utilities.minie.test.shape.ShapeGenerator;
-import jme3utilities.ui.AbstractDemo;
-import jme3utilities.ui.HelpVersion;
-import jme3utilities.ui.InputMode;
+import jme3utilities.ui.AcorusDemo;
 
 /**
- * An AbstractDemo with additional data and methods to test and/or demonstrate
- * the capabilities of Minie.
+ * An AcorusDemo with additional data and methods to test and/or demonstrate the
+ * capabilities of Minie.
  *
  * @author Stephen Gold sgold@sonic.net
  */
-abstract public class PhysicsDemo extends AbstractDemo {
+abstract public class PhysicsDemo extends AcorusDemo {
     // *************************************************************************
     // constants and loggers
 
@@ -98,23 +88,54 @@ abstract public class PhysicsDemo extends AbstractDemo {
     final public static Logger loggerP
             = Logger.getLogger(PhysicsDemo.class.getName());
     /**
-     * action strings that onAction() recognizes
+     * action string to dump the GUI scene graph
      */
     final public static String asDumpGui = "dump gui";
+    /**
+     * action string to dump the physics space
+     */
     final public static String asDumpSpace = "dump space";
+    /**
+     * action string to dump the main scene graph
+     */
     final public static String asDumpScene = "dump scene";
+    /**
+     * action string to dump the render manager (all viewports)
+     */
     final public static String asDumpScenes = "dump scenes";
+    /**
+     * action string to dump the main viewport
+     */
     final public static String asDumpViewport = "dump viewport";
-
-    // TODO included in AbstractDemo in the next Acorus release
-    final public static String asEditDisplaySettings = "edit display settings";
-
+    /**
+     * action string to toggle debug visualization of collision-object bounding
+     * boxes
+     */
     final public static String asToggleAabbs = "toggle aabbs";
+    /**
+     * action string to toggle debug visualization of CCD swept spheres
+     */
     final public static String asToggleCcdSpheres = "toggle ccdSpheres";
+    /**
+     * action string to toggle debug visualization
+     */
     final public static String asToggleDebug = "toggle debug";
+    /**
+     * action string to toggle debug visualization of gravity vectors
+     */
     final public static String asToggleGArrows = "toggle gArrows";
+    /**
+     * action string to toggle debug visualization of collision-object axes
+     */
     final public static String asTogglePcoAxes = "toggle pcoAxes";
+    /**
+     * action string to toggle debug visualization of velocity vectors
+     */
     final public static String asToggleVArrows = "toggle vArrows";
+    /**
+     * action string to toggle debug visualization of angular-velocity vectors
+     */
+    final public static String asToggleWArrows = "toggle wArrows";
     // *************************************************************************
     // fields
 
@@ -135,17 +156,29 @@ abstract public class PhysicsDemo extends AbstractDemo {
      */
     private FilterAll vArrowsFilter = null;
     /**
+     * filter to control visualization of angular velocities
+     */
+    private FilterAll wArrowsFilter = null;
+    /**
      * library of named physics collision shapes
      */
     final private Map<String, CollisionShape> namedShapes = new TreeMap<>();
     /**
-     * dump debugging information to System.out
+     * dump debugging information to {@code System.out}
      */
     final private PhysicsDumper dumper = new PhysicsDumper();
     /**
      * enhanced pseudo-random generator
      */
     final private ShapeGenerator generator = new ShapeGenerator();
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate a generic PhysicsDemo.
+     */
+    protected PhysicsDemo() {
+    }
     // *************************************************************************
     // new methods exposed
 
@@ -245,7 +278,7 @@ abstract public class PhysicsDemo extends AbstractDemo {
                 break;
 
             case "triangle":
-                addPlatform(platformType, DebugMeshNormals.Facet, topY);
+                addPlatform(platformType, MeshNormals.Facet, topY);
                 break;
 
             default:
@@ -264,8 +297,8 @@ abstract public class PhysicsDemo extends AbstractDemo {
      * @param centerY the desired Y coordinate of the center (in physics-space
      * coordinates)
      */
-    public void addPlatform(String shapeName, DebugMeshNormals normals,
-            float centerY) {
+    public void addPlatform(
+            String shapeName, MeshNormals normals, float centerY) {
         Validate.nonNull(shapeName, "shape name");
 
         CollisionShape shape = findShape(shapeName);
@@ -358,31 +391,6 @@ abstract public class PhysicsDemo extends AbstractDemo {
     }
 
     /**
-     * Delete the application's stored settings, if any. TODO use Heart library
-     *
-     * @param applicationName the name of the application
-     */
-    public static void deleteStoredSettings(String applicationName) {
-        try {
-            if (Preferences.userRoot().nodeExists(applicationName)) {
-                Preferences.userRoot().node(applicationName).removeNode();
-                loggerP.log(Level.WARNING,
-                        "The stored settings for \"{0}\" were deleted.",
-                        applicationName);
-            } else {
-                loggerP.log(Level.WARNING,
-                        "No stored settings for \"{0}\" were found.",
-                        applicationName);
-            }
-
-        } catch (BackingStoreException exception) {
-            loggerP.log(Level.SEVERE,
-                    "The stored settings for \"{0}\" are inaccessible.",
-                    applicationName);
-        }
-    }
-
-    /**
      * Find the named CollisionShape in the library.
      *
      * @param name the name of the shape to find (not null)
@@ -401,8 +409,8 @@ abstract public class PhysicsDemo extends AbstractDemo {
     public void generateMaterials() {
         super.generateMaterials();
 
-        Texture texture = MyAsset.loadTexture(assetManager,
-                "Textures/greenTile.png", true);
+        Texture texture = MyAsset
+                .loadTexture(assetManager, "Textures/greenTile.png", true);
         texture.setMinFilter(Texture.MinFilter.Trilinear);
         texture.setWrap(Texture.WrapMode.Repeat);
         Material greenTile
@@ -489,21 +497,6 @@ abstract public class PhysicsDemo extends AbstractDemo {
         assert !namedShapes.containsKey(name);
 
         namedShapes.put(name, shape);
-    }
-
-    /**
-     * Callback invoked after the framebuffer is resized. TODO included in
-     * AbstractDemo in the next Acorus release
-     *
-     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
-     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
-     */
-    public void resize(int newWidth, int newHeight) {
-        Validate.positive(newWidth, "new width");
-        Validate.positive(newHeight, "new height");
-
-        InputMode activeMode = InputMode.getActiveMode();
-        updateHelpNodes(activeMode, newWidth, newHeight, HelpVersion.Detailed);
     }
 
     /**
@@ -603,25 +596,7 @@ abstract public class PhysicsDemo extends AbstractDemo {
      */
     abstract protected float maxArrowLength();
     // *************************************************************************
-    // AbstractDemo methods
-
-    /**
-     * Initialize this application. TODO included in AbstractDemo in the next
-     * Acorus release
-     */
-    @Override
-    public void actionInitializeApplication() {
-        /*
-         * Ensure that size-dependent data get initialized.
-         */
-        int width = cam.getWidth();
-        int height = cam.getHeight();
-        resize(width, height);
-        /*
-         * Ensure that size-dependent data get updated.
-         */
-        addSceneProcessor();
-    }
+    // AcorusDemo methods
 
     /**
      * Process an action that wasn't handled by the active InputMode.
@@ -669,6 +644,11 @@ abstract public class PhysicsDemo extends AbstractDemo {
                 case asToggleVArrows:
                     toggleVelocityArrows();
                     return;
+                case asToggleWArrows:
+                    toggleAngularVelocityArrows();
+                    return;
+
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
@@ -684,17 +664,17 @@ abstract public class PhysicsDemo extends AbstractDemo {
      * @param topHalfExtent half the desired extent of the top surface (&gt;0)
      * @param thickness the desired thickness (in physics-space units, &gt;0)
      */
-    private void addBoxPlatform(float topY, float topHalfExtent,
-            float thickness) {
+    private void addBoxPlatform(
+            float topY, float topHalfExtent, float thickness) {
         Validate.positive(topHalfExtent, "top half extent");
         Validate.positive(thickness, "thickness");
 
-        CollisionShape shape = new BoxCollisionShape(topHalfExtent,
-                thickness / 2f, topHalfExtent);
+        CollisionShape shape = new BoxCollisionShape(
+                topHalfExtent, thickness / 2f, topHalfExtent);
         PhysicsRigidBody body
                 = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
-        body.setDebugMeshNormals(DebugMeshNormals.Facet);
+        body.setDebugMeshNormals(MeshNormals.Facet);
         body.setPhysicsLocation(new Vector3f(0f, topY - thickness / 2f, 0f));
 
         addPlatform(body);
@@ -717,7 +697,7 @@ abstract public class PhysicsDemo extends AbstractDemo {
         PhysicsRigidBody body
                 = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
-        body.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        body.setDebugMeshNormals(MeshNormals.Smooth);
         body.setDebugMeshResolution(DebugShapeFactory.highResolution);
         body.setPhysicsLocation(new Vector3f(0f, topY - height / 2f, 0f));
         /*
@@ -742,13 +722,13 @@ abstract public class PhysicsDemo extends AbstractDemo {
         Validate.positive(topRadius, "top radius");
 
         float height = 3f * topRadius; // tall to mitigate smoothed normals
-        CylinderCollisionShape shape = new CylinderCollisionShape(topRadius,
-                height, PhysicsSpace.AXIS_Y);
+        CylinderCollisionShape shape = new CylinderCollisionShape(
+                topRadius, height, PhysicsSpace.AXIS_Y);
 
         PhysicsRigidBody body
                 = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
-        body.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        body.setDebugMeshNormals(MeshNormals.Smooth);
         body.setDebugMeshResolution(DebugShapeFactory.highResolution);
         body.setPhysicsLocation(new Vector3f(0f, topY - height / 2f, 0f));
 
@@ -775,7 +755,7 @@ abstract public class PhysicsDemo extends AbstractDemo {
         PhysicsRigidBody body
                 = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
-        body.setDebugMeshNormals(DebugMeshNormals.Facet);
+        body.setDebugMeshNormals(MeshNormals.Facet);
         body.setPhysicsLocation(new Vector3f(0f, topY - thickness / 2f, 0f));
 
         addPlatform(body);
@@ -798,7 +778,7 @@ abstract public class PhysicsDemo extends AbstractDemo {
         PlaneDmiListener planeDmiListener = new PlaneDmiListener(sideLength);
         body.setDebugMeshInitListener(planeDmiListener);
 
-        body.setDebugMeshNormals(DebugMeshNormals.Facet);
+        body.setDebugMeshNormals(MeshNormals.Facet);
 
         addPlatform(body);
 
@@ -818,62 +798,13 @@ abstract public class PhysicsDemo extends AbstractDemo {
         PhysicsRigidBody body
                 = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
-        body.setDebugMeshNormals(DebugMeshNormals.Facet);
+        body.setDebugMeshNormals(MeshNormals.Facet);
         Quaternion rotation = new Quaternion();
         rotation.fromAngles(FastMath.HALF_PI, 0f, 0f);
         body.setPhysicsRotation(rotation);
         body.setPhysicsLocation(new Vector3f(0f, topY, 0f));
 
         addPlatform(body);
-    }
-
-    /**
-     * Add a SceneProcessor to invoke resize().
-     */
-    private void addSceneProcessor() {
-        SceneProcessor sceneProcessor = new SceneProcessor() {
-            @Override
-            public void cleanup() {
-                // do nothing
-            }
-
-            @Override
-            public void initialize(RenderManager rm, ViewPort unused2) {
-                // do nothing
-            }
-
-            @Override
-            public boolean isInitialized() {
-                return true;
-            }
-
-            @Override
-            public void postFrame(FrameBuffer unused) {
-                // do nothing
-            }
-
-            @Override
-            public void postQueue(RenderQueue unused) {
-                // do nothing
-            }
-
-            @Override
-            public void preFrame(float tpf) {
-                // do nothing
-            }
-
-            @Override
-            public void reshape(ViewPort unused, int newWidth, int newHeight) {
-                resize(newWidth, newHeight);
-            }
-
-            @Override
-            public void setProfiler(AppProfiler unused) {
-                // do nothing
-            }
-        };
-
-        guiViewPort.addProcessor(sceneProcessor);
     }
 
     /**
@@ -885,8 +816,8 @@ abstract public class PhysicsDemo extends AbstractDemo {
      * @param topHalfExtent half the desired extent of the top surface (&gt;0)
      * @param thickness the desired thickness (in physics-space units, &gt;0)
      */
-    private void addSquarePlatform(float topY, float topHalfExtent,
-            float thickness) {
+    private void addSquarePlatform(
+            float topY, float topHalfExtent, float thickness) {
         Validate.positive(topHalfExtent, "top half extent");
         Validate.positive(thickness, "thickness");
 
@@ -894,7 +825,7 @@ abstract public class PhysicsDemo extends AbstractDemo {
         PhysicsRigidBody body
                 = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
-        body.setDebugMeshNormals(DebugMeshNormals.Facet);
+        body.setDebugMeshNormals(MeshNormals.Facet);
         body.setPhysicsLocation(new Vector3f(0f, topY, 0f));
         Quaternion rotation = new Quaternion();
         rotation.fromAngles(FastMath.HALF_PI, 0f, 0f);
@@ -916,6 +847,20 @@ abstract public class PhysicsDemo extends AbstractDemo {
 
         BulletAppState bulletAppState = getBulletAppState();
         bulletAppState.setDebugBoundingBoxFilter(aabbsFilter);
+    }
+
+    /**
+     * Toggle visualization of rigid-body angular velocities.
+     */
+    private void toggleAngularVelocityArrows() {
+        if (wArrowsFilter == null) {
+            wArrowsFilter = new FilterAll(true);
+        } else {
+            wArrowsFilter = null;
+        }
+
+        BulletAppState bulletAppState = getBulletAppState();
+        bulletAppState.setDebugAngularVelocityFilter(wArrowsFilter);
     }
 
     /**

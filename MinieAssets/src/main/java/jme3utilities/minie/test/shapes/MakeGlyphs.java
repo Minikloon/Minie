@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -64,7 +64,7 @@ import jme3utilities.math.MyVector3f;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MakeGlyphs {
+final public class MakeGlyphs {
     // *************************************************************************
     // constants and loggers
 
@@ -84,17 +84,26 @@ public class MakeGlyphs {
     /**
      * list of vertices in a triangular prism
      */
-    final private List<Vector3f> prismVertices
+    final private static List<Vector3f> prismVertices
             = new ArrayList<>(2 * MyMesh.vpt);
     /**
      * individual vertices in the above list
      */
-    final private Vector3f v0a = new Vector3f();
-    final private Vector3f v0b = new Vector3f();
-    final private Vector3f v1a = new Vector3f();
-    final private Vector3f v1b = new Vector3f();
-    final private Vector3f v2a = new Vector3f();
-    final private Vector3f v2b = new Vector3f();
+    final private static Vector3f v0a = new Vector3f();
+    final private static Vector3f v0b = new Vector3f();
+    final private static Vector3f v1a = new Vector3f();
+    final private static Vector3f v1b = new Vector3f();
+    final private static Vector3f v2a = new Vector3f();
+    final private static Vector3f v2b = new Vector3f();
+    // *************************************************************************
+    // constructors
+
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private MakeGlyphs() {
+        // do nothing
+    }
     // *************************************************************************
     // new methods exposed
 
@@ -105,28 +114,17 @@ public class MakeGlyphs {
      */
     public static void main(String[] arguments) {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
-        /*
-         * Mute the chatty loggers found in some imported packages.
-         */
+
+        // Mute the chatty loggers found in some imported packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Set the logging level for this class.
-         */
-        //logger.setLevel(Level.INFO);
-        /*
-         * Instantiate the application.
-         */
-        MakeGlyphs application = new MakeGlyphs();
-        /*
-         * Log the working directory.
-         */
+
+        // Log the working directory.
         String userDir = System.getProperty("user.dir");
         logger.log(Level.INFO, "working directory is {0}",
                 MyString.quote(userDir));
-        /*
-         * Generate the collision shapes.
-         */
-        application.makeAlphabet();
+
+        // Generate the collision shapes.
+        makeAlphabet();
     }
     // *************************************************************************
     // private methods
@@ -137,7 +135,7 @@ public class MakeGlyphs {
      * @return a new font instance
      */
     @SuppressWarnings("unchecked")
-    private TrueTypeFont loadProFont() {
+    private static TrueTypeFont loadProFont() {
         DesktopAssetManager assetManager = new DesktopAssetManager();
         assetManager.registerLocator(null, ClasspathLocator.class);
         assetManager.registerLoader(J3MLoader.class, "j3m", "j3md");
@@ -157,10 +155,8 @@ public class MakeGlyphs {
      * Generate collision shapes for all 26 letters of the English alphabet in
      * upper case.
      */
-    private void makeAlphabet() {
-        /*
-         * Initialize the vertex list.
-         */
+    private static void makeAlphabet() {
+        // Initialize the vertex list.
         prismVertices.clear();
         prismVertices.add(v0a);
         prismVertices.add(v0b);
@@ -168,9 +164,8 @@ public class MakeGlyphs {
         prismVertices.add(v1b);
         prismVertices.add(v2a);
         prismVertices.add(v2b);
-        /*
-         * Generate the shapes.
-         */
+
+        // Generate the shapes.
         TrueTypeFont font = loadProFont();
         Transform transformA = new Transform();
         transformA.getTranslation().set(0f, 0f, 0.5f);
@@ -194,20 +189,17 @@ public class MakeGlyphs {
      * @param transformB the 2nd coordinate transform to apply to triangles (not
      * null, unaffected)
      */
-    private void makeGlyphShape(TrueTypeFont font, char character,
+    private static void makeGlyphShape(TrueTypeFont font, char character,
             Transform transformA, Transform transformB) {
-        /*
-         * Convert the specified character to a TrueTypeNode.
-         */
+        // Convert the specified character to a TrueTypeNode.
         String string = Character.toString(character);
         int kerning = 0;
         ColorRGBA color = null;
         StringContainer.Align hAlign = StringContainer.Align.Center;
         StringContainer.VAlign vAlign = StringContainer.VAlign.Center;
         Spatial ttNode = font.getText(string, kerning, color, hAlign, vAlign);
-        /*
-         * Access the generated mesh.
-         */
+
+        // Access the generated mesh.
         List<Geometry> list = MySpatial.listGeometries(ttNode);
         assert list.size() == 1;
         Mesh mesh = list.get(0).getMesh();
@@ -241,9 +233,8 @@ public class MakeGlyphs {
             CollisionShape prism = new HullCollisionShape(prismVertices);
             compoundShape.addChildShape(prism);
         }
-        /*
-         * Write the compound shape to a J3O file.
-         */
+
+        // Write the compound shape to a J3O file.
         String assetPath
                 = String.format("CollisionShapes/glyphs/%s.j3o", string);
         String filePath = String.format("%s/%s", assetDirPath, assetPath);

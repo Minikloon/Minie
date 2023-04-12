@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022 jMonkeyEngine
+ * Copyright (c) 2018-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,7 @@
  */
 package com.jme3.bullet.animation;
 
+import com.jme3.anim.AnimComposer;
 import com.jme3.anim.Armature;
 import com.jme3.anim.Joint;
 import com.jme3.anim.SkinningControl;
@@ -65,6 +66,7 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
+import jme3utilities.MyControl;
 import jme3utilities.MyMesh;
 import jme3utilities.MySkeleton;
 import jme3utilities.MySpatial;
@@ -100,7 +102,9 @@ public class DacLinks
      */
     final private static String tagArmature = "armature";
     final private static String tagAttachmentLinks = "attachmentLinks";
+    final private static String tagBindTransforms = "bindTransforms";
     final private static String tagBoneLinkList = "boneLinkList";
+    final private static String tagPreComposer = "preComposer";
     final private static String tagSkeleton = "skeleton";
     final private static String tagTorsoLink = "torsoLink";
     final private static String tagTransformer = "transformer";
@@ -120,8 +124,8 @@ public class DacLinks
      */
     private Armature armature = null;
     /**
-     * false until the first physics tick, true thereafter, indicating that all
-     * links are ready for dynamic mode
+     * false until the first simulation step, true thereafter, indicating that
+     * all links are ready for dynamic mode
      */
     private boolean isReady = false;
     /**
@@ -137,6 +141,10 @@ public class DacLinks
      */
     private Map<String, BoneLink> boneLinks = new HashMap<>(32);
     /**
+     * helper control, or null if none
+     */
+    private PreComposer preComposer = null;
+    /**
      * Skeleton being controlled, or null for an Armature
      */
     private Skeleton skeleton = null;
@@ -145,13 +153,13 @@ public class DacLinks
      */
     private Spatial transformer = null;
     /**
-     * saved bind transform for each armature joint or skeleton bone
-     */
-    private Transform[] bindTransforms = null;
-    /**
      * torso link for this control
      */
     private TorsoLink torsoLink = null;
+    /**
+     * saved bind transform for each armature joint or skeleton bone
+     */
+    private Transform[] bindTransforms = null;
     // *************************************************************************
     // constructors
 
@@ -159,7 +167,8 @@ public class DacLinks
      * Instantiate an enabled control without any linked bones or attachments
      * (torso only).
      */
-    DacLinks() {
+    protected DacLinks() {
+        // do nothing
     }
     // *************************************************************************
     // new methods exposed
@@ -174,11 +183,14 @@ public class DacLinks
      */
     Transform copyBindTransform(int jointIndex, Transform storeResult) {
         Transform alias = bindTransforms[jointIndex];
+        Transform result;
         if (storeResult == null) {
-            return alias.clone();
+            result = alias.clone();
         } else {
-            return storeResult.set(alias);
+            result = storeResult.set(alias);
         }
+
+        return result;
     }
 
     /**
@@ -296,7 +308,7 @@ public class DacLinks
      *
      * @return the pre-existing spatial, or null
      */
-    Spatial getTransformer() {
+    public Spatial getTransformer() {
         return transformer;
     }
 
@@ -368,9 +380,8 @@ public class DacLinks
             list.add(managerJoint);
             addUnlinkedDescendants(managerJoint, list);
         }
-        /*
-         * Convert the list to an array.
-         */
+
+        // Convert the list to an array.
         int numManagedJoints = list.size();
         Joint[] array = new Joint[numManagedJoints];
         list.toArray(array);
@@ -407,9 +418,8 @@ public class DacLinks
             list.add(managerBone);
             addUnlinkedDescendants(managerBone, list);
         }
-        /*
-         * Convert the list to an array.
-         */
+
+        // Convert the list to an array.
         int numManaged = list.size();
         Bone[] array = new Bone[numManaged];
         list.toArray(array);
@@ -470,24 +480,21 @@ public class DacLinks
      * @return the calculated physics transform (either storeResult or a new
      * transform, not null)
      */
-    Transform physicsTransform(Bone bone, Vector3f localOffset,
-            Transform storeResult) {
+    Transform physicsTransform(
+            Bone bone, Vector3f localOffset, Transform storeResult) {
         Transform result
                 = (storeResult == null) ? new Transform() : storeResult;
-        /*
-         * Start with the body's transform in the bone's local coordinates.
-         */
+
+        // Start with the body's transform in the bone's local coordinates.
         result.setTranslation(localOffset);
         result.setRotation(rotateIdentity);
         result.setScale(1f);
-        /*
-         * Convert to mesh coordinates.
-         */
+
+        // Convert to mesh coordinates.
         Transform localToMesh = MySkeleton.copyMeshTransform(bone, null);
         result.combineWithParent(localToMesh);
-        /*
-         * Convert to world (physics-space) coordinates.
-         */
+
+        // Convert to world (physics-space) coordinates.
         Transform meshToWorld = meshTransform(null);
         result.combineWithParent(meshToWorld);
 
@@ -504,8 +511,8 @@ public class DacLinks
      * @return the calculated physics transform (either storeResult or a new
      * transform, not null)
      */
-    Transform physicsTransform(Joint joint, Vector3f localOffset,
-            Transform storeResult) {
+    Transform physicsTransform(
+            Joint joint, Vector3f localOffset, Transform storeResult) {
         Transform result
                 = (storeResult == null) ? new Transform() : storeResult;
         /*
@@ -515,14 +522,12 @@ public class DacLinks
         result.setTranslation(localOffset);
         result.setRotation(rotateIdentity);
         result.setScale(1f);
-        /*
-         * Convert to mesh coordinates.
-         */
+
+        // Convert to mesh coordinates.
         Transform localToMesh = joint.getModelTransform();
         result.combineWithParent(localToMesh);
-        /*
-         * Convert to world (physics-space) coordinates.
-         */
+
+        // Convert to world (physics-space) coordinates.
         Transform meshToWorld = meshTransform(null);
         result.combineWithParent(meshToWorld);
 
@@ -588,7 +593,8 @@ public class DacLinks
 
     /**
      * Verify that this control is ready for dynamic mode, which implies that it
-     * is added to a Spatial.
+     * is added to a Spatial, added to a PhysicsSpace, and the physics has been
+     * stepped.
      *
      * @param desiredAction (not null, not empty)
      */
@@ -596,6 +602,12 @@ public class DacLinks
         assert desiredAction != null;
 
         verifyAddedToSpatial(desiredAction);
+
+        if (!added) {
+            String message = "Cannot " + desiredAction
+                    + " unless the control is added to a PhysicsSpace.";
+            throw new IllegalStateException(message);
+        }
 
         if (!isReady) {
             String message = "Cannot " + desiredAction
@@ -718,9 +730,9 @@ public class DacLinks
         super.cloneFields(cloner, original);
         DacLinks originalDac = (DacLinks) original;
 
-        boneLinkList = cloner.clone(boneLinkList);
+        this.boneLinkList = cloner.clone(boneLinkList);
 
-        attachmentLinks = new HashMap<>(8);
+        this.attachmentLinks = new HashMap<>(8);
         for (Map.Entry<String, AttachmentLink> entry
                 : originalDac.attachmentLinks.entrySet()) {
             String boneName = entry.getKey();
@@ -729,7 +741,7 @@ public class DacLinks
             attachmentLinks.put(boneName, copyLink);
         }
 
-        boneLinks = new HashMap<>(32);
+        this.boneLinks = new HashMap<>(32);
         for (Map.Entry<String, BoneLink> entry
                 : originalDac.boneLinks.entrySet()) {
             String boneName = entry.getKey();
@@ -738,10 +750,12 @@ public class DacLinks
             boneLinks.put(boneName, copyLink);
         }
 
-        armature = cloner.clone(armature);
-        skeleton = cloner.clone(skeleton);
-        transformer = cloner.clone(transformer);
-        torsoLink = cloner.clone(torsoLink);
+        this.armature = cloner.clone(armature);
+        this.preComposer = cloner.clone(preComposer);
+        this.skeleton = cloner.clone(skeleton);
+        this.transformer = cloner.clone(transformer);
+        this.bindTransforms = cloner.clone(bindTransforms);
+        this.torsoLink = cloner.clone(torsoLink);
     }
 
     /**
@@ -753,14 +767,13 @@ public class DacLinks
     @Override
     protected void createSpatialData(Spatial spatial) {
         RagUtils.validate(spatial);
-        int numDacs
-                = MySpatial.countControls(spatial, DynamicAnimControl.class);
+        int numDacs = MySpatial.countControls(spatial, DacLinks.class);
         if (numDacs > 1) {
             logger3.log(Level.WARNING, "Added a DynamicAnimControl to a model "
-                    + "that already contains {0}.",
-                    numDacs - 1);
+                    + "that already contains {0}.", numDacs - 1);
         }
 
+        boolean saveHwSkinning;
         SkinningControl skinningControl
                 = spatial.getControl(SkinningControl.class);
         String[] tempManagerMap;
@@ -774,19 +787,21 @@ public class DacLinks
                         + "a SkeletonControl. Make sure the Control is there "
                         + "and not on some other Spatial.");
             }
+
+            // spatial has a SkeletonControl
             sortControls(skeletonControl);
+
+            // Temporarily disable hardware skinning.
+            saveHwSkinning = skeletonControl.isHardwareSkinningPreferred();
             skeletonControl.setHardwareSkinningPreferred(false);
-            /*
-             * Analyze the model's Skeleton.
-             */
-            skeleton = skeletonControl.getSkeleton();
+
+            // Analyze the model's Skeleton.
+            this.skeleton = skeletonControl.getSkeleton();
             validateSkeleton();
             tempManagerMap = managerMap(skeleton);
             int numBones = skeleton.getBoneCount();
-            /*
-             * Temporarily set all bones' local translations
-             * and rotations to bind.
-             */
+
+            // Temporarily put the skeleton into bind pose.
             MySkeleton.setUserControl(skeleton, true);
             savedTransforms = new Transform[numBones];
             Vector3f userScale = new Vector3f();
@@ -797,49 +812,66 @@ public class DacLinks
 
                 userScale.set(bone.getLocalScale());
                 userScale.divideLocal(bone.getBindScale()); // multiply?
-                bone.setUserTransforms(translateIdentity, rotateIdentity,
-                        userScale);
+                bone.setUserTransforms(
+                        translateIdentity, rotateIdentity, userScale);
             }
             MySkeleton.setUserControl(skeleton, false);
             skeleton.updateWorldVectors();
 
-            bindTransforms = new Transform[numBones];
+            // Save the bind transform of each skeleton bone.
+            this.bindTransforms = new Transform[numBones];
             for (int jointIndex = 0; jointIndex < numBones; ++jointIndex) {
                 Bone bone = skeleton.getBone(jointIndex);
-                bindTransforms[jointIndex]
+                this.bindTransforms[jointIndex]
                         = MySkeleton.copyBindTransform(bone, null);
             }
 
         } else { // spatial has a SkinningControl
-            sortControls(skinningControl);
-            skinningControl.setHardwareSkinningPreferred(false);
-            /*
-             * Analyze the model's Armature.
-             */
-            armature = skinningControl.getArmature();
-            validateArmature();
-            tempManagerMap = managerMap(armature);
+            this.armature = skinningControl.getArmature();
+
             int numArmatureJoints = armature.getJointCount();
-            /*
-             * Temporarily set all armature joints' local translations
-             * and rotations to bind.
-             */
             savedTransforms = new Transform[numArmatureJoints];
             for (int jointI = 0; jointI < numArmatureJoints; ++jointI) {
                 Joint armatureJoint = armature.getJoint(jointI);
                 savedTransforms[jointI]
                         = armatureJoint.getLocalTransform().clone();
+            }
+
+            sortControls(skinningControl); // This resets the armature!
+
+            // Temporarily disable hardware skinning.
+            saveHwSkinning = skinningControl.isHardwareSkinningPreferred();
+            skinningControl.setHardwareSkinningPreferred(false);
+
+            // Analyze the model's Armature.
+            validateArmature();
+            tempManagerMap = managerMap(armature);
+
+            // Temporarily put the armature into bind pose.
+            for (int jointI = 0; jointI < numArmatureJoints; ++jointI) {
+                Joint armatureJoint = armature.getJoint(jointI);
                 armatureJoint.applyBindPose(); // TODO adjust the scale?
             }
             armature.update();
-            /*
-             * Save the bind transform of each armature joint.
-             */
-            bindTransforms = new Transform[numArmatureJoints];
+
+            // Save the bind transform of each armature joint.
+            this.bindTransforms = new Transform[numArmatureJoints];
             for (int jointI = 0; jointI < numArmatureJoints; ++jointI) {
                 Joint armatureJoint = armature.getJoint(jointI);
-                bindTransforms[jointI]
+                this.bindTransforms[jointI]
                         = armatureJoint.getLocalTransform().clone();
+            }
+            /*
+             * If there's an AnimComposer, insert a PreComposer to hide
+             * our Armature modifications.
+             */
+            AnimComposer composer = spatial.getControl(AnimComposer.class);
+            if (composer == null) {
+                logger3.log(Level.WARNING, "Didn't find an AnimComposer.");
+            } else {
+                int composerIndex = MyControl.findIndex(composer, spatial);
+                this.preComposer = new PreComposer(this);
+                spatial.addControlAt(composerIndex, preComposer);
             }
         }
         /*
@@ -850,23 +882,20 @@ public class DacLinks
         List<Mesh> targetList = RagUtils.listDacMeshes(spatial, null);
         Mesh[] targets = new Mesh[targetList.size()];
         targetList.toArray(targets);
-        transformer = MySpatial.findAnimatedGeometry(spatial);
+        this.transformer = MySpatial.findAnimatedGeometry(spatial);
         if (transformer == null) {
-            transformer = spatial;
+            this.transformer = spatial;
         }
-        /*
-         * Enumerate mesh-vertex coordinates and assign them to managers.
-         */
+
+        // Enumerate mesh-vertex coordinates and assign them to managers.
         Map<String, VectorSet> coordsMap
                 = RagUtils.coordsMap(targets, tempManagerMap);
-        /*
-         * Create the TorsoLink.
-         */
+
+        // Create the TorsoLink.
         VectorSet vertexLocations = coordsMap.get(torsoName);
         createTorsoLink(vertexLocations, targets);
-        /*
-         * Create bone links without physics joints.
-         */
+
+        // Create bone links without physics joints.
         String[] linkedBoneNames = listLinkedBoneNames();
         for (String boneName : linkedBoneNames) {
             vertexLocations = coordsMap.get(boneName);
@@ -879,12 +908,11 @@ public class DacLinks
          * with its parent in the link hierarchy.
          * Also initialize the boneLinkList.
          */
-        boneLinkList = new ArrayList<>(numLinkedBones);
+        this.boneLinkList = new ArrayList<>(numLinkedBones);
         addJoints(torsoLink);
         assert boneLinkList.size() == numLinkedBones : boneLinkList.size();
-        /*
-         * Create attachment links with physics joints.
-         */
+
+        // Create attachment links with physics joints.
         String[] attachBoneNames = listAttachmentBoneNames();
         for (String boneName : attachBoneNames) {
             if (skinningControl == null) {
@@ -894,20 +922,21 @@ public class DacLinks
             }
         }
 
-        if (skinningControl == null) {
-            /*
-             * Restore the skeleton's pose.
-             */
+        if (skinningControl == null) { // old animation system
+            skeletonControl.setHardwareSkinningPreferred(saveHwSkinning);
+
+            // Restore the skeleton's pose.
             int numBones = skeleton.getBoneCount();
             for (int boneIndex = 0; boneIndex < numBones; ++boneIndex) {
                 Bone bone = skeleton.getBone(boneIndex);
                 MySkeleton.setLocalTransform(bone, savedTransforms[boneIndex]);
             }
             skeleton.updateWorldVectors();
-        } else {
-            /*
-             * Restore the armature's pose.
-             */
+
+        } else { // new animation system
+            skinningControl.setHardwareSkinningPreferred(saveHwSkinning);
+
+            // Restore the armature's pose.
             int numArmatureJoints = armature.getJointCount();
             for (int jointI = 0; jointI < numArmatureJoints; ++jointI) {
                 Joint armatureJoint = armature.getJoint(jointI);
@@ -927,22 +956,7 @@ public class DacLinks
     }
 
     /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public DacLinks jmeClone() {
-        try {
-            DacLinks clone = (DacLinks) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
-    }
-
-    /**
-     * Read the mass of the named bone/torso.
+     * Return the mass of the named bone/torso.
      *
      * @param boneName the name of the bone/torso (not null)
      * @return the mass (&gt;0) or NaN if undetermined
@@ -982,7 +996,7 @@ public class DacLinks
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        boneLinkList = capsule.readSavableArrayList(tagBoneLinkList, null);
+        this.boneLinkList = capsule.readSavableArrayList(tagBoneLinkList, null);
         if (boneLinkList != null) {
             for (BoneLink link : boneLinkList) {
                 String name = link.boneName();
@@ -990,18 +1004,22 @@ public class DacLinks
             }
         }
 
-        Savable[] savableArray = capsule.readSavableArray(tagAttachmentLinks,
-                new AttachmentLink[0]);
+        Savable[] savableArray = capsule.readSavableArray(
+                tagAttachmentLinks, new AttachmentLink[0]);
         for (Savable savable : savableArray) {
             AttachmentLink link = (AttachmentLink) savable;
             String name = link.boneName();
             attachmentLinks.put(name, link);
         }
 
-        armature = (Armature) capsule.readSavable(tagArmature, null);
-        skeleton = (Skeleton) capsule.readSavable(tagSkeleton, null);
-        transformer = (Spatial) capsule.readSavable(tagTransformer, null);
-        torsoLink = (TorsoLink) capsule.readSavable(tagTorsoLink, null);
+        this.armature = (Armature) capsule.readSavable(tagArmature, null);
+        this.preComposer
+                = (PreComposer) capsule.readSavable(tagPreComposer, null);
+        this.skeleton = (Skeleton) capsule.readSavable(tagSkeleton, null);
+        this.transformer = (Spatial) capsule.readSavable(tagTransformer, null);
+        this.bindTransforms
+                = RagUtils.readTransformArray(capsule, tagBindTransforms);
+        this.torsoLink = (TorsoLink) capsule.readSavable(tagTorsoLink, null);
     }
 
     /**
@@ -1035,6 +1053,7 @@ public class DacLinks
                 space.removeJoint(joint);
             }
         }
+        this.isReady = false;
     }
 
     /**
@@ -1064,16 +1083,21 @@ public class DacLinks
         }
         attachmentLinks.clear();
 
-        armature = null;
-        if (skeleton != null) {
+        if (preComposer != null) {
+            Spatial controlledSpatial = getSpatial();
+            controlledSpatial.removeControl(preComposer);
+            this.preComposer = null;
+        }
+        this.armature = null;
+        if (skeleton != null) { // old animation system
             MySkeleton.setUserControl(skeleton, false);
-            skeleton = null;
+            this.skeleton = null;
         }
 
         boneLinks.clear();
-        boneLinkList = null;
-        torsoLink = null;
-        transformer = null;
+        this.boneLinkList = null;
+        this.torsoLink = null;
+        this.transformer = null;
     }
 
     /**
@@ -1091,13 +1115,13 @@ public class DacLinks
         AttachmentLink link = attachmentLinks.get(boneName);
         if (link != null) {
             Spatial spatial = getSpatial();
-            if (skeleton != null) {
+            if (skeleton != null) { // old animation system
                 SkeletonControl skeletonControl
                         = spatial.getControl(SkeletonControl.class);
                 String[] managerMap = managerMap(skeleton);
                 createAttachmentLink(boneName, skeletonControl, managerMap);
 
-            } else {
+            } else { // new animation system
                 SkinningControl skinningControl
                         = spatial.getControl(SkinningControl.class);
                 String[] managerMap = managerMap(armature);
@@ -1115,7 +1139,6 @@ public class DacLinks
     @Override
     public void setAttachmentMass(String boneName, float mass) {
         Validate.positive(mass, "mass");
-
         super.setAttachmentMass(boneName, mass);
 
         AttachmentLink link = attachmentLinks.get(boneName);
@@ -1133,7 +1156,6 @@ public class DacLinks
     @Override
     public void setDamping(float dampingRatio) {
         Validate.nonNegative(dampingRatio, "damping ratio");
-
         super.setDamping(dampingRatio);
 
         if (getSpatial() != null) {
@@ -1153,7 +1175,6 @@ public class DacLinks
     @Override
     public void setGravity(Vector3f gravity) {
         Validate.finite(gravity, "gravity");
-
         super.setGravity(gravity);
 
         if (getSpatial() != null) { // TODO make sure it's in ragdoll mode
@@ -1191,6 +1212,23 @@ public class DacLinks
     }
 
     /**
+     * Specify the main bone.
+     *
+     * @param boneName the name of the desired bone, or null to determine the
+     * main bone heuristically when the control is added to a spatial
+     */
+    @Override
+    public void setMainBoneName(String boneName) {
+        Spatial controlledSpatial = getSpatial();
+        if (controlledSpatial != null) {
+            throw new IllegalStateException("Cannot change the main bone once "
+                    + "the Control is added to a Spatial.");
+        }
+
+        super.setMainBoneName(boneName);
+    }
+
+    /**
      * Alter the mass of the named bone/torso.
      *
      * @param boneName the name of the bone, or torsoName (not null)
@@ -1199,7 +1237,6 @@ public class DacLinks
     @Override
     public void setMass(String boneName, float mass) {
         Validate.positive(mass, "mass");
-
         super.setMass(boneName, mass);
 
         if (getSpatial() != null) {
@@ -1217,21 +1254,50 @@ public class DacLinks
     /**
      * Translate the torso to the specified location.
      *
-     * @param vec desired location (not null, unaffected)
+     * @param vec desired location (not null, finite, unaffected)
      */
     @Override
     protected void setPhysicsLocation(Vector3f vec) {
+        Validate.finite(vec, "vec");
         torsoLink.getRigidBody().setPhysicsLocation(vec);
     }
 
     /**
      * Rotate the torso to the specified orientation.
      *
-     * @param quat desired orientation (not null, unaffected)
+     * @param quat desired orientation (not null, not zero, unaffected)
      */
     @Override
     protected void setPhysicsRotation(Quaternion quat) {
+        Validate.nonZero(quat, "quat");
         torsoLink.getRigidBody().setPhysicsRotation(quat);
+    }
+
+    /**
+     * Return the ragdoll's total mass, including attachments.
+     *
+     * @return the total mass (&gt;0) or NaN if undetermined
+     */
+    @Override
+    public float totalMass() {
+        float result;
+        Spatial controlledSpatial = getSpatial();
+        if (controlledSpatial == null) {
+            result = super.totalMass();
+        } else {
+            PhysicsRigidBody body = torsoLink.getRigidBody();
+            result = body.getMass();
+            for (BoneLink boneLink : boneLinkList) {
+                body = boneLink.getRigidBody();
+                result += body.getMass();
+            }
+            for (AttachmentLink attachmentLink : attachmentLinks.values()) {
+                body = attachmentLink.getRigidBody();
+                result += body.getMass();
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -1246,6 +1312,10 @@ public class DacLinks
         verifyAddedToSpatial("update the control");
         if (!isEnabled()) {
             return;
+        }
+
+        if (preComposer != null) {
+            preComposer.saveArmature();
         }
 
         if (torsoLink != null) {
@@ -1284,8 +1354,11 @@ public class DacLinks
         capsule.write(links, tagAttachmentLinks, new AttachmentLink[0]);
 
         capsule.write(armature, tagArmature, null);
+        // isReady and boneLinks are never written.
+        capsule.write(preComposer, tagPreComposer, null);
         capsule.write(skeleton, tagSkeleton, null);
         capsule.write(transformer, tagTransformer, null);
+        capsule.write(bindTransforms, tagBindTransforms, null);
         capsule.write(torsoLink, tagTorsoLink, null);
     }
     // *************************************************************************
@@ -1296,7 +1369,7 @@ public class DacLinks
      * Used to re-activate any deactivated rigid bodies.
      *
      * @param space the space that was just stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -1311,7 +1384,7 @@ public class DacLinks
             link.postTick();
         }
 
-        isReady = true;
+        this.isReady = true;
     }
 
     /**
@@ -1319,7 +1392,7 @@ public class DacLinks
      * time to clear/apply forces.
      *
      * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
@@ -1353,9 +1426,8 @@ public class DacLinks
              */
             BoneLink childLink = findBoneLink(childName);
             childLink.addJoint(parentLink);
-            /*
-             * Add the BoneLink to the pre-order list.
-             */
+
+            // Add the BoneLink to the pre-order list.
             boneLinkList.add(childLink);
 
             addJoints(childLink);
@@ -1412,21 +1484,18 @@ public class DacLinks
         assert boneName != null;
         assert skeletonControl != null;
         assert managerMap != null;
-        /*
-         * Collect the location of every mesh vertex in the attached model.
-         */
+
+        // Collect the location of every mesh vertex in the attached model.
         Spatial attachModel = getAttachmentModel(boneName);
         attachModel = Heart.deepCopy(attachModel);
         VectorSet vertexLocations
                 = MyMesh.listVertexLocations(attachModel, null);
-        /*
-         * Attach the model to the attachments node.
-         */
+
+        // Attach the model to the attachments node.
         Node node = skeletonControl.getAttachmentsNode(boneName);
         node.attachChild(attachModel);
-        /*
-         * Determine which link will manage the new AttachmentLink.
-         */
+
+        // Determine which link will manage the new AttachmentLink.
         Bone bone = skeleton.getBone(boneName);
         int boneIndex = skeleton.getBoneIndex(bone);
         String managerName = managerMap[boneIndex];
@@ -1436,21 +1505,19 @@ public class DacLinks
         } else {
             manager = boneLinks.get(managerName);
         }
-        /*
-         * Locate the attached model's center of mass.
-         */
+
+        // Locate the attached model's center of mass.
         LinkConfig linkConfig = attachmentConfig(boneName);
         CenterHeuristic centerHeuristic = linkConfig.centerHeuristic();
         assert centerHeuristic != CenterHeuristic.Joint;
         Vector3f center = centerHeuristic.center(vertexLocations, null);
-        /*
-         * Create the CollisionShape.
-         */
-        CollisionShape shape = linkConfig.createShape(transformIdentity,
-                center, vertexLocations);
 
-        AttachmentLink link = new AttachmentLink(this, bone, manager,
-                attachModel, shape, linkConfig, center);
+        // Create the CollisionShape.
+        CollisionShape shape = linkConfig
+                .createShape(transformIdentity, center, vertexLocations);
+
+        AttachmentLink link = new AttachmentLink(
+                this, bone, manager, attachModel, shape, linkConfig, center);
         attachmentLinks.put(boneName, link);
     }
 
@@ -1468,21 +1535,18 @@ public class DacLinks
         assert jointName != null;
         assert skinningControl != null;
         assert managerMap != null;
-        /*
-         * Collect the location of every mesh vertex in the attached model.
-         */
+
+        // Collect the location of every mesh vertex in the attached model.
         Spatial attachModel = getAttachmentModel(jointName);
         attachModel = Heart.deepCopy(attachModel);
         VectorSet vertexLocations
                 = MyMesh.listVertexLocations(attachModel, null);
-        /*
-         * Attach the model to the attachments node.
-         */
+
+        // Attach the model to the attachments node.
         Node node = skinningControl.getAttachmentsNode(jointName);
         node.attachChild(attachModel);
-        /*
-         * Determine which link will manage the new AttachmentLink.
-         */
+
+        // Determine which link will manage the new AttachmentLink.
         Joint joint = armature.getJoint(jointName);
         int jointIndex = armature.getJointIndex(joint);
         String managerName = managerMap[jointIndex];
@@ -1492,21 +1556,19 @@ public class DacLinks
         } else {
             manager = boneLinks.get(managerName);
         }
-        /*
-         * Locate the attached model's center of mass.
-         */
+
+        // Locate the attached model's center of mass.
         LinkConfig linkConfig = attachmentConfig(jointName);
         CenterHeuristic centerHeuristic = linkConfig.centerHeuristic();
         assert centerHeuristic != CenterHeuristic.Joint;
         Vector3f center = centerHeuristic.center(vertexLocations, null);
-        /*
-         * Create the CollisionShape.
-         */
-        CollisionShape shape = linkConfig.createShape(transformIdentity,
-                center, vertexLocations);
 
-        AttachmentLink link = new AttachmentLink(this, joint, manager,
-                attachModel, shape, linkConfig, center);
+        // Create the CollisionShape.
+        CollisionShape shape = linkConfig
+                .createShape(transformIdentity, center, vertexLocations);
+
+        AttachmentLink link = new AttachmentLink(
+                this, joint, manager, attachModel, shape, linkConfig, center);
         attachmentLinks.put(jointName, link);
     }
 
@@ -1525,20 +1587,19 @@ public class DacLinks
         }
 
         Bone bone = null;
-        Joint joint = null;
+        Joint armatureJoint = null;
         Transform boneToMesh;
-        if (skeleton != null) {
+        if (skeleton != null) { // old animation system
             bone = findBone(boneName);
             boneToMesh = MySkeleton.copyMeshTransform(bone, null);
-        } else {
-            joint = findArmatureJoint(boneName);
-            boneToMesh = joint.getModelTransform();
+        } else { // new animation system
+            armatureJoint = findArmatureJoint(boneName);
+            boneToMesh = armatureJoint.getModelTransform();
         }
         Transform meshToBone = boneToMesh.invert();
         LinkConfig linkConfig = config(boneName);
-        /*
-         * Create the CollisionShape and locate the center of mass.
-         */
+
+        // Create the CollisionShape and locate the center of mass.
         Vector3f center;
         CenterHeuristic centerHeuristic = linkConfig.centerHeuristic();
         if (centerHeuristic == CenterHeuristic.Joint) {
@@ -1547,16 +1608,17 @@ public class DacLinks
             center = centerHeuristic.center(vertexLocations, null);
             center.subtractLocal(boneToMesh.getTranslation());
         }
-        CollisionShape shape;
-        shape = linkConfig.createShape(meshToBone, center, vertexLocations);
+        CollisionShape shape
+                = linkConfig.createShape(meshToBone, center, vertexLocations);
 
         meshToBone.getTranslation().zero();
         Vector3f offset = meshToBone.transformVector(center, null);
+
         BoneLink link;
-        if (skeleton != null) {
+        if (skeleton != null) { // old animation system
             link = new BoneLink(this, bone, shape, linkConfig, offset);
-        } else {
-            link = new BoneLink(this, joint, shape, linkConfig, offset);
+        } else { // new animation system
+            link = new BoneLink(this, armatureJoint, shape, linkConfig, offset);
         }
         boneLinks.put(boneName, link);
     }
@@ -1573,29 +1635,52 @@ public class DacLinks
                     "No mesh vertices for the torso."
                     + " Make sure the root bone is not linked.");
         }
-        /*
-         * Create the CollisionShape.
-         */
+
+        // Create the CollisionShape.
         Bone bone = null;
         Joint armatureJoint = null;
+        String mainBoneName = mainBoneName();
         Transform boneToMesh;
-        if (skeleton != null) {
-            bone = RagUtils.findMainBone(skeleton, meshes);
-            assert bone.getParent() == null;
+        if (skeleton != null) { // old animation system
+            if (mainBoneName == null) { // default main bone
+                bone = RagUtils.findMainBone(skeleton, meshes);
+                assert bone.getParent() == null;
+                mainBoneName = bone.getName();
+                super.setMainBoneName(mainBoneName);
+            } else {
+                bone = skeleton.getBone(mainBoneName);
+                if (bone == null) {
+                    String q = MyString.quote(mainBoneName);
+                    throw new IllegalStateException("Bone not found: " + q);
+                }
+            }
             boneToMesh = MySkeleton.copyMeshTransform(bone, null);
-        } else {
-            armatureJoint = RagUtils.findMainJoint(armature, meshes);
-            assert armatureJoint.getParent() == null;
+
+        } else { // new animation system
+            if (mainBoneName == null) { // default main bone
+                armatureJoint = RagUtils.findMainJoint(armature, meshes);
+                assert armatureJoint.getParent() == null;
+                mainBoneName = armatureJoint.getName();
+                super.setMainBoneName(mainBoneName);
+            } else {
+                armatureJoint = armature.getJoint(mainBoneName);
+                if (armatureJoint == null) {
+                    String q = MyString.quote(mainBoneName);
+                    throw new IllegalStateException("Joint not found: " + q);
+                }
+            }
             boneToMesh = armatureJoint.getModelTransform();
         }
         Transform meshToBone = boneToMesh.invert();
         LinkConfig linkConfig = config(torsoName);
+
+        // Create the CollisionShape and locate the center of mass.
         CenterHeuristic centerHeuristic = linkConfig.centerHeuristic();
         assert centerHeuristic != CenterHeuristic.Joint;
         Vector3f center = centerHeuristic.center(vertexLocations, null);
         center.subtractLocal(boneToMesh.getTranslation());
-        CollisionShape shape = linkConfig.createShape(meshToBone, center,
-                vertexLocations);
+        CollisionShape shape
+                = linkConfig.createShape(meshToBone, center, vertexLocations);
 
         meshToBone.getTranslation().zero();
         Vector3f offset = meshToBone.transformVector(center, null);
@@ -1606,16 +1691,16 @@ public class DacLinks
             Transform modelToMesh
                     = RagUtils.relativeTransform(transformer, (Node) cgm, null);
             meshToModel = modelToMesh.invert();
-        } else {
+        } else { // cgm instanceof Geometry
             meshToModel = transformIdentity;
         }
 
-        if (skeleton != null) {
-            torsoLink = new TorsoLink(this, bone, shape, linkConfig,
-                    meshToModel, offset);
-        } else {
-            torsoLink = new TorsoLink(this, armatureJoint, shape, linkConfig,
-                    meshToModel, offset);
+        if (skeleton != null) { // old animation system
+            this.torsoLink = new TorsoLink(
+                    this, bone, shape, linkConfig, meshToModel, offset);
+        } else { // new animation system
+            this.torsoLink = new TorsoLink(this, armatureJoint, shape,
+                    linkConfig, meshToModel, offset);
         }
     }
 
@@ -1626,16 +1711,13 @@ public class DacLinks
      * @param maxHops the maximum number of hops (&ge;0)
      */
     private void ignoreCollisions(int maxHops) {
-        /*
-         * Clear the ignore lists of all bodies.
-         */
+        // Clear the ignore lists of all bodies.
         PhysicsRigidBody[] bodies = listRigidBodies();
         for (PhysicsRigidBody body : bodies) {
             body.clearIgnoreList();
         }
-        /*
-         * Rebuild the ignore lists using recursion.
-         */
+
+        // Rebuild the ignore lists using recursion.
         Map<PhysicsBody, Integer> visited = new HashMap<>(bodies.length);
         for (PhysicsRigidBody body : bodies) {
             visited.clear();
@@ -1654,23 +1736,23 @@ public class DacLinks
         assert otherSgc != null;
 
         Spatial spatial = getSpatial();
-        int dacIndex = MySpatial.findIndex(spatial, this);
+        int dacIndex = MyControl.findIndex(this, spatial);
         assert dacIndex != -1;
-        int otherIndex = MySpatial.findIndex(spatial, otherSgc);
+        int otherIndex = MyControl.findIndex(otherSgc, spatial);
         assert otherIndex != -1;
         assert dacIndex != otherIndex;
 
         if (dacIndex > otherIndex) {
             /*
              * Remove the other Control and re-add it to make sure it will get
-             * updated *after* this control. TODO also arrange with AnimComposer/AnimControl
+             * updated AFTER this control.
              */
             spatial.removeControl(otherSgc);
             spatial.addControl(otherSgc);
 
-            dacIndex = MySpatial.findIndex(spatial, this);
+            dacIndex = MyControl.findIndex(this, spatial);
             assert dacIndex != -1;
-            otherIndex = MySpatial.findIndex(spatial, otherSgc);
+            otherIndex = MyControl.findIndex(otherSgc, spatial);
             assert otherIndex != -1;
             assert dacIndex < otherIndex;
         }

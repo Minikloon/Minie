@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021 jMonkeyEngine
+ * Copyright (c) 2018-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,10 +73,10 @@ import jme3utilities.Validate;
 import jme3utilities.math.MyVector3f;
 
 /**
- * Before adding this Control to a Spatial, configure it by invoking
- * {@link #link(java.lang.String, float, com.jme3.bullet.animation.RangeOfMotion)}
- * for each bone that should have its own rigid body. Leave unlinked bones near
- * the root of the skeleton to form the torso of the ragdoll.
+ * Before adding this Control to a Spatial, configure it by invoking {@link
+ * #link(java.lang.String, float, com.jme3.bullet.animation.RangeOfMotion)} for
+ * each bone that should have its own rigid body. Leave unlinked bones near the
+ * root of the skeleton to form the torso of the ragdoll.
  * <p>
  * When you add the Control to a Spatial, it generates a ragdoll consisting of a
  * rigid body for the torso and another for each linked bone. It also creates a
@@ -125,6 +125,10 @@ public class DynamicAnimControl
      * list of IK joints
      */
     private ArrayList<IKJoint> ikJoints = new ArrayList<>(20);
+    /**
+     * report completion of the current blend-to-kinematic operation
+     */
+    private CompletionListener<DynamicAnimControl> blendListener;
     /**
      * calculated total mass, not including released attachments
      */
@@ -176,14 +180,14 @@ public class DynamicAnimControl
      */
     public void amputateSubtree(BoneLink rootLink, float blendInterval) {
         Validate.nonNull(rootLink, "root link");
-        Validate.require(rootLink.getControl() == this,
-                "link belongs to this control");
+        Validate.require(
+                rootLink.getControl() == this, "link belongs to this control");
         Validate.nonNegative(blendInterval, "blend interval");
         verifyAddedToSpatial("change modes");
 
         blendDescendants(rootLink, KinematicSubmode.Amputated, blendInterval);
-        rootLink.blendToKinematicMode(KinematicSubmode.Amputated,
-                blendInterval);
+        rootLink.blendToKinematicMode(
+                KinematicSubmode.Amputated, blendInterval);
     }
 
     /**
@@ -197,8 +201,8 @@ public class DynamicAnimControl
      */
     public void animateSubtree(PhysicsLink rootLink, float blendInterval) {
         Validate.nonNull(rootLink, "root link");
-        Validate.require(rootLink.getControl() == this,
-                "link belongs to this control");
+        Validate.require(
+                rootLink.getControl() == this, "link belongs to this control");
         Validate.nonNegative(blendInterval, "blend interval");
         verifyAddedToSpatial("change modes");
 
@@ -215,8 +219,8 @@ public class DynamicAnimControl
      */
     public void bindSubtree(PhysicsLink rootLink, float blendInterval) {
         Validate.nonNull(rootLink, "root link");
-        Validate.require(rootLink.getControl() == this,
-                "link belongs to this control");
+        Validate.require(
+                rootLink.getControl() == this, "link belongs to this control");
         Validate.nonNegative(blendInterval, "blend interval");
         verifyAddedToSpatial("change modes");
 
@@ -225,26 +229,46 @@ public class DynamicAnimControl
 
     /**
      * Begin blending all links to purely kinematic mode, driven by animation.
-     * TODO callback when the transition completes
      * <p>
      * Allowed only when the Control IS added to a Spatial.
      *
      * @param blendInterval the duration of the blend interval (in seconds,
      * &ge;0)
-     * @param endModelTransform the desired local Transform for the controlled
-     * spatial when the transition completes, or null for no change to local
-     * Transform (unaffected)
+     * @param endModelTransform the desired local transform for the controlled
+     * spatial when the blend completes (alias created) or null for no change to
+     * the local transform
      */
-    public void blendToKinematicMode(float blendInterval,
-            Transform endModelTransform) {
+    public void blendToKinematicMode(
+            float blendInterval, Transform endModelTransform) {
         Validate.nonNegative(blendInterval, "blend interval");
         verifyAddedToSpatial("change modes");
 
-        getTorsoLink().blendToKinematicMode(KinematicSubmode.Animated,
-                blendInterval, endModelTransform);
+        blendToKinematicMode(
+                KinematicSubmode.Animated, blendInterval, endModelTransform);
+    }
+
+    /**
+     * Begin blending all links to purely kinematic mode.
+     * <p>
+     * Allowed only when the Control IS added to a Spatial.
+     *
+     * @param submode enum value (not null)
+     * @param blendInterval the duration of the blend interval (in seconds,
+     * &ge;0)
+     * @param endModelTransform the desired local transform for the controlled
+     * spatial when the blend completes (alias created) or null for no change to
+     * the local transform
+     */
+    public void blendToKinematicMode(KinematicSubmode submode,
+            float blendInterval, Transform endModelTransform) {
+        Validate.nonNull(submode, "submode");
+        Validate.nonNegative(blendInterval, "blend interval");
+        verifyAddedToSpatial("change modes");
+
+        getTorsoLink().blendToKinematicMode(
+                submode, blendInterval, endModelTransform);
         for (BoneLink boneLink : getBoneLinks()) {
-            boneLink.blendToKinematicMode(KinematicSubmode.Animated,
-                    blendInterval);
+            boneLink.blendToKinematicMode(submode, blendInterval);
         }
         for (AttachmentLink link : listAttachmentLinks()) {
             if (!link.isReleased()) {
@@ -312,9 +336,8 @@ public class DynamicAnimControl
         Validate.nonEmpty(vertexSpecifier, "vertex specifier");
         Vector3f worldLocation = (storeWorldLocation == null)
                 ? new Vector3f() : storeWorldLocation;
-        /*
-         * Parse the vertex index and geometry name from the specifier.
-         */
+
+        // Parse the vertex index and geometry name from the specifier.
         String[] fields = vertexSpecifier.split("/");
         int numFields = fields.length;
         if (numFields < 2 || numFields > 3) {
@@ -322,9 +345,8 @@ public class DynamicAnimControl
                     + MyString.quote(vertexSpecifier);
             throw new IllegalArgumentException(message);
         }
-        /*
-         * Find the mesh that contains the vertex.
-         */
+
+        // Find the mesh that contains the vertex.
         Armature armature = getArmature();
         Skeleton skeleton = getSkeleton();
         Spatial subtree;
@@ -333,8 +355,8 @@ public class DynamicAnimControl
             if (armature == null) {
                 Bone attachBone = skeleton.getBone(attachName);
                 if (attachBone == null) {
-                    String message = String.format("non-existent bone %s"
-                            + " in vertex specifier",
+                    String message = String.format(
+                            "non-existent bone %s in vertex specifier",
                             MyString.quote(attachName));
                     throw new IllegalArgumentException(message);
                 }
@@ -348,8 +370,8 @@ public class DynamicAnimControl
             } else { // armature != null
                 Joint attachArmatureJoint = armature.getJoint(attachName);
                 if (attachArmatureJoint == null) {
-                    String message = String.format("non-existent bone %s"
-                            + " in vertex specifier",
+                    String message = String.format(
+                            "non-existent bone %s in vertex specifier",
                             MyString.quote(attachName));
                     throw new IllegalArgumentException(message);
                 }
@@ -375,28 +397,25 @@ public class DynamicAnimControl
         }
         Geometry geometry = (Geometry) gSpatial;
         Mesh mesh = geometry.getMesh();
-        /*
-         * Calculate the mesh location (pos) of the vertex.
-         */
+
+        // Calculate the mesh location (pos) of the vertex.
         int vertexIndex;
         try {
             vertexIndex = Integer.parseInt(fields[0]);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException exception) {
             vertexIndex = -1;
         }
         int numVertices = mesh.getVertexCount();
         if (vertexIndex < 0 || vertexIndex >= numVertices) {
             String message = String.format(
                     "non-existent vertex %s in vertex specifier (legal range: "
-                    + "0 to %d)", MyString.quote(fields[0]),
-                    numVertices - 1);
+                    + "0 to %d)", MyString.quote(fields[0]), numVertices - 1);
             throw new IllegalArgumentException(message);
         }
-        Vector3f pos = MyMesh.vertexVector3f(mesh, VertexBuffer.Type.Position,
-                vertexIndex, null);
-        /*
-         * Find the manager and convert the pos to a world location.
-         */
+        Vector3f pos = MyMesh.vertexVector3f(
+                mesh, VertexBuffer.Type.Position, vertexIndex, null);
+
+        // Find the manager and convert the pos to a world location.
         PhysicsLink manager;
         if (numFields == 3) { // The vertex is in an attached model.
             assert !MyMesh.isAnimated(mesh);
@@ -411,8 +430,8 @@ public class DynamicAnimControl
             } else {
                 managerMap = managerMap(armature);
             }
-            String managerName = RagUtils.findManager(mesh, vertexIndex,
-                    new int[4], new float[4], managerMap);
+            String managerName = RagUtils.findManager(
+                    mesh, vertexIndex, new int[4], new float[4], managerMap);
             if (managerName.equals(torsoName)) {
                 manager = getTorsoLink();
             } else {
@@ -426,8 +445,8 @@ public class DynamicAnimControl
         if (storeLocalLocation != null) {
             Transform localToWorld = manager.physicsTransform(null);
             localToWorld.setScale(1f);
-            localToWorld.transformInverseVector(worldLocation,
-                    storeLocalLocation);
+            localToWorld
+                    .transformInverseVector(worldLocation, storeLocalLocation);
         }
 
         return manager;
@@ -455,16 +474,14 @@ public class DynamicAnimControl
         New6Dof new6dof = new New6Dof(linkBody, translateIdentity,
                 translateIdentity, worldToLocal, matrixIdentity,
                 RotationOrder.XYZ);
-        /*
-         * Initialize the fix location in physics-space coordinates.
-         */
+
+        // Initialize the fix location in physics-space coordinates.
         TranslationMotor motor = new6dof.getTranslationMotor();
         Vector3f location = localToWorld.getTranslation(); // alias
         motor.set(MotorParam.LowerLimit, location);
         motor.set(MotorParam.UpperLimit, location);
-        /*
-         * Lock all rotation axes at 0.
-         */
+
+        // Lock all rotation axes at 0.
         for (int axisIndex = 0; axisIndex < MyVector3f.numAxes; ++axisIndex) {
             RotationMotor rotMotor = new6dof.getRotationMotor(axisIndex);
             rotMotor.setSpringEnabled(true);
@@ -494,8 +511,8 @@ public class DynamicAnimControl
      */
     public void freezeSubtree(PhysicsLink rootLink, boolean forceKinematic) {
         Validate.nonNull(rootLink, "root link");
-        Validate.require(rootLink.getControl() == this,
-                "link belongs to this control");
+        Validate.require(
+                rootLink.getControl() == this, "link belongs to this control");
         verifyAddedToSpatial("change modes");
 
         rootLink.freeze(forceKinematic);
@@ -504,6 +521,15 @@ public class DynamicAnimControl
         for (PhysicsLink child : children) {
             freezeSubtree(child, forceKinematic);
         }
+    }
+
+    /**
+     * Access the blend listener.
+     *
+     * @return the pre-existing instance, or null of none
+     */
+    public CompletionListener<DynamicAnimControl> getBlendListener() {
+        return blendListener;
     }
 
     /**
@@ -592,8 +618,8 @@ public class DynamicAnimControl
         Validate.nonNull(pivotInGoalBody, "pivot in goal body");
 
         PhysicsRigidBody linkBody = link.getRigidBody();
-        Point2PointJoint newJoint = new Point2PointJoint(linkBody, goalBody,
-                pivotInLinkBody, pivotInGoalBody);
+        Point2PointJoint newJoint = new Point2PointJoint(
+                linkBody, goalBody, pivotInLinkBody, pivotInGoalBody);
         IKJoint ikJoint = new IKJoint(newJoint, true);
 
         ikJoints.add(ikJoint);
@@ -615,8 +641,8 @@ public class DynamicAnimControl
      * @return a new joint, with the link body at the A end, which will be
      * disabled by ragdoll mode (not null)
      */
-    public IKJoint moveToWorld(PhysicsLink link, Vector3f pivotInLinkBody,
-            Vector3f goalInWorld) {
+    public IKJoint moveToWorld(
+            PhysicsLink link, Vector3f pivotInLinkBody, Vector3f goalInWorld) {
         Validate.finite(pivotInLinkBody, "pivot in link body");
         Validate.finite(goalInWorld, "goal location");
 
@@ -684,9 +710,8 @@ public class DynamicAnimControl
         New6Dof new6dof = new New6Dof(linkBody, translateIdentity,
                 translateIdentity, matrixIdentity, matrixIdentity,
                 RotationOrder.XYZ);
-        /*
-         * Initialize the pin location in physics-space coordinates.
-         */
+
+        // Initialize the pin location in physics-space coordinates.
         TranslationMotor motor = new6dof.getTranslationMotor();
         Vector3f location = linkBody.getPhysicsLocation(null);
         motor.set(MotorParam.LowerLimit, location);
@@ -732,6 +757,74 @@ public class DynamicAnimControl
     }
 
     /**
+     * Record the current bone transforms for use in a kinematic reset.
+     */
+    public void saveCurrentPose() {
+        List<BoneLink> boneLinks = getBoneLinks();
+        TorsoLink torso = getTorsoLink();
+        int numManaged = torso.countManaged();
+        Transform[] resetTransforms = new Transform[numManaged];
+
+        Skeleton skeleton = getSkeleton();
+        if (skeleton == null) { // new animation system
+            Armature armature = getArmature();
+
+            for (int mbIndex = 0; mbIndex < numManaged; ++mbIndex) {
+                int jointIndex = torso.boneIndex(mbIndex);
+                Joint joint = armature.getJoint(jointIndex);
+                resetTransforms[mbIndex]
+                        = joint.getLocalTransform().clone();
+            }
+            torso.setEndBoneTransforms(resetTransforms);
+
+            for (BoneLink boneLink : boneLinks) {
+                numManaged = boneLink.countManaged();
+                resetTransforms = new Transform[numManaged];
+                for (int mbIndex = 0; mbIndex < numManaged; ++mbIndex) {
+                    int jointIndex = boneLink.boneIndex(mbIndex);
+                    Joint joint = armature.getJoint(jointIndex);
+                    resetTransforms[mbIndex]
+                            = joint.getLocalTransform().clone();
+                }
+                boneLink.setEndBoneTransforms(resetTransforms);
+            }
+
+        } else { // old animation system
+            for (int mbIndex = 0; mbIndex < numManaged; ++mbIndex) {
+                int boneIndex = torso.boneIndex(mbIndex);
+                Bone bone = skeleton.getBone(boneIndex);
+                resetTransforms[mbIndex]
+                        = MySkeleton.copyLocalTransform(bone, null);
+            }
+            torso.setEndBoneTransforms(resetTransforms);
+
+            for (BoneLink boneLink : boneLinks) {
+                numManaged = boneLink.countManaged();
+                resetTransforms = new Transform[numManaged];
+                for (int mbIndex = 0; mbIndex < numManaged; ++mbIndex) {
+                    int boneIndex = boneLink.boneIndex(mbIndex);
+                    Bone bone = skeleton.getBone(boneIndex);
+                    resetTransforms[mbIndex]
+                            = MySkeleton.copyLocalTransform(bone, null);
+                }
+                boneLink.setEndBoneTransforms(resetTransforms);
+            }
+        }
+    }
+
+    /**
+     * Replace the current blend listener. Note that the listener is
+     * automatically removed after each invocation, so typically this method is
+     * re-invoked before each blend.
+     *
+     * @param listener the desired listener, or null for none
+     */
+    public void
+            setBlendListener(CompletionListener<DynamicAnimControl> listener) {
+        this.blendListener = listener;
+    }
+
+    /**
      * Alter the contact-response setting of the specified link and all its
      * descendants (excluding released attachments). Note: recursive!
      * <p>
@@ -742,11 +835,11 @@ public class DynamicAnimControl
      * @param desiredResponse true for the usual rigid-body response, false for
      * ghost-like response
      */
-    public void setContactResponseSubtree(PhysicsLink rootLink,
-            boolean desiredResponse) {
+    public void setContactResponseSubtree(
+            PhysicsLink rootLink, boolean desiredResponse) {
         Validate.nonNull(rootLink, "root link");
-        Validate.require(rootLink.getControl() == this,
-                "link belongs to this control");
+        Validate.require(
+                rootLink.getControl() == this, "link belongs to this control");
         verifyAddedToSpatial("change modes");
 
         if (!rootLink.isReleased()) {
@@ -793,8 +886,8 @@ public class DynamicAnimControl
 
         PhysicsLink parent = startLink.getParent();
         if (parent != null && chainLength > 1) {
-            setDynamicChain(parent, chainLength - 1, uniformAcceleration,
-                    lockAll);
+            setDynamicChain(
+                    parent, chainLength - 1, uniformAcceleration, lockAll);
         }
     }
 
@@ -813,8 +906,8 @@ public class DynamicAnimControl
     public void setDynamicSubtree(PhysicsLink rootLink,
             Vector3f uniformAcceleration, boolean lockAll) {
         Validate.nonNull(rootLink, "root link");
-        Validate.require(rootLink.getControl() == this,
-                "link belongs to this control");
+        Validate.require(
+                rootLink.getControl() == this, "link belongs to this control");
         Validate.nonNull(uniformAcceleration, "uniform acceleration");
         verifyAddedToSpatial("change modes");
 
@@ -837,16 +930,32 @@ public class DynamicAnimControl
     }
 
     /**
-     * Immediately put all links into purely kinematic mode. The model's
-     * Transform is unaffected.
+     * Immediately put all links into purely kinematic mode. The transform of
+     * the controlled spatial is unaffected.
      * <p>
      * Allowed only when the Control IS added to a Spatial.
      */
     public void setKinematicMode() {
         verifyAddedToSpatial("set kinematic mode");
 
-        Transform localTransform = getSpatial().getLocalTransform();
-        blendToKinematicMode(0f, localTransform);
+        float blendInterval = 0f; // in seconds
+        blendToKinematicMode(KinematicSubmode.Animated, blendInterval, null);
+    }
+
+    /**
+     * Immediately put all links into purely kinematic mode. The transform of
+     * the controlled spatial is unaffected.
+     * <p>
+     * Allowed only when the Control IS added to a Spatial.
+     *
+     * @param submode enum value (not null)
+     */
+    public void setKinematicMode(KinematicSubmode submode) {
+        Validate.nonNull(submode, "submode");
+        verifyAddedToSpatial("set kinematic mode");
+
+        float blendInterval = 0f; // in seconds
+        blendToKinematicMode(submode, blendInterval, null);
     }
 
     /**
@@ -903,25 +1012,10 @@ public class DynamicAnimControl
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
 
-        ikJoints = cloner.clone(ikJoints);
-        collisionListeners = cloner.clone(collisionListeners);
-        centerLocation = cloner.clone(centerLocation);
-        centerVelocity = cloner.clone(centerVelocity);
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public DynamicAnimControl jmeClone() {
-        try {
-            DynamicAnimControl clone = (DynamicAnimControl) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
+        this.ikJoints = cloner.clone(ikJoints);
+        this.collisionListeners = cloner.clone(collisionListeners);
+        this.centerLocation = cloner.clone(centerLocation);
+        this.centerVelocity = cloner.clone(centerVelocity);
     }
 
     /**
@@ -937,13 +1031,13 @@ public class DynamicAnimControl
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        // isReady and collisionListeners not read
-        ikJoints = capsule.readSavableArrayList(tagIkJoints, new ArrayList(1));
-        ragdollMass = capsule.readFloat(tagRagdollMass, 1f);
-        centerLocation = (Vector3f) capsule.readSavable(
-                tagCenterLocation, new Vector3f());
-        centerVelocity = (Vector3f) capsule.readSavable(
-                tagCenterVelocity, new Vector3f());
+        this.ikJoints = capsule
+                .readSavableArrayList(tagIkJoints, new ArrayList(1));
+        this.ragdollMass = capsule.readFloat(tagRagdollMass, 1f);
+        this.centerLocation = (Vector3f) capsule
+                .readSavable(tagCenterLocation, new Vector3f());
+        this.centerVelocity = (Vector3f) capsule
+                .readSavable(tagCenterVelocity, new Vector3f());
     }
 
     /**
@@ -964,6 +1058,26 @@ public class DynamicAnimControl
     }
 
     /**
+     * Update this Control. Invoked once per frame during the logical-state
+     * update, provided the control is added to a scene. Do not invoke directly
+     * from user code.
+     *
+     * @param tpf the time interval between frames (in seconds, &ge;0)
+     */
+    @Override
+    public void update(float tpf) {
+        super.update(tpf);
+
+        if (blendListener != null) {
+            float weight = getTorsoLink().kinematicWeight();
+            if (weight == 1f) {
+                blendListener.onCompletion(this);
+                this.blendListener = null;
+            }
+        }
+    }
+
+    /**
      * Serialize this Control to the specified exporter, for example when saving
      * to a J3O file.
      *
@@ -975,8 +1089,8 @@ public class DynamicAnimControl
         super.write(exporter);
         OutputCapsule capsule = exporter.getCapsule(this);
 
-        // isReady and collisionListeners not written
         capsule.writeSavableArrayList(ikJoints, tagIkJoints, null);
+        // blendListener and collisionListeners are never written.
         capsule.write(ragdollMass, tagRagdollMass, 1f);
         capsule.write(centerLocation, tagCenterLocation, null);
         capsule.write(centerVelocity, tagCenterVelocity, null);
@@ -1022,22 +1136,19 @@ public class DynamicAnimControl
             }
             otherPco = pcoA;
         }
-        /*
-         * Discard collisions that don't involve this Control.
-         */
+
+        // Discard collisions that don't involve this Control.
         if (!isThisControlInvolved) {
             return;
         }
-        /*
-         * Discard low-impulse collisions.
-         */
+
+        // Discard low-impulse collisions.
         float impulseThreshold = eventDispatchImpulseThreshold();
         if (event.getAppliedImpulse() < impulseThreshold) {
             return;
         }
-        /*
-         * Dispatch an event.
-         */
+
+        // Dispatch an event.
         for (RagdollCollisionListener listener : collisionListeners) {
             listener.collide(physicsLink, otherPco, event);
         }
@@ -1055,7 +1166,7 @@ public class DynamicAnimControl
      * @param blendInterval the duration of the blend interval (in seconds,
      * &ge;0)
      */
-    private void blendDescendants(PhysicsLink rootLink,
+    private static void blendDescendants(PhysicsLink rootLink,
             KinematicSubmode submode, float blendInterval) {
         assert rootLink != null;
         assert submode != null;
@@ -1137,6 +1248,6 @@ public class DynamicAnimControl
         float invMass = (float) (1.0 / massSum);
         locationSum.mult(invMass, centerLocation);
         velocitySum.mult(invMass, centerVelocity);
-        ragdollMass = (float) massSum;
+        this.ragdollMass = (float) massSum;
     }
 }

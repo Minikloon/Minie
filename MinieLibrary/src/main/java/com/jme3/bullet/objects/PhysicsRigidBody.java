@@ -38,6 +38,7 @@ import com.jme3.bullet.collision.PcoType;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.HeightfieldCollisionShape;
 import com.jme3.bullet.objects.infos.RigidBodyMotionState;
+import com.jme3.bullet.objects.infos.RigidBodySnapshot;
 import com.jme3.export.InputCapsule;
 import com.jme3.export.JmeExporter;
 import com.jme3.export.JmeImporter;
@@ -48,16 +49,19 @@ import com.jme3.math.Quaternion;
 import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import com.jme3.util.clone.Cloner;
+import com.simsilica.mathd.Matrix3d;
 import com.simsilica.mathd.Quatd;
 import com.simsilica.mathd.Vec3d;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Validate;
+import jme3utilities.math.MyQuaternion;
 import jme3utilities.math.MyVector3f;
 
 /**
- * A collision object to simulate a rigid body, based on Bullet's btRigidBody.
+ * A collision object to simulate a rigid body, based on Bullet's
+ * {@code btRigidBody}.
  *
  * @author normenhansen
  */
@@ -93,6 +97,7 @@ public class PhysicsRigidBody extends PhysicsBody {
             = "linearSleepingThreshold";
     final private static String tagLinearVelocity = "linearVelocity";
     final private static String tagMass = "mass";
+    final private static String tagMotionState = "motionState";
     final private static String tagPhysicsLocation = "physicsLocation";
     final private static String tagPhysicsRotation = "physicsRotation";
     final private static String tagProtectGravity = "tagProtectGravity";
@@ -155,7 +160,7 @@ public class PhysicsRigidBody extends PhysicsBody {
      *
      * @param shape the desired shape (not null, alias created)
      * @param mass if 0, a static body is created; otherwise a dynamic body is
-     * created (&ge;0)
+     * created (&ge;0, default=1)
      */
     public PhysicsRigidBody(CollisionShape shape, float mass) {
         Validate.nonNull(shape, "shape");
@@ -305,7 +310,7 @@ public class PhysicsRigidBody extends PhysicsBody {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @return the angular factor
      */
@@ -343,7 +348,7 @@ public class PhysicsRigidBody extends PhysicsBody {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @return a new velocity vector (radians per second in physics-space
      * coordinates, not null)
@@ -500,7 +505,7 @@ public class PhysicsRigidBody extends PhysicsBody {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @return a new velocity vector (physics-space units per second in
      * physics-space coordinates, not null)
@@ -556,7 +561,7 @@ public class PhysicsRigidBody extends PhysicsBody {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @return a new Quaternion (relative to physics-space coordinates, not
      * null)
@@ -587,7 +592,8 @@ public class PhysicsRigidBody extends PhysicsBody {
      * @return true if in dynamic mode, otherwise false (static/kinematic mode)
      */
     public boolean isDynamic() {
-        return mass > massForStatic && !kinematic;
+        boolean result = (mass > massForStatic && !kinematic);
+        return result;
     }
 
     /**
@@ -612,7 +618,7 @@ public class PhysicsRigidBody extends PhysicsBody {
      * @return true if in kinematic mode, otherwise false (dynamic/static mode)
      */
     final public boolean isKinematic() {
-        assert checkKinematicFlag() : kinematic;
+        assert checkKinematicFlag() : "copy of flag = " + kinematic;
         return kinematic;
     }
 
@@ -656,6 +662,64 @@ public class PhysicsRigidBody extends PhysicsBody {
         double result = potentialEnergy + kineticEnergy();
 
         return result;
+    }
+
+    /**
+     * Rebuild this rigid body with a new native object.
+     */
+    public void rebuildRigidBody() {
+        long oldId = 0L;
+        PhysicsSpace removedFrom = null;
+        RigidBodySnapshot snapshot = null;
+
+        if (hasAssignedNativeObject()) {
+            // Gather information regarding the existing native object.
+            oldId = nativeId();
+            removedFrom = (PhysicsSpace) getCollisionSpace();
+            if (removedFrom != null) {
+                removedFrom.removeCollisionObject(this);
+            }
+            snapshot = new RigidBodySnapshot(this);
+
+            logger2.log(Level.INFO, "Clearing {0}.", this);
+            clearIgnoreList();
+            unassignNativeObject();
+        }
+
+        preRebuild();
+
+        long msId = motionState.nativeId();
+        CollisionShape shape = getCollisionShape();
+        long shapeId = shape.nativeId();
+        long objectId = createRigidBody(mass, msId, shapeId);
+        setNativeId(objectId);
+        assert getInternalType(objectId) == PcoType.rigid :
+                getInternalType(objectId);
+        if (logger2.isLoggable(Level.INFO)) {
+            if (oldId == 0L) {
+                logger2.log(
+                        Level.INFO, "Created {0}.", Long.toHexString(objectId));
+            } else {
+                logger2.log(
+                        Level.INFO, "Substituted {0} for {1}.", new Object[]{
+                            Long.toHexString(objectId), Long.toHexString(oldId)
+                        });
+            }
+        }
+
+        if (mass != massForStatic) {
+            setKinematic(kinematic);
+        }
+
+        postRebuild();
+
+        if (removedFrom != null) {
+            removedFrom.addCollisionObject(this);
+        }
+        if (snapshot != null) {
+            snapshot.applyTo(this);
+        }
+        // TODO physics joints
     }
 
     /**
@@ -764,13 +828,13 @@ public class PhysicsRigidBody extends PhysicsBody {
      * (default=true)
      */
     public void setContactResponse(boolean newState) {
-        long objectId = nativeId();
-        int flags = getCollisionFlags(objectId);
+        int flags = collisionFlags();
         if (newState) {
             flags &= ~CollisionFlag.NO_CONTACT_RESPONSE;
         } else {
             flags |= CollisionFlag.NO_CONTACT_RESPONSE;
         }
+        long objectId = nativeId();
         setCollisionFlags(objectId, flags);
     }
 
@@ -810,15 +874,22 @@ public class PhysicsRigidBody extends PhysicsBody {
      * Alter this body's gravitational acceleration.
      * <p>
      * Invoke this method <em>after</em> adding the body to a PhysicsSpace.
-     * Adding a body to a PhysicsSpace may override its gravity.
+     * Unless protection is set, adding a body to a PhysicsSpace overrides its
+     * gravity.
+     *
+     * @see #setProtectGravity(boolean)
      *
      * @param acceleration the desired acceleration vector (in physics-space
      * coordinates, not null, unaffected, default=(0,0,0))
      */
     public void setGravityDp(Vec3d acceleration) {
         Validate.nonNull(acceleration, "acceleration");
-        if (!isInWorld()) {
-            logger2.warning("The body is not in any PhysicsSpace.");
+        if (!isInWorld() && !isGravityProtected()) {
+            logger2.warning(
+                    "The body isn't in any PhysicsSpace, and its gravity isn't"
+                    + " protected. Unless protection is set, adding it"
+                    + " to a PhysicsSpace will override its gravity."
+            );
         }
 
         long objectId = nativeId();
@@ -859,7 +930,7 @@ public class PhysicsRigidBody extends PhysicsBody {
         long objectId = nativeId();
         setKinematic(objectId, kinematic);
 
-        assert isKinematic() == kinematic : kinematic;
+        assert isKinematic() == kinematic : "copy of flag = " + kinematic;
     }
 
     /**
@@ -905,7 +976,7 @@ public class PhysicsRigidBody extends PhysicsBody {
      * Alter the linear velocity of this body's center of mass.
      *
      * @param velocity the desired velocity (physics-space units per second in
-     * physics-space coordinates, not null, unaffected)
+     * physics-space coordinates, not null, finite, unaffected)
      */
     public void setLinearVelocity(Vector3f velocity) {
         Validate.finite(velocity, "velocity");
@@ -922,6 +993,8 @@ public class PhysicsRigidBody extends PhysicsBody {
      * physics-space coordinates, not null, unaffected)
      */
     public void setLinearVelocityDp(Vec3d velocity) {
+        Validate.nonNull(velocity, "velocity");
+
         long objectId = nativeId();
         setLinearVelocityDp(objectId, velocity);
         activate();
@@ -934,6 +1007,8 @@ public class PhysicsRigidBody extends PhysicsBody {
      * null, unaffected)
      */
     public void setPhysicsLocationDp(Vec3d location) {
+        Validate.nonNull(location, "location");
+
         long objectId = nativeId();
         setPhysicsLocationDp(objectId, location);
     }
@@ -959,13 +1034,34 @@ public class PhysicsRigidBody extends PhysicsBody {
      * Directly reorient this body.
      *
      * @param orientation the desired orientation (relative to physics-space
-     * coordinates, not null, unaffected)
+     * coordinates, not null, not zero, unaffected)
      */
     public void setPhysicsRotation(Quaternion orientation) {
-        Validate.nonNull(orientation, "orientation");
+        Validate.nonZero(orientation, "orientation");
+        if (getCollisionShape() instanceof HeightfieldCollisionShape
+                && !MyQuaternion.isRotationIdentity(orientation)) {
+            throw new IllegalArgumentException("No rotation of heightfields.");
+        }
 
         long objectId = nativeId();
         setPhysicsRotation(objectId, orientation);
+    }
+
+    /**
+     * Directly reorient this body.
+     *
+     * @param orientation the desired orientation (rotation matrix relative to
+     * physics-space coordinates, not null, unaffected)
+     */
+    public void setPhysicsRotationDp(Matrix3d orientation) {
+        Validate.nonNull(orientation, "orientation");
+        if (getCollisionShape() instanceof HeightfieldCollisionShape
+                && !orientation.isIdentity()) {
+            throw new IllegalArgumentException("No rotation of heightfields.");
+        }
+
+        long objectId = nativeId();
+        setPhysicsRotationDp(objectId, orientation);
     }
 
     /**
@@ -976,6 +1072,10 @@ public class PhysicsRigidBody extends PhysicsBody {
      */
     public void setPhysicsRotationDp(Quatd orientation) {
         Validate.nonNull(orientation, "orientation");
+        if (getCollisionShape() instanceof HeightfieldCollisionShape
+                && !orientation.isRotationIdentity()) {
+            throw new IllegalArgumentException("No rotation of heightfields.");
+        }
 
         long objectId = nativeId();
         setPhysicsRotationDp(objectId, orientation);
@@ -1084,13 +1184,13 @@ public class PhysicsRigidBody extends PhysicsBody {
      * For use by subclasses.
      */
     protected void postRebuild() {
-        long objectId = nativeId();
-        int flags = getCollisionFlags(objectId);
+        int flags = collisionFlags();
         if (mass == massForStatic) {
             flags |= CollisionFlag.STATIC_OBJECT;
         } else {
             flags &= ~CollisionFlag.STATIC_OBJECT;
         }
+        long objectId = nativeId();
         setCollisionFlags(objectId, flags);
 
         initUserPointer();
@@ -1101,37 +1201,6 @@ public class PhysicsRigidBody extends PhysicsBody {
      */
     protected void preRebuild() {
         // do nothing
-    }
-
-    /**
-     * Build/rebuild this body after parameters have changed.
-     */
-    protected void rebuildRigidBody() {
-        PhysicsSpace removedFrom = null;
-        if (hasAssignedNativeObject()) {
-            removedFrom = (PhysicsSpace) getCollisionSpace();
-            if (removedFrom != null) {
-                removedFrom.removeCollisionObject(this);
-            }
-            logger2.log(Level.FINE, "Clearing {0}.", this);
-            unassignNativeObject();
-        }
-
-        preRebuild();
-
-        CollisionShape shape = getCollisionShape();
-        long objectId = createRigidBody(mass, motionState.nativeId(),
-                shape.nativeId());
-        setNativeId(objectId);
-        assert getInternalType(objectId) == PcoType.rigid :
-                getInternalType(objectId);
-        logger2.log(Level.FINE, "Created {0}.", this);
-
-        postRebuild();
-
-        if (removedFrom != null) {
-            removedFrom.addCollisionObject(this);
-        }
     }
     // *************************************************************************
     // PhysicsBody methods
@@ -1147,48 +1216,40 @@ public class PhysicsRigidBody extends PhysicsBody {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        super.cloneFields(cloner, original);
-        rebuildRigidBody();
-
+        assert !hasAssignedNativeObject();
         PhysicsRigidBody old = (PhysicsRigidBody) original;
-        cloneIgnoreList(cloner, old);
-        cloneJoints(cloner);
-        motionState = cloner.clone(motionState);
+        assert old != this;
+        assert old.hasAssignedNativeObject();
 
+        RigidBodySnapshot snapshot = new RigidBodySnapshot(old);
+        super.cloneFields(cloner, original);
+        if (hasAssignedNativeObject()) {
+            return;
+        }
+
+        this.motionState = cloner.clone(motionState);
+        assert !hasAssignedNativeObject();
+
+        CollisionShape shape = getCollisionShape();
+        long objectId = createRigidBody(
+                mass, motionState.nativeId(), shape.nativeId());
+        setNativeId(objectId);
+        assert getInternalType(objectId) == PcoType.rigid :
+                getInternalType(objectId);
+        logger2.log(Level.INFO, "Created " + Long.toHexString(objectId));
         if (mass != massForStatic) {
             setKinematic(kinematic);
         }
+        postRebuild();
+        snapshot.applyTo(this);
+
         Vector3f tmpVector = new Vector3f(); // TODO garbage
-        if (old.isDynamic()) {
-            setAngularVelocity(old.getAngularVelocity(tmpVector));
-            setLinearVelocity(old.getLinearVelocity(tmpVector));
-        }
-
-        clearForces();
-
-        setAngularFactor(scaleIdentity);
-        applyTorque(old.totalAppliedTorque(tmpVector));
-        setAngularFactor(old.getAngularFactor(tmpVector));
-
-        setLinearFactor(scaleIdentity);
-        applyCentralForce(old.totalAppliedForce(tmpVector));
-        setLinearFactor(old.getLinearFactor(tmpVector));
-        /*
-         * Set force, torque, velocities, and kinematic flag
-         * BEFORE copyPcoProperties() because
-         * those setters also affect deactivation time.
-         */
-        copyPcoProperties(old);
-
-        setAngularDamping(old.getAngularDamping());
-        setAngularSleepingThreshold(old.getAngularSleepingThreshold());
-        setContactResponse(old.isContactResponse());
         setInverseInertiaLocal(old.getInverseInertiaLocal(tmpVector));
-        setLinearDamping(old.getLinearDamping());
-        setLinearSleepingThreshold(old.getLinearSleepingThreshold());
-        setPhysicsLocation(old.getPhysicsLocation(tmpVector));
-        setPhysicsRotation(old.getPhysicsRotationMatrix(null));
-        setProtectGravity(old.isGravityProtected());
+
+        clearIgnoreList();
+        cloneIgnoreList(cloner, old);
+
+        cloneJoints(cloner, old);
     }
 
     /**
@@ -1220,21 +1281,6 @@ public class PhysicsRigidBody extends PhysicsBody {
     }
 
     /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public PhysicsRigidBody jmeClone() {
-        try {
-            PhysicsRigidBody clone = (PhysicsRigidBody) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
-    }
-
-    /**
      * De-serialize this body from the specified importer, for example when
      * loading from a J3O file.
      *
@@ -1246,20 +1292,25 @@ public class PhysicsRigidBody extends PhysicsBody {
         super.read(importer);
 
         InputCapsule capsule = importer.getCapsule(this);
-        mass = capsule.readFloat(tagMass, 1f);
+        this.kinematic = capsule.readBoolean(tagKinematic, false);
+        this.mass = capsule.readFloat(tagMass, 1f);
+        this.motionState = (RigidBodyMotionState) capsule
+                .readSavable(tagMotionState, null);
+        if (motionState == null) {
+            // de-serializing a model serialized prior to v7.0.0
+            this.motionState = new RigidBodyMotionState();
+        }
+
         rebuildRigidBody();
 
-        setAngularVelocity((Vector3f) capsule.readSavable(tagAngularVelocity,
-                translateIdentity));
-        if (mass != massForStatic) {
-            setKinematic(capsule.readBoolean(tagKinematic, false));
-        }
-        setLinearVelocity((Vector3f) capsule.readSavable(tagLinearVelocity,
-                translateIdentity));
-        applyCentralForce((Vector3f) capsule.readSavable(tagAppliedForce,
-                translateIdentity));
-        applyTorque((Vector3f) capsule.readSavable(tagAppliedTorque,
-                translateIdentity));
+        setAngularVelocity((Vector3f) capsule
+                .readSavable(tagAngularVelocity, translateIdentity));
+        setLinearVelocity((Vector3f) capsule
+                .readSavable(tagLinearVelocity, translateIdentity));
+        applyCentralForce((Vector3f) capsule
+                .readSavable(tagAppliedForce, translateIdentity));
+        applyTorque((Vector3f) capsule
+                .readSavable(tagAppliedTorque, translateIdentity));
         /*
          * Set force, torque, velocities, and kinematic flag
          * BEFORE readPcoProperties() because
@@ -1268,12 +1319,12 @@ public class PhysicsRigidBody extends PhysicsBody {
         readPcoProperties(capsule);
 
         setContactResponse(capsule.readBoolean(tagContactResponse, true));
-        setInverseInertiaLocal((Vector3f) capsule.readSavable(tagInverseInertia,
-                scaleIdentity));
-        setAngularFactor((Vector3f) capsule.readSavable(tagAngularFactor,
-                scaleIdentity));
-        setLinearFactor((Vector3f) capsule.readSavable(tagLinearFactor,
-                scaleIdentity));
+        setInverseInertiaLocal((Vector3f) capsule
+                .readSavable(tagInverseInertia, scaleIdentity));
+        setAngularFactor((Vector3f) capsule
+                .readSavable(tagAngularFactor, scaleIdentity));
+        setLinearFactor((Vector3f) capsule
+                .readSavable(tagLinearFactor, scaleIdentity));
         setDamping(capsule.readFloat(tagLinearDamping, 0f),
                 capsule.readFloat(tagAngularDamping, 0f));
         setSleepingThresholds(
@@ -1281,10 +1332,10 @@ public class PhysicsRigidBody extends PhysicsBody {
                 capsule.readFloat(tagAngularSleepingThreshold, 1f));
         setProtectGravity(capsule.readBoolean(tagProtectGravity, false));
 
-        setPhysicsLocation((Vector3f) capsule.readSavable(tagPhysicsLocation,
-                translateIdentity));
-        setPhysicsRotation((Matrix3f) capsule.readSavable(tagPhysicsRotation,
-                matrixIdentity));
+        setPhysicsLocation((Vector3f) capsule
+                .readSavable(tagPhysicsLocation, translateIdentity));
+        setPhysicsRotation((Matrix3f) capsule
+                .readSavable(tagPhysicsRotation, matrixIdentity));
 
         readJoints(capsule);
     }
@@ -1293,16 +1344,24 @@ public class PhysicsRigidBody extends PhysicsBody {
      * Alter this body's gravitational acceleration.
      * <p>
      * Invoke this method <em>after</em> adding the body to a PhysicsSpace.
-     * Adding a body to a PhysicsSpace may override its gravity.
+     * Unless protection is set, adding a body to a PhysicsSpace overrides its
+     * gravity.
+     *
+     * @see #setProtectGravity(boolean)
+     * @see #setGravityDp(com.simsilica.mathd.Vec3d)
      *
      * @param acceleration the desired acceleration vector (in physics-space
-     * coordinates, not null, unaffected, default=(0,0,0))
+     * coordinates, not null, finite, unaffected, default=(0,0,0))
      */
     @Override
     public void setGravity(Vector3f acceleration) {
-        Validate.nonNull(acceleration, "acceleration");
-        if (!isInWorld()) {
-            logger2.warning("The body is not in any PhysicsSpace.");
+        Validate.finite(acceleration, "acceleration");
+        if (!isInWorld() && !isGravityProtected()) {
+            logger2.warning(
+                    "The body isn't in any PhysicsSpace, and its gravity isn't"
+                    + " protected. Unless protection is set, adding it"
+                    + " to a PhysicsSpace will override its gravity."
+            );
         }
 
         long objectId = nativeId();
@@ -1327,12 +1386,19 @@ public class PhysicsRigidBody extends PhysicsBody {
 
         if (mass == this.mass) {
             return;
+
+        } else if (this.mass == massForStatic) {
+            // Static to non-static requires a rebuild.
+            this.mass = mass;
+            rebuildRigidBody();
+            return;
         }
+
         this.mass = mass;
         long objectId = nativeId();
         updateMassProps(objectId, shape.nativeId(), mass);
 
-        int flags = getCollisionFlags(objectId);
+        int flags = collisionFlags();
         if (mass == massForStatic) {
             flags |= CollisionFlag.STATIC_OBJECT;
         } else {
@@ -1345,7 +1411,7 @@ public class PhysicsRigidBody extends PhysicsBody {
      * Directly relocate this body's center of mass.
      *
      * @param location the desired location (in physics-space coordinates, not
-     * null, unaffected)
+     * null, finite, unaffected)
      */
     @Override
     public void setPhysicsLocation(Vector3f location) {
@@ -1372,14 +1438,15 @@ public class PhysicsRigidBody extends PhysicsBody {
         capsule.write(getAngularFactor(null), tagAngularFactor, null);
         capsule.write(getLinearFactor(null), tagLinearFactor, null);
         capsule.write(kinematic, tagKinematic, false);
+        capsule.write(motionState, tagMotionState, null);
 
         capsule.write(getInverseInertiaLocal(null), tagInverseInertia, null);
         capsule.write(getLinearDamping(), tagLinearDamping, 0f);
         capsule.write(getAngularDamping(), tagAngularDamping, 0f);
-        capsule.write(getLinearSleepingThreshold(), tagLinearSleepingThreshold,
-                0.8f);
-        capsule.write(getAngularSleepingThreshold(),
-                tagAngularSleepingThreshold, 1f);
+        capsule.write(
+                getLinearSleepingThreshold(), tagLinearSleepingThreshold, 0.8f);
+        capsule.write(
+                getAngularSleepingThreshold(), tagAngularSleepingThreshold, 1f);
         capsule.write(isGravityProtected(), tagProtectGravity, false);
 
         capsule.write(getPhysicsLocation(null), tagPhysicsLocation, null);
@@ -1415,12 +1482,11 @@ public class PhysicsRigidBody extends PhysicsBody {
      * @return true if the flags are equal, otherwise false
      */
     private boolean checkKinematicFlag() {
-        if (mass == massForStatic) {// don't invoke getCollisionFlags(long) TODO
-            return true;
+        if (mass == massForStatic) {
+            return true; // TODO
         }
 
-        long objectId = nativeId();
-        int flags = getCollisionFlags(objectId);
+        int flags = collisionFlags();
         boolean nativeKinematicFlag
                 = (flags & CollisionFlag.KINEMATIC_OBJECT) != 0x0;
 
@@ -1449,130 +1515,133 @@ public class PhysicsRigidBody extends PhysicsBody {
 
     native private static void applyCentralForce(long objectId, Vector3f force);
 
-    native private static void applyCentralImpulse(long objectId,
-            Vector3f impulse);
+    native private static void
+            applyCentralImpulse(long objectId, Vector3f impulse);
 
-    native private static void applyForce(long objectId, Vector3f force,
-            Vector3f localOffset);
+    native private static void
+            applyForce(long objectId, Vector3f force, Vector3f localOffset);
 
-    native private static void applyImpulse(long objectId, Vector3f impulse,
-            Vector3f localOffset);
+    native private static void
+            applyImpulse(long objectId, Vector3f impulse, Vector3f localOffset);
 
     native private static void applyTorque(long objectId, Vector3f torque);
 
-    native private static void applyTorqueImpulse(long objectId,
-            Vector3f torqueImpulse);
+    native private static void
+            applyTorqueImpulse(long objectId, Vector3f torqueImpulse);
 
     native private static void clearForces(long objectId);
 
-    native private static long createRigidBody(float mass, long motionStateId,
-            long collisionShapeId);
+    native private static long createRigidBody(
+            float mass, long motionStateId, long collisionShapeId);
 
     native private static float getAngularDamping(long objectId);
 
-    native private static void getAngularFactor(long objectId,
-            Vector3f storeResult);
+    native private static void
+            getAngularFactor(long objectId, Vector3f storeResult);
 
     native private static float getAngularSleepingThreshold(long objectId);
 
-    native private static void getAngularVelocity(long objectId,
-            Vector3f storeResult);
+    native private static void
+            getAngularVelocity(long objectId, Vector3f storeResult);
 
-    native private static void getAngularVelocityDp(long objectId,
-            Vec3d storeResult);
+    native private static void
+            getAngularVelocityDp(long objectId, Vec3d storeResult);
 
     native private static void getGravity(long objectId, Vector3f storeResult);
 
     native private static void getGravityDp(long objectId, Vec3d storeResult);
 
-    native private static void getInverseInertiaLocal(long objectId,
-            Vector3f storeResult);
+    native private static void
+            getInverseInertiaLocal(long objectId, Vector3f storeResult);
 
-    native private static void getInverseInertiaWorld(long objectId,
-            Matrix3f storeResult);
+    native private static void
+            getInverseInertiaWorld(long objectId, Matrix3f storeResult);
 
     native private static float getLinearDamping(long objectId);
 
-    native private static void getLinearFactor(long objectId,
-            Vector3f storeResult);
+    native private static void
+            getLinearFactor(long objectId, Vector3f storeResult);
 
     native private static float getLinearSleepingThreshold(long objectId);
 
-    native private static void getLinearVelocity(long objectId,
-            Vector3f storeResult);
+    native private static void
+            getLinearVelocity(long objectId, Vector3f storeResult);
 
-    native private static void getLinearVelocityDp(long objectId,
-            Vec3d storeResult);
+    native private static void
+            getLinearVelocityDp(long objectId, Vec3d storeResult);
 
     native private static float getMass(long objectId);
 
     native private static float getSquaredSpeed(long objectId);
 
-    native private static void getTotalForce(long objectId,
-            Vector3f storeResult);
+    native private static void
+            getTotalForce(long objectId, Vector3f storeResult);
 
-    native private static void getTotalTorque(long objectId,
-            Vector3f storeResult);
+    native private static void
+            getTotalTorque(long objectId, Vector3f storeResult);
 
     native private static boolean getUseSpaceGravity(long objectId);
 
-    native private static void setAngularDamping(long objectId,
-            float dampingFraction);
+    native private static void
+            setAngularDamping(long objectId, float dampingFraction);
 
     native private static void setAngularFactor(long objectId, Vector3f factor);
 
-    native private static void setAngularSleepingThreshold(long objectId,
-            float threshold);
+    native private static void
+            setAngularSleepingThreshold(long objectId, float threshold);
 
     native private static void setAngularVelocity(long objectId, Vector3f vec);
 
     native private static void setAngularVelocityDp(long objectId, Vec3d vec);
 
-    native private static void setCollisionShape(long objectId,
-            long collisionShapeId);
+    native private static void
+            setCollisionShape(long objectId, long collisionShapeId);
 
-    native private static void setDamping(long objectId, float linear,
-            float angular);
+    native private static void
+            setDamping(long objectId, float linear, float angular);
 
     native private static void setGravity(long objectId, Vector3f gravity);
 
     native private static void setGravityDp(long objectId, Vec3d gravity);
 
-    native private static void setInverseInertiaLocal(long objectId,
-            Vector3f inverseInertialLocal);
+    native private static void setInverseInertiaLocal(
+            long objectId, Vector3f inverseInertialLocal);
 
     native private static void setKinematic(long objectId, boolean kinematic);
 
     native private static void setLinearFactor(long objectId, Vector3f factor);
 
-    native private static void setLinearSleepingThreshold(long objectId,
-            float threshold);
+    native private static void
+            setLinearSleepingThreshold(long objectId, float threshold);
 
     native private static void setLinearVelocity(long objectId, Vector3f vec);
 
     native private static void setLinearVelocityDp(long objectId, Vec3d vec);
 
-    native private static void setPhysicsLocation(long objectId,
-            Vector3f location);
+    native private static void
+            setPhysicsLocation(long objectId, Vector3f location);
 
-    native private static void setPhysicsLocationDp(long objectId,
-            Vec3d location);
+    native private static void
+            setPhysicsLocationDp(long objectId, Vec3d location);
 
-    native private static void setPhysicsRotation(long objectId,
-            Matrix3f rotation);
+    native private static void
+            setPhysicsRotation(long objectId, Matrix3f rotation);
 
-    native private static void setPhysicsRotation(long objectId,
-            Quaternion rotation);
+    native private static void
+            setPhysicsRotation(long objectId, Quaternion rotation);
 
-    native private static void setPhysicsRotationDp(long objectId,
-            Quatd rotation);
+    native private static void
+            setPhysicsRotationDp(long objectId, Matrix3d rotation);
 
-    native private static void setSleepingThresholds(long objectId,
-            float linear, float angular);
+    native private static void
+            setPhysicsRotationDp(long objectId, Quatd rotation);
 
-    native private static void setUseSpaceGravity(long objectId,
-            boolean useSpaceGravity);
+    native private static void
+            setSleepingThresholds(long objectId, float linear, float angular);
 
-    native private static void updateMassProps(long objectId,
-            long collisionShapeId, float mass);
+    native private static void
+            setUseSpaceGravity(long objectId, boolean useSpaceGravity);
+
+    native private static void
+            updateMassProps(long objectId, long collisionShapeId, float mass);
 }

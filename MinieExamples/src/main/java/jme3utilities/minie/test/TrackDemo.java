@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,6 @@ import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.joints.Constraint;
 import com.jme3.bullet.objects.PhysicsRigidBody;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.light.AmbientLight;
@@ -73,6 +72,7 @@ import jme3utilities.InfluenceUtil;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
 import jme3utilities.MySpatial;
+import jme3utilities.MyString;
 import jme3utilities.debug.SkeletonVisualizer;
 import jme3utilities.math.MyVector3f;
 import jme3utilities.minie.DumpFlags;
@@ -117,73 +117,76 @@ public class TrackDemo extends PhysicsDemo {
     /**
      * true once {@link #initWhenReady()} has been invoked for the latest model
      */
-    private boolean dacReadyInitDone = false;
+    private static boolean dacReadyInitDone = false;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * inverse kinematics joint for the finger/sword tip
      */
-    private Constraint tipJoint = null;
+    private static Constraint tipJoint = null;
     /**
      * Control being tested
      */
-    private DynamicAnimControl dac;
+    private static DynamicAnimControl dac;
 
-    private int chainLength;
+    private static int chainLength;
     /**
      * root node of the C-G model on which the Control is being tested
      */
-    private Node cgModel;
-    private PhysicsRigidBody targetBody;
+    private static Node cgModel;
+    private static PhysicsRigidBody targetBody;
     /**
      * visualizer for the skeleton of the C-G model
      */
-    private SkeletonVisualizer sv;
+    private static SkeletonVisualizer sv;
     /**
      * vertex specifier for finger/sword tip
      */
-    private String tipSpec;
+    private static String tipSpec;
 
-    private TrackController leftWatch = null;
-    private TrackController rightWatch = null;
-    private TrackController watch = null;
+    private static TrackController leftWatch = null;
+    private static TrackController rightWatch = null;
+    private static TrackController watch = null;
     /**
      * locations of grid corners in world coordinates
      */
-    private Vector3f gridBottomLeft;
-    private Vector3f gridBottomRight;
-    private Vector3f gridTopLeft;
-    private Vector3f gridTopRight;
+    private static Vector3f gridBottomLeft;
+    private static Vector3f gridBottomRight;
+    private static Vector3f gridTopLeft;
+    private static Vector3f gridTopRight;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TrackDemo application.
+     */
+    public TrackDemo() { // made explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TrackDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new TrackDemo();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new TrackDemo();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -193,7 +196,8 @@ public class TrackDemo extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        super.acorusInit();
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -203,9 +207,8 @@ public class TrackDemo extends PhysicsDemo {
         viewPort.setBackgroundColor(skyColor);
 
         addLighting();
-        /*
-         * Hide the render-statistics overlay.
-         */
+
+        // Hide the render-statistics overlay.
         stateManager.getState(StatsAppState.class).toggleStats();
 
         float length = 0.8f;
@@ -218,9 +221,8 @@ public class TrackDemo extends PhysicsDemo {
         //addModel("Sinbad");
         //addModel("MhGame");
         addModel("SinbadWith1Sword");
-        /*
-         * Add a target rigid body, to be moved by dragging RMB.
-         */
+
+        // Add a target rigid body, to be moved by dragging RMB.
         CollisionShape shape = new SphereCollisionShape(0.02f);
         targetBody = new PhysicsRigidBody(shape);
         targetBody.setKinematic(true);
@@ -232,7 +234,7 @@ public class TrackDemo extends PhysicsDemo {
     }
 
     /**
-     * Configure the PhysicsDumper.
+     * Configure the PhysicsDumper during startup.
      */
     @Override
     public void configureDumper() {
@@ -254,7 +256,7 @@ public class TrackDemo extends PhysicsDemo {
     }
 
     /**
-     * Determine the length of debug axis arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -264,7 +266,8 @@ public class TrackDemo extends PhysicsDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -296,15 +299,6 @@ public class TrackDemo extends PhysicsDemo {
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind("toggle skeleton", KeyInput.KEY_V);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - 2f * margin;
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -324,6 +318,7 @@ public class TrackDemo extends PhysicsDemo {
                 case "toggle skeleton":
                     toggleSkeleton();
                     return;
+                default:
             }
 
             String[] words = actionString.split(" ");
@@ -394,7 +389,7 @@ public class TrackDemo extends PhysicsDemo {
     }
 
     /**
-     * Add lighting and shadows to the scene.
+     * Add lighting and shadows to the main scene.
      */
     private void addLighting() {
         ColorRGBA ambientColor = new ColorRGBA(0.2f, 0.2f, 0.2f, 1f);
@@ -410,8 +405,8 @@ public class TrackDemo extends PhysicsDemo {
         int mapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                        numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, mapSize, numSplits);
         dlsr.setLight(sun);
         dlsr.setShadowIntensity(0.5f);
         viewPort.addProcessor(dlsr);
@@ -523,10 +518,8 @@ public class TrackDemo extends PhysicsDemo {
      * Initialization that takes place once all links are ready for dynamic
      * mode.
      */
-    private void initWhenReady() {
-        /*
-         * Touch the tip vertex to the target.
-         */
+    private static void initWhenReady() {
+        // Touch the tip vertex to the target.
         Vector3f pivot = new Vector3f();
         PhysicsLink tipLink = dac.findManagerForVertex(tipSpec, null, pivot);
         dac.setMass(tipLink, 100f);
@@ -535,9 +528,8 @@ public class TrackDemo extends PhysicsDemo {
                 = dac.moveToBody(tipLink, pivot, targetBody, Vector3f.ZERO);
         tipJoint = ikJoint.getPhysicsJoint();
         tipJoint.setEnabled(false);
-        /*
-         * The face and neck track the target.
-         */
+
+        // The face and neck track the target.
         Face face = (Face) dac;
         Vector3f faceDirection = face.faceDirection(null);
         String noseSpec = face.faceCenterSpec();
@@ -548,33 +540,30 @@ public class TrackDemo extends PhysicsDemo {
         watch.setDeltaGainFactor(1.2f);
         watch.setEnabled(false);
         watch.setErrorGainFactor(0.3f);
-        /*
-         * If the model's eyes are animated, each eye also tracks the target.
-         */
+
+        // If the model's eyes are animated, each eye also tracks the target.
         if (dac instanceof Binocular) {
             Binocular binocular = (Binocular) dac;
-            /*
-             * left eye
-             */
+
+            // left eye
             String spec = binocular.leftPupilSpec();
             PhysicsLink link = dac.findManagerForVertex(spec, null, pivot);
             link.setDynamic(Vector3f.ZERO);
             Vector3f lookDirection = binocular.leftEyeLookDirection(null);
-            leftWatch = new TrackController(link, pivot, lookDirection,
-                    targetBody);
+            leftWatch = new TrackController(
+                    link, pivot, lookDirection, targetBody);
             link.addIKController(leftWatch);
             leftWatch.setDeltaGainFactor(4f);
             leftWatch.setEnabled(false);
             leftWatch.setErrorGainFactor(1f);
-            /*
-             * right eye
-             */
+
+            // right eye
             spec = binocular.rightPupilSpec();
             link = dac.findManagerForVertex(spec, null, pivot);
             link.setDynamic(Vector3f.ZERO);
             binocular.leftEyeLookDirection(lookDirection);
-            rightWatch = new TrackController(link, pivot, lookDirection,
-                    targetBody);
+            rightWatch = new TrackController(
+                    link, pivot, lookDirection, targetBody);
             link.addIKController(rightWatch);
             rightWatch.setDeltaGainFactor(4f);
             rightWatch.setEnabled(false);
@@ -615,7 +604,6 @@ public class TrackDemo extends PhysicsDemo {
         cgModel.rotate(0f, -1.6f, 0f);
 
         dac = new MhGameControl();
-
         tipSpec = "5239/male_generic"; // tip of right index finger
     }
 
@@ -627,7 +615,6 @@ public class TrackDemo extends PhysicsDemo {
         cgModel.rotate(0f, 1.6f, 0f);
 
         dac = new NinjaControl();
-
         tipSpec = "55/Ninja-geom-2"; // tip of katana blade
     }
 
@@ -639,7 +626,6 @@ public class TrackDemo extends PhysicsDemo {
         cgModel.rotate(0f, -1.6f, 0f);
 
         dac = new OtoControl();
-
         tipSpec = "3236/Oto-geom-1"; // right knuckle
     }
 
@@ -652,7 +638,6 @@ public class TrackDemo extends PhysicsDemo {
         cgModel.rotate(0f, -1.6f, 0f);
 
         dac = new PuppetControl();
-
         tipSpec = "3185/Mesh.009_0"; // tip of right index finger
     }
 
@@ -664,7 +649,6 @@ public class TrackDemo extends PhysicsDemo {
         cgModel.rotate(0f, -1.6f, 0f);
 
         dac = new SinbadControl();
-
         tipSpec = "223/Sinbad-geom-2"; // tip of right index finger
 
         gridBottomLeft.set(-1f, 0.5f, -1f);
@@ -721,7 +705,7 @@ public class TrackDemo extends PhysicsDemo {
     /**
      * Toggle mesh rendering on/off.
      */
-    private void toggleMeshes() {
+    private static void toggleMeshes() {
         Spatial.CullHint hint = cgModel.getLocalCullHint();
         if (hint == Spatial.CullHint.Inherit
                 || hint == Spatial.CullHint.Never) {
@@ -735,7 +719,7 @@ public class TrackDemo extends PhysicsDemo {
     /**
      * Toggle the skeleton visualizer on/off.
      */
-    private void toggleSkeleton() {
+    private static void toggleSkeleton() {
         boolean enabled = sv.isEnabled();
         sv.setEnabled(!enabled);
     }
@@ -748,10 +732,10 @@ public class TrackDemo extends PhysicsDemo {
         Ray ray = MyCamera.mouseRay(cam, inputManager);
 
         Vector3f location = new Vector3f();
-        boolean isTopLeft = ray.intersectWhere(gridTopLeft,
-                gridTopRight, gridBottomLeft, location);
-        boolean isBottomRight = ray.intersectWhere(gridBottomRight,
-                gridTopRight, gridBottomLeft, location);
+        boolean isTopLeft = ray.intersectWhere(
+                gridTopLeft, gridTopRight, gridBottomLeft, location);
+        boolean isBottomRight = ray.intersectWhere(
+                gridBottomRight, gridTopRight, gridBottomLeft, location);
         if (isTopLeft || isBottomRight) {
             if (leftWatch != null) {
                 leftWatch.setEnabled(true);

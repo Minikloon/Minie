@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021 jMonkeyEngine
+ * Copyright (c) 2018-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,6 +53,7 @@ import java.util.logging.Logger;
 import jme3utilities.MySpatial;
 import jme3utilities.MyString;
 import jme3utilities.Validate;
+import jme3utilities.math.MyVector3f;
 
 /**
  * Configure a DynamicAnimControl and access its configuration.
@@ -84,6 +85,8 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
     final private static String tagIgnoredHops = "ignoredHops";
     final private static String tagLinkedBoneJoints = "linkedBoneJoints";
     final private static String tagLinkedBoneNames = "linkedBoneNames";
+    final private static String tagMainBoneName = "mainBoneName";
+    final private static String tagRelativeTolerance = "relativeTolerance";
     final private static String tagTorsoConfig = "torsoConfig";
     /**
      * name for the ragdoll's torso, must not be used for any bone
@@ -102,6 +105,10 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
      * listeners
      */
     private float eventDispatchImpulseThreshold = 0f;
+    /**
+     * relative tolerance for comparing scale factors
+     */
+    private float relativeTolerance = 0.001f;
     /**
      * maximum number of physics-joint hops across which bodies ignore
      * collisions
@@ -128,6 +135,10 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
      */
     private Map<String, Spatial> attachModelMap = new HashMap<>(5);
     /**
+     * name of the torso's main bone, or null if it hasn't been determined yet
+     */
+    private String mainBoneName = null;
+    /**
      * gravitational acceleration vector for ragdolls
      */
     private Vector3f gravityVector = new Vector3f(0f, -9.8f, 0f);
@@ -138,10 +149,25 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
      * Instantiate an enabled Control without any attachments or linked bones
      * (torso only).
      */
-    DacConfiguration() {
+    protected DacConfiguration() {
+        // do nothing
     }
     // *************************************************************************
     // new methods exposed
+
+    /**
+     * Test whether 2 scale vectors are equal within the tolerance set for this
+     * control.
+     *
+     * @param scale1 the first scale vector (not null, unaffected)
+     * @param scale2 the 2nd scale vector (not null, unaffected)
+     * @return true if within tolerance, otherwise false
+     */
+    boolean areWithinTolerance(Vector3f scale1, Vector3f scale2) {
+        boolean result = MyVector3f.areWithinTolerance(
+                scale1, scale2, relativeTolerance);
+        return result;
+    }
 
     /**
      * Configure the specified model as an attachment.
@@ -497,6 +523,16 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
     }
 
     /**
+     * Return the name of the main bone.
+     *
+     * @return the name of the bone, or null if the main bone hasn't been
+     * determined yet
+     */
+    public String mainBoneName() {
+        return mainBoneName;
+    }
+
+    /**
      * Read the mass of the named bone/torso.
      *
      * @param boneName the name of the bone/torso (not null)
@@ -506,6 +542,16 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
         LinkConfig config = config(boneName);
         float mass = config.mass();
         return mass;
+    }
+
+    /**
+     * Return the relative tolerance for comparing scale factors.
+     *
+     * @return the relative tolerance (&ge;0)
+     */
+    public float relativeTolerance() {
+        assert relativeTolerance >= 0f;
+        return relativeTolerance;
     }
 
     /**
@@ -632,6 +678,16 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
     }
 
     /**
+     * Specify the main bone.
+     *
+     * @param boneName the name of the desired bone, or null to determine the
+     * main bone heuristically when the control is added to a spatial
+     */
+    public void setMainBoneName(String boneName) {
+        this.mainBoneName = boneName;
+    }
+
+    /**
      * Alter the mass of the named bone/torso.
      *
      * @param boneName the name of the bone, or torsoName (not null)
@@ -650,6 +706,16 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
             String msg = "No bone/torso named " + MyString.quote(boneName);
             throw new IllegalArgumentException(msg);
         }
+    }
+
+    /**
+     * Alter the relative tolerance for comparing scale factors.
+     *
+     * @param newTolerance the desired value (&ge;0, default=0.001)
+     */
+    public void setRelativeTolerance(float newTolerance) {
+        Validate.nonNegative(newTolerance, "new tolerance");
+        this.relativeTolerance = newTolerance;
     }
 
     /**
@@ -697,8 +763,8 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
      * @param addResult the collection of skeleton bones to append to (not null,
      * modified)
      */
-    protected void addUnlinkedDescendants(Bone startBone,
-            Collection<Bone> addResult) {
+    protected void addUnlinkedDescendants(
+            Bone startBone, Collection<Bone> addResult) {
         for (Bone child : startBone.getChildren()) {
             String childName = child.getName();
             if (!hasBoneLink(childName)) {
@@ -716,8 +782,8 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
      * @param addResult the collection of armature joints to append to (not
      * null, modified)
      */
-    protected void addUnlinkedDescendants(Joint startJoint,
-            Collection<Joint> addResult) {
+    protected void addUnlinkedDescendants(
+            Joint startJoint, Collection<Joint> addResult) {
         for (Joint child : startJoint.getChildren()) {
             String childName = child.getName();
             if (!hasBoneLink(childName)) {
@@ -834,37 +900,21 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
 
-        alConfigMap = cloner.clone(alConfigMap);
-        blConfigMap = cloner.clone(blConfigMap);
-        jointMap = cloner.clone(jointMap);
+        this.alConfigMap = cloner.clone(alConfigMap);
+        this.blConfigMap = cloner.clone(blConfigMap);
+        this.jointMap = cloner.clone(jointMap);
 
-        attachModelMap = new HashMap<>(5);
-        DacConfiguration originalCdac
-                = (DacConfiguration) original;
+        this.attachModelMap = new HashMap<>(5);
+        DacConfiguration originalDc = (DacConfiguration) original;
         for (Map.Entry<String, Spatial> entry
-                : originalCdac.attachModelMap.entrySet()) {
+                : originalDc.attachModelMap.entrySet()) {
             String boneName = entry.getKey();
             Spatial spatial = entry.getValue();
             Spatial copySpatial = cloner.clone(spatial);
             attachModelMap.put(boneName, copySpatial);
         }
 
-        gravityVector = cloner.clone(gravityVector);
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public DacConfiguration jmeClone() {
-        try {
-            DacConfiguration clone = (DacConfiguration) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
+        this.gravityVector = cloner.clone(gravityVector);
     }
 
     /**
@@ -879,9 +929,9 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        ignoredHops = capsule.readInt(tagIgnoredHops, 1);
-        damping = capsule.readFloat(tagDamping, 0.6f);
-        eventDispatchImpulseThreshold
+        this.ignoredHops = capsule.readInt(tagIgnoredHops, 1);
+        this.damping = capsule.readFloat(tagDamping, 0.6f);
+        this.eventDispatchImpulseThreshold
                 = capsule.readFloat(tagEventDispatchImpulseThreshold, 0f);
 
         jointMap.clear();
@@ -898,6 +948,8 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
             blConfigMap.put(boneName, (LinkConfig) blConfigs[i]);
         }
 
+        this.mainBoneName = capsule.readString(tagMainBoneName, null);
+
         attachModelMap.clear();
         alConfigMap.clear();
         String[] attachBoneNames
@@ -912,8 +964,11 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
             alConfigMap.put(boneName, (LinkConfig) alConfigs[i]);
         }
 
-        torsoConfig = (LinkConfig) capsule.readSavable(tagTorsoConfig, null);
-        gravityVector = (Vector3f) capsule.readSavable(tagGravity, null);
+        this.torsoConfig
+                = (LinkConfig) capsule.readSavable(tagTorsoConfig, null);
+        this.gravityVector = (Vector3f) capsule.readSavable(tagGravity, null);
+        this.relativeTolerance
+                = capsule.readFloat(tagRelativeTolerance, 0.001f);
     }
 
     /**
@@ -963,6 +1018,8 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
         capsule.write(roms, tagLinkedBoneJoints, null);
         capsule.write(blConfigs, tagBlConfigs, null);
 
+        capsule.write(mainBoneName, tagMainBoneName, null);
+
         count = countAttachments();
         String[] attachBoneNames = new String[count];
         Spatial[] attachModels = new Spatial[count];
@@ -980,6 +1037,7 @@ abstract public class DacConfiguration extends AbstractPhysicsControl {
 
         capsule.write(torsoConfig, tagTorsoConfig, null);
         capsule.write(gravityVector, tagGravity, null);
+        capsule.write(relativeTolerance, tagRelativeTolerance, 0.001f);
     }
     // *************************************************************************
     // private methods

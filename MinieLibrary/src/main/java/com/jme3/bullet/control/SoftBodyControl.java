@@ -55,6 +55,7 @@ import java.nio.IntBuffer;
 import java.util.List;
 import java.util.logging.Logger;
 import jme3utilities.MySpatial;
+import jme3utilities.Validate;
 
 /**
  * A PhysicsControl to link a PhysicsSoftBody to a Spatial.
@@ -169,13 +170,13 @@ public class SoftBodyControl extends AbstractPhysicsControl {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
 
-        geometry = cloner.clone(geometry);
-        body = cloner.clone(body);
+        this.geometry = cloner.clone(geometry);
+        this.body = cloner.clone(body);
 
         if (indexMap != null) {
             SoftBodyControl originalControl = (SoftBodyControl) original;
             int numIndices = indexMap.limit();
-            indexMap = BufferUtils.createIntBuffer(numIndices);
+            this.indexMap = BufferUtils.createIntBuffer(numIndices);
             for (int offset = 0; offset < numIndices; ++offset) {
                 int tmpIndex = originalControl.indexMap.get(offset);
                 indexMap.put(tmpIndex);
@@ -191,31 +192,16 @@ public class SoftBodyControl extends AbstractPhysicsControl {
      */
     @Override
     protected void createSpatialData(Spatial spatial) {
-        body = new PhysicsSoftBody();
-        body.setUserObject(spatial); // link from collision object
+        this.body = new PhysicsSoftBody();
+        this.body.setUserObject(spatial); // link from collision object
 
         List<Geometry> geometries = MySpatial.listGeometries(spatial);
-        geometry = geometries.get(0); // TODO use name
+        this.geometry = geometries.get(0); // TODO use name
         Mesh mesh = geometry.getMesh();
         if (mesh.getBuffer(VertexBuffer.Type.Normal) == null) {
-            updateNormals = false;
+            this.updateNormals = false;
         }
         appendFromGeometry();
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new Control (not null)
-     */
-    @Override
-    public SoftBodyControl jmeClone() {
-        try {
-            SoftBodyControl clone = (SoftBodyControl) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -230,10 +216,10 @@ public class SoftBodyControl extends AbstractPhysicsControl {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        body = (PhysicsSoftBody) capsule.readSavable(tagBody, null);
-        geometry = (Geometry) capsule.readSavable(tagGeometry, null);
-        mergeVertices = capsule.readBoolean(tagMergeVertices, false);
-        updateNormals = capsule.readBoolean(tagUpdateNormals, false);
+        this.body = (PhysicsSoftBody) capsule.readSavable(tagBody, null);
+        this.geometry = (Geometry) capsule.readSavable(tagGeometry, null);
+        this.mergeVertices = capsule.readBoolean(tagMergeVertices, false);
+        this.updateNormals = capsule.readBoolean(tagUpdateNormals, false);
 
         if (body != null) {
             Spatial controlled = getSpatial();
@@ -259,17 +245,18 @@ public class SoftBodyControl extends AbstractPhysicsControl {
     @Override
     protected void removeSpatialData(Spatial spatial) {
         body.setUserObject(null);
-        body = null;
+        this.body = null;
     }
 
     /**
      * Translate the soft body to the specified location.
      *
      * @param location the desired location (in physics-space coordinates, not
-     * null, unaffected)
+     * null, finite, unaffected)
      */
     @Override
     public void setPhysicsLocation(Vector3f location) {
+        Validate.finite(location, "location");
         body.setPhysicsLocation(location);
     }
 
@@ -330,8 +317,8 @@ public class SoftBodyControl extends AbstractPhysicsControl {
 
         Mesh mesh = geometry.getMesh();
         boolean localFlag = false; // copy physics-space locations, not local
-        NativeSoftBodyUtil.updateMesh(body, indexMap, mesh, localFlag,
-                updateNormals, physicsToMesh);
+        NativeSoftBodyUtil.updateMesh(
+                body, indexMap, mesh, localFlag, updateNormals, physicsToMesh);
 
         spatial.updateModelBound(); // TODO needed?
     }

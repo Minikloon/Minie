@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.MyString;
 import jme3utilities.Validate;
+import jme3utilities.nifty.dialog.AllowNull;
+import jme3utilities.nifty.dialog.DialogController;
+import jme3utilities.nifty.dialog.FloatDialog;
 import jme3utilities.ui.InputMode;
 
 /**
@@ -60,7 +63,7 @@ class LoadMode extends InputMode {
     // constructors
 
     /**
-     * Instantiate a disabled, uninitialized mode.
+     * Instantiate a disabled, uninitialized input mode.
      */
     LoadMode() {
         super("load");
@@ -102,11 +105,9 @@ class LoadMode extends InputMode {
      * @param application (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager,
-            Application application) {
-        /*
-         * Set the mouse cursor for this mode.
-         */
+    public void initialize(
+            AppStateManager stateManager, Application application) {
+        // Configure the mouse cursor for this mode.
         AssetManager manager = application.getAssetManager();
         JmeCursor cursor = (JmeCursor) manager.loadAsset(assetPath);
         setCursor(cursor);
@@ -125,9 +126,8 @@ class LoadMode extends InputMode {
     public void onAction(String actionString, boolean ongoing, float tpf) {
         Validate.nonNull(actionString, "action string");
         if (logger.isLoggable(Level.INFO)) {
-            logger.log(Level.INFO, "Got action {0} ongoing={1}", new Object[]{
-                MyString.quote(actionString), ongoing
-            });
+            logger.log(Level.INFO, "Got action {0} ongoing={1}",
+                    new Object[]{MyString.quote(actionString), ongoing});
         }
 
         boolean handled = false;
@@ -147,8 +147,16 @@ class LoadMode extends InputMode {
                     model.moreRoot();
                     break;
 
+                case Action.nextAnimation:
+                    model.nextAnimation();
+                    break;
+
                 case Action.nextScreen:
                     nextScreen();
+                    break;
+
+                case Action.previousAnimation:
+                    model.previousAnimation();
                     break;
 
                 case Action.previousScreen:
@@ -156,15 +164,27 @@ class LoadMode extends InputMode {
                     previousScreen();
                     break;
 
+                case Action.setAnimationTime:
+                    setAnimationTime();
+                    break;
+
                 case Action.toggleSkeleton:
-                    DacWizard app = DacWizard.getApplication();
-                    app.toggleSkeletonVisualizer();
+                    model.toggleShowingSkeleton();
                     break;
 
                 default:
                     handled = false;
             }
+
+            String prefix = Action.setAnimationTime + " ";
+            if (!handled && actionString.startsWith(prefix)) {
+                String argument = MyString.remainder(actionString, prefix);
+                float time = Float.parseFloat(argument);
+                model.setAnimationTime(time);
+                handled = true;
+            }
         }
+
         if (!handled) {
             getActionApplication().onAction(actionString, ongoing, tpf);
         }
@@ -173,11 +193,10 @@ class LoadMode extends InputMode {
     // private methods
 
     /**
-     * Advance to the BonesScreen if possible.
+     * Proceed to the "bones" screen if possible.
      */
     private void nextScreen() {
-        LoadScreen screen = DacWizard.findAppState(LoadScreen.class);
-        String feedback = screen.feedback();
+        String feedback = LoadScreen.feedback();
         if (feedback.isEmpty()) {
             setEnabled(false);
             InputMode bones = InputMode.findMode("bones");
@@ -186,11 +205,30 @@ class LoadMode extends InputMode {
     }
 
     /**
-     * Go back to the FilePathScreen.
+     * Go back to the "filePath" screen.
      */
     private void previousScreen() {
         setEnabled(false);
         InputMode filePath = InputMode.findMode("filePath");
         filePath.setEnabled(true);
+    }
+
+    /**
+     * Process a "set animationTime" action: display a dialog to enter a new
+     * animation time.
+     */
+    private static void setAnimationTime() {
+        Model model = DacWizard.getModel();
+        float duration = model.animationDuration();
+        DialogController controller
+                = new FloatDialog("Set", 0f, duration, AllowNull.No);
+
+        float oldTime = model.animationTime();
+        String defaultText = Float.toString(oldTime);
+
+        LoadScreen screen = DacWizard.findAppState(LoadScreen.class);
+        screen.closeAllPopups();
+        screen.showTextEntryDialog("Enter the animation time (in seconds):",
+                defaultText, Action.setAnimationTime + " ", controller);
     }
 }

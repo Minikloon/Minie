@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,7 @@ import java.util.logging.Logger;
 import jme3utilities.SimpleAppState;
 import jme3utilities.math.MyArray;
 import jme3utilities.math.MyMath;
-import jme3utilities.minie.test.common.PhysicsDemo;
+import jme3utilities.ui.AcorusDemo;
 
 /**
  * AppState to display the status of the DropTest application in an overlay. The
@@ -46,7 +46,7 @@ import jme3utilities.minie.test.common.PhysicsDemo;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class DropTestStatus extends SimpleAppState {
+class DropTestStatus extends SimpleAppState {
     // *************************************************************************
     // constants and loggers
 
@@ -199,7 +199,7 @@ public class DropTestStatus extends SimpleAppState {
         int selectedField = selectedLine - firstField;
         int sum = selectedField + amount;
         selectedField = MyMath.modulo(sum, numFields);
-        selectedLine = selectedField + firstField;
+        this.selectedLine = selectedField + firstField;
     }
 
     /**
@@ -310,6 +310,21 @@ public class DropTestStatus extends SimpleAppState {
     }
 
     /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    void resize(int newWidth, int newHeight) {
+        if (isInitialized()) {
+            for (int lineIndex = 0; lineIndex < numStatusLines; ++lineIndex) {
+                float y = newHeight - 20f * lineIndex;
+                statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
+            }
+        }
+    }
+
+    /**
      * Determine the selected restitution fraction for all rigid bodies.
      *
      * @return the fraction (&ge;0, &le;1)
@@ -324,17 +339,14 @@ public class DropTestStatus extends SimpleAppState {
      * Toggle child coloring disabled/enabled.
      */
     void toggleChildColor() {
-        isChildColoring = !isChildColoring;
-        appInstance.setDebugMaterialsAll();
+        this.isChildColoring = !isChildColoring;
     }
 
     /**
      * Toggle wireframe disabled/enabled.
      */
     void toggleWireframe() {
-        isWireframe = !isWireframe;
-        appInstance.setDebugMaterialsAll();
-        appInstance.setDebugShadowMode();
+        this.isWireframe = !isWireframe;
     }
     // *************************************************************************
     // ActionAppState methods
@@ -346,9 +358,8 @@ public class DropTestStatus extends SimpleAppState {
     @Override
     public void cleanup() {
         super.cleanup();
-        /*
-         * Remove the status lines from the guiNode.
-         */
+
+        // Remove the status lines from the guiNode.
         for (int i = 0; i < numStatusLines; ++i) {
             statusLines[i].removeFromParent();
         }
@@ -364,12 +375,11 @@ public class DropTestStatus extends SimpleAppState {
     public void initialize(AppStateManager sm, Application app) {
         super.initialize(sm, app);
 
-        appInstance = (DropTest) app;
+        this.appInstance = (DropTest) app;
         BitmapFont guiFont
                 = assetManager.loadFont("Interface/Fonts/Default.fnt");
-        /*
-         * Add the status lines to the guiNode.
-         */
+
+        // Add status lines to the guiNode.
         for (int lineIndex = 0; lineIndex < numStatusLines; ++lineIndex) {
             statusLines[lineIndex] = new BitmapText(guiFont);
             float y = cam.getHeight() - 20f * lineIndex;
@@ -400,38 +410,38 @@ public class DropTestStatus extends SimpleAppState {
 
         int index = 1 + Arrays.binarySearch(dampingValues, damping);
         int count = dampingValues.length;
-        String message = String.format("Damping #%d of %d:  %.2f", index,
-                count, damping);
+        String message = String.format(
+                "Damping #%d of %d:  %.2f", index, count, damping);
         updateStatusLine(dampingStatusLine, message);
 
         index = 1 + Arrays.binarySearch(frictionValues, friction);
         count = frictionValues.length;
-        message = String.format("Friction #%d of %d:  %.1f", index,
-                count, friction);
+        message = String.format(
+                "Friction #%d of %d:  %.1f", index, count, friction);
         updateStatusLine(frictionStatusLine, message);
 
         index = 1 + Arrays.binarySearch(gravityValues, gravity);
         count = gravityValues.length;
-        message = String.format("Gravity #%d of %d:  %.1f", index,
-                count, gravity);
+        message = String.format(
+                "Gravity #%d of %d:  %.1f", index, count, gravity);
         updateStatusLine(gravityStatusLine, message);
 
         index = 1 + Arrays.binarySearch(dropNames, nextDropType);
         count = dropNames.length;
-        message = String.format("Drop #%d of %d:  %s", index, count,
-                nextDropType);
+        message = String.format(
+                "Drop #%d of %d:  %s", index, count, nextDropType);
         updateStatusLine(dropStatusLine, message);
 
         index = 1 + Arrays.binarySearch(platformNames, platformName);
         count = platformNames.length;
-        message = String.format("Platform #%d of %d:  %s", index, count,
-                platformName);
+        message = String.format(
+                "Platform #%d of %d:  %s", index, count, platformName);
         updateStatusLine(platformStatusLine, message);
 
         index = 1 + Arrays.binarySearch(restitutionValues, restitution);
         count = restitutionValues.length;
-        message = String.format("Restitution #%d of %d:  %.2f", index,
-                count, restitution);
+        message = String.format(
+                "Restitution #%d of %d:  %.2f", index, count, restitution);
         updateStatusLine(restitutionStatusLine, message);
     }
     // *************************************************************************
@@ -443,7 +453,7 @@ public class DropTestStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceDamping(int amount) {
-        damping = PhysicsDemo.advanceFloat(dampingValues, damping, amount);
+        this.damping = AcorusDemo.advanceFloat(dampingValues, damping, amount);
         appInstance.setDampingAll(damping);
     }
 
@@ -453,8 +463,8 @@ public class DropTestStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceDrop(int amount) {
-        nextDropType
-                = PhysicsDemo.advanceString(dropNames, nextDropType, amount);
+        this.nextDropType
+                = AcorusDemo.advanceString(dropNames, nextDropType, amount);
     }
 
     /**
@@ -463,7 +473,8 @@ public class DropTestStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceFriction(int amount) {
-        friction = PhysicsDemo.advanceFloat(frictionValues, friction, amount);
+        this.friction
+                = AcorusDemo.advanceFloat(frictionValues, friction, amount);
         appInstance.setFrictionAll(friction);
     }
 
@@ -473,7 +484,7 @@ public class DropTestStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceGravity(int amount) {
-        gravity = PhysicsDemo.advanceFloat(gravityValues, gravity, amount);
+        this.gravity = AcorusDemo.advanceFloat(gravityValues, gravity, amount);
         appInstance.setGravityAll(gravity);
     }
 
@@ -483,8 +494,8 @@ public class DropTestStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advancePlatform(int amount) {
-        platformName = PhysicsDemo.advanceString(platformNames, platformName,
-                amount);
+        this.platformName
+                = AcorusDemo.advanceString(platformNames, platformName, amount);
         appInstance.restartScenario();
     }
 
@@ -494,13 +505,16 @@ public class DropTestStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceRestitution(int amount) {
-        restitution = PhysicsDemo.advanceFloat(restitutionValues, restitution,
-                amount);
+        this.restitution = AcorusDemo
+                .advanceFloat(restitutionValues, restitution, amount);
         appInstance.setRestitutionAll(restitution);
     }
 
     /**
      * Update the indexed status line.
+     *
+     * @param lineIndex which status line (&ge;0)
+     * @param text the text to display, not including the arrow, if any
      */
     private void updateStatusLine(int lineIndex, String text) {
         BitmapText spatial = statusLines[lineIndex];
@@ -530,7 +544,7 @@ public class DropTestStatus extends SimpleAppState {
         message += viewOptions;
         statusLines[0].setText(message);
 
-        int numDrops = appInstance.countDrops();
+        int numDrops = DropTest.countDrops();
         int numActiveBodies = appInstance.countActive();
         int numCachedMeshes = DebugShapeFactory.countCachedMeshes();
         boolean isPaused = appInstance.isPaused();

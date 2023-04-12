@@ -37,5 +37,14 @@ package com.jme3.bullet.util;
  *
  * @author normenhansen
  */
-public class NativeMeshUtil {
+final public class NativeMeshUtil {
+    // *************************************************************************
+    // constructors
+
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private NativeMeshUtil() {
+        // do nothing
+    }
 }

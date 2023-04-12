@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@ import java.nio.FloatBuffer;
 /**
  * A simple example to demonstrate the use of principalAxes() and correctAxes()
  * to improve the plausibility of a compound shape.
- *
+ * <p>
  * Builds upon HelloMadMallet.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -54,9 +54,9 @@ public class HelloMassDistribution extends SimpleApplication {
     /**
      * Main entry point for the HelloMassDistribution application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloMassDistribution application = new HelloMassDistribution();
         application.start();
     }
@@ -70,8 +70,8 @@ public class HelloMassDistribution extends SimpleApplication {
     public void simpleInitApp() {
         // Set up Bullet physics and create a physics space.
         BulletAppState bulletAppState = new BulletAppState();
-        bulletAppState.setDebugEnabled(true);
         stateManager.attach(bulletAppState);
+        bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSpace physicsSpace = bulletAppState.getPhysicsSpace();
 
         physicsSpace.setGravity(new Vector3f(0f, -50f, 0f));
@@ -89,7 +89,8 @@ public class HelloMassDistribution extends SimpleApplication {
         float handleLength = 3f;
         float handleRadius = 0.3f;
         hes.set(handleRadius, handleRadius, handleLength / 2f);
-        CollisionShape handleShape = new CylinderCollisionShape(hes, PhysicsSpace.AXIS_Z);
+        CollisionShape handleShape
+                = new CylinderCollisionShape(hes, PhysicsSpace.AXIS_Z);
 
         CompoundCollisionShape malletShape = new CompoundCollisionShape();
         malletShape.addChildShape(handleShape, 0f, 0f, handleLength / 2f);
@@ -101,8 +102,8 @@ public class HelloMassDistribution extends SimpleApplication {
         FloatBuffer massDistribution = BufferUtils.createFloatBuffer(
                 handleMass, headMass);
         Vector3f inertiaVector = new Vector3f();
-        Transform correction = malletShape.principalAxes(massDistribution, null,
-                inertiaVector);
+        Transform correction = malletShape.principalAxes(
+                massDistribution, null, inertiaVector);
 
         // Correct the shape.
         malletShape.correctAxes(correction);
@@ -124,8 +125,8 @@ public class HelloMassDistribution extends SimpleApplication {
         // Create a static disc and add it to the space.
         float discRadius = 5f;
         float discThickness = 0.5f;
-        CollisionShape discShape = new CylinderCollisionShape(discRadius,
-                discThickness, PhysicsSpace.AXIS_Y);
+        CollisionShape discShape = new CylinderCollisionShape(
+                discRadius, discThickness, PhysicsSpace.AXIS_Y);
         PhysicsRigidBody disc
                 = new PhysicsRigidBody(discShape, PhysicsBody.massForStatic);
         physicsSpace.addCollisionObject(disc);

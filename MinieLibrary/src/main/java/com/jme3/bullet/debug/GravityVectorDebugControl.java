@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 jMonkeyEngine
+ * Copyright (c) 2020-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,16 +87,16 @@ class GravityVectorDebugControl extends AbstractPhysicsDebugControl {
      * @param debugAppState which app state (not null, alias created)
      * @param pco which body to visualize (not null, alias created)
      */
-    GravityVectorDebugControl(BulletDebugAppState debugAppState,
-            PhysicsCollisionObject pco) {
+    GravityVectorDebugControl(
+            BulletDebugAppState debugAppState, PhysicsCollisionObject pco) {
         super(debugAppState);
-        body = (PhysicsBody) pco;
+        this.body = (PhysicsBody) pco;
 
-        extent = body.getGravity(null);
+        this.extent = body.getGravity(null);
         Arrow mesh = new Arrow(extent);
-        geom = new Geometry("gravity of " + body, mesh);
+        this.geom = new Geometry("gravity of " + body, mesh);
 
-        center = body.getPhysicsLocation(null);
+        this.center = body.getPhysicsLocation(null);
         geom.setLocalTranslation(center);
 
         Material material = debugAppState.getGravityVectorMaterial();

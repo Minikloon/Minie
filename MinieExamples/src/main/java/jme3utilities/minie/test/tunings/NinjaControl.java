@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -66,6 +66,7 @@ public class NinjaControl
                 CenterHeuristic.Mean, RotationOrder.XZY);
 
         super.setConfig(torsoName, hull);
+        super.setMainBoneName("Joint2");
 
         // chest
         super.link("Joint4", hull,
@@ -119,7 +120,8 @@ public class NinjaControl
      */
     @Override
     public BoneLink getLeftFoot() {
-        return findBoneLink("Joint26");
+        BoneLink result = findBoneLink("Joint26");
+        return result;
     }
 
     /**
@@ -129,7 +131,8 @@ public class NinjaControl
      */
     @Override
     public BoneLink getRightFoot() {
-        return findBoneLink("Joint21");
+        BoneLink result = findBoneLink("Joint21");
+        return result;
     }
     // *************************************************************************
     // Face methods
@@ -139,9 +142,8 @@ public class NinjaControl
      * typically on the bridge of the nose, halfway between the pupils.
      *
      * @return the vertex specification (not null, not empty)
-     * @see
-     * com.jme3.bullet.animation.DynamicAnimControl#findManagerForVertex(java.lang.String,
-     * com.jme3.math.Vector3f, com.jme3.math.Vector3f)
+     * @see com.jme3.bullet.animation.DynamicAnimControl#findManagerForVertex(
+     * java.lang.String, com.jme3.math.Vector3f, com.jme3.math.Vector3f)
      */
     @Override
     public String faceCenterSpec() {

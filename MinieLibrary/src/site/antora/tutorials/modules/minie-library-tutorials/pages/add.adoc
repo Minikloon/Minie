@@ -1,13 +1,14 @@
 = How to add Minie to an existing project
+:Project: Minie
 :experimental:
 :page-pagination:
 :url-api: https://stephengold.github.io/Minie/javadoc/master/com/jme3/bullet
 
 TIP: If you're creating a JMonkeyEngine desktop application from scratch,
 https://github.com/stephengold/BasicGame-on-Gradle[the BasicGame-on-Gradle project]
-provides a good template.
+provides a good starting point.
 
-Adding Minie to an existing JMonkeyEngine project is a 7-step process:
+Adding {Project} to an existing JMonkeyEngine project is a 7-step process:
 
 . Remove any libraries that might interfere with Minie.
 . Add libraries to the classpath.
@@ -67,32 +68,31 @@ Open the project's properties in the IDE (JME SDK or NetBeans):
 
 == Add libraries to the classpath
 
-Minie comes pre-built as a single library that includes both Java classes
+{Project} comes pre-built as a single library that includes both Java classes
 and native libraries.
-The Minie library depends on:
+The {Project} library depends on:
 
 * the standard jme3-terrain library,
 * https://github.com/Simsilica/SimMath[Simsilica's SimMath library], and
 * https://github.com/stephengold/Heart[the Heart library],
-  which in turn depend on:
-** the standard jme3-core library.
+
+and those libraries depend on other JVM libraries.
 
 For projects built using Gradle or Maven, it's usually sufficient to specify the
-dependency on the Minie Library.  Build tools should automatically
+dependency on the {Project} Library.  Build tools should automatically
 resolve the remaining dependencies.
 
 === Gradle-built projects
 
-Add to the application's "build.gradle" file:
+Add to the project's "build.gradle" file:
 
 [source,groovy]
 ----
 repositories {
     mavenCentral()
-    maven { url 'https://jcenter.bintray.com' } // for SimMath
 }
 dependencies {
-    implementation 'com.github.stephengold:Minie:4.8.1'
+    implementation 'com.github.stephengold:Minie:7.4.0'
 }
 ----
 
@@ -110,29 +110,36 @@ Add to the project's "pom.xml" file:
       <id>mvnrepository</id>
       <url>https://repo1.maven.org/maven2/</url>
     </repository>
-    <repository>
-        <id>jcenter</id>
-        <name>jcenter</name>
-        <url>https://jcenter.bintray.com</url>
-    </repository>
 </repositories>
 
 <dependency>
   <groupId>com.github.stephengold</groupId>
   <artifactId>Minie</artifactId>
-  <version>4.8.1</version>
+  <version>7.4.0</version>
 </dependency>
 ----
 
 === Ant-built projects
 
-Download the Minie, Heart, and SimMath libraries from GitHub:
+https://ant.apache.org[Ant] doesn't know about transitive dependencies,
+so you'll need to resolve them manually.
+Furthermore, in order to use the latest {Project} release,
+you'll need version 3.6.0 JMonkeyEngine libraries.
+(You can still use a JME 3.2 or 3.3 SDK, however.)
+For more information about the libraries {Project} depends on,
+see xref:ROOT:depends.adoc[the Library version dependencies page].
 
-* https://github.com/stephengold/Minie/releases/tag/4.8.1
-* https://github.com/stephengold/Heart/releases/tag/7.4.1
-* https://github.com/Simsilica/SimMath/releases/tag/sim-math-v1.4.1
+Download the {Project} library and its dependencies
+from GitHub and/or Maven Central:
 
-You'll want both class JARs
+* https://github.com/stephengold/Minie/releases/latest
+* https://github.com/stephengold/Heart/releases/tag/8.3.2
+* https://github.com/Simsilica/SimMath/releases/tag/sim-math-v1.6.0
+* https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-core/3.6.0-stable/
+* https://repo1.maven.org/maven2/org/jmonkeyengine/jme3-terrain/3.6.0-stable/
+* https://repo1.maven.org/maven2/org/slf4j/slf4j-api/1.7.32/
+
+You'll definitely want the class JARs
 and probably the "-sources" and "-javadoc" JARs as well.
 
 Open the project's properties in the IDE (JME SDK or NetBeans):
@@ -144,25 +151,19 @@ Open the project's properties in the IDE (JME SDK or NetBeans):
 . Add the Heart class JAR:
 .. Click on the btn:[Add JAR/Folder] button.
 .. Navigate to the download directory.
-.. Select the "Heart-7.4.1" file.
+.. Select the "Minie-7.4.0.jar" file.
 .. Click on the btn:[Open] button.
 . (optional) Add JARs for javadoc and sources:
 .. Click on the btn:[Edit] button.
 .. Click on the btn:[Browse...] button to the right of "Javadoc:"
-.. Select the "Heart-7.4.1-javadoc.jar" file.
+.. Select the "Minie-7.4.0-javadoc.jar" file.
 .. Click on the btn:[Open] button.
 .. Click on the btn:[Browse...] button to the right of "Sources:"
-.. Select the "Heart-7.4.1-sources.jar" file.
+.. Select the "Minie-7.4.0-sources.jar" file.
 .. Click on the btn:[Open] button button again.
 .. Click on the btn:[OK] button to close the "Edit Jar Reference" dialog.
-. Similarly, add the Minie and sim-math JAR(s).
+. Add the other JVM libraries in a similar manner.
 . Click on the btn:[OK] button to exit the "Project Properties" dialog.
-
-In order to use the latest Minie release,
-you'll need version 3.5.1 JMonkeyEngine libraries.
-(You can still use a JME 3.2 or 3.3 SDK, however.)
-For more information about the libraries Minie depends on,
-see xref:depends.adoc[the Library version dependencies page].
 
 == Load the native library
 
@@ -190,48 +191,35 @@ for configuring, accessing, updating, and debugging
 a {url-api}/PhysicsSpace.html[`PhysicsSpace`].
 
 If the application already has
-a {url-api}/BulletAppState.html[`BulletAppState`], that code will probably
-work fine with Minie.
+a {url-api}/BulletAppState.html[`BulletAppState`],
+that code might work with Minie.
 If not, here is a snippet to guide you:
 
 [source,java]
 ----
-SoftPhysicsAppState appState = new SoftPhysicsAppState();
-stateManager.attach(appState);
-PhysicsSoftSpace physicsSpace = appState.getPhysicsSoftSpace();
+import com.jme3.bullet.BulletAppState;
+import com.jme3.bullet.PhysicsSpace;
+
+// ...
+
+@Override
+public void simpleInitApp() {
+    BulletAppState bulletAppState = new BulletAppState();
+    stateManager.attach(bulletAppState);
 ----
 
-If the application doesn't need soft bodies, you can instantiate
-a {url-api}/BulletAppState.html[`BulletAppState`] directly:
-
-[source,java]
-----
-BulletAppState appState = new BulletAppState();
-stateManager.attach(appState);
-PhysicsSpace physicsSpace = appState.getPhysicsSpace();
-----
-
-If the application needs multibodies, instantiate a
-{url-api}/MultiBodyBulletAppState.html[`MultiBodyBulletAppState`].
-(Minie doesn't yet support combining soft bodies and multibodies in
-a single physics space.)
-
-By default, the physics simulation runs on the render thread.
-To execute it on a dedicated thread, use:
+[CAUTION]
+====
+Initialization order matters.
+A `BulletAppState` can't be instantiated until the native library is loaded,
+which (for desktop apps) occurs during `Application.start()`.
+That's why the following snippet fails:
 
 [source,java]
 ----
-bulletAppState.setThreadingType(BulletAppState.ThreadingType.PARALLEL);
+static BulletAppState bulletAppState = new BulletAppState();
 ----
-
-By default, simulation advances based on the time per frame (tpf)
-reported by the renderer.
-To advance the physics simulation at a different rate, use:
-
-[source,java]
-----
-bulletAppState.setSpeed(0.5f); // simulate physics at half speed
-----
+====
 
 By default, debug visualization is disabled. To enable it, use:
 
@@ -242,9 +230,9 @@ bulletAppState.setDebugEnabled(true); // default=false
 
 Other {url-api}/BulletAppState.html[`BulletAppState`] parameters,
 used to customize debug visualization,
-are described on xref:debug.adoc[the debugging page].
+are described on xref:debug.adoc[the troubleshooting page].
 
-Ways to simulate physics without using
+Techniques to simulate physics without using
 {url-api}/BulletAppState.html[`BulletAppState`]
 are described on xref:server.adoc[the physics-without-appstates page].
 
@@ -258,15 +246,6 @@ the application can access immediately:
 ----
 PhysicsSpace space = bulletAppState.getPhysicsSpace();
 ----
-
-`SoftPhysicsAppState` instantiates a `PhysicsSoftSpace`, which is a subclass:
-
-[source,java]
-----
-PhysicsSoftSpace space = bulletAppState.getPhysicsSoftSpace();
-----
-
-and `MultiBodyAppState` instantiates a `MultiBodySpace`, another subclass.
 
 Physics simulation can run with a fixed time step or a variable time step.
 The default configuration is a fixed time step of 1/60th of a second
@@ -291,16 +270,6 @@ space.setMaxSubSteps(6);
 NOTE: `setAccuracy()` has no effect when `maxSubSteps==0`,
 while `setMaxTimeStep()` has no effect when `maxSubSteps>0`.
 
-The contact solver performs a fixed number of iterations per time step,
-by default, 10.
-For higher-quality (but slower) simulation, increase this number.
-For instance, to use 20 iterations:
-
-[source,java]
-----
-space.getSolverInfo().setNumIterations(20);
-----
-
 Each physics space has a gravity vector,
 which is typically applied to bodies as they get added to the space.
 To simulate a zero-gravity environment,
@@ -311,9 +280,19 @@ set the gravity of the space to zero:
 space.setGravity(Vector3f.ZERO);
 ----
 
-== Create collision objects
+== Create and add collision objects
 
-You can create collision objects directly, using the constructors:
+Collision objects come in many different types:
+
+* bodies (`PhysicsBody`)
+** soft bodies (`PhysicsSoftBody`)
+** rigid bodies (`PhysicsRigidBody`)
+*** vehicles (`PhysicsVehicle`)
+* ghost objects (`PhysicsGhostObject`)
+* characters (`PhysicsCharacter`)
+* colliders (`MultiBodyCollider`)
+
+You can either create them directly, using the constructors:
 
 [source,java]
 ----
@@ -341,7 +320,8 @@ RigidBodyControl rbc1 = new RigidBodyControl(sphere2, mass);
 rigidNode1.addControl(rbc1);
 ----
 
-Either way, the objects won't get simulated unless they're added to a space.
+Either way, the objects
+aren't simulated unless they're added to a space.
 
 == Summary
 

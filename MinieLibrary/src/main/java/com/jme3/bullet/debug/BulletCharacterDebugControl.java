@@ -32,7 +32,6 @@
 package com.jme3.bullet.debug;
 
 import com.jme3.bullet.collision.shapes.CollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.objects.PhysicsCharacter;
 import com.jme3.bullet.util.DebugShapeFactory;
 import com.jme3.material.Material;
@@ -41,6 +40,7 @@ import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jme3utilities.MeshNormals;
 
 /**
  * A physics-debug control used to visualize a PhysicsCharacter.
@@ -64,13 +64,13 @@ public class BulletCharacterDebugControl extends CollisionShapeDebugControl {
     // fields
 
     /**
-     * debug-mesh normals option for which debugSpatial was generated
-     */
-    private DebugMeshNormals oldNormals;
-    /**
      * debug-mesh resolution for which debugSpatial was generated
      */
     private int oldResolution;
+    /**
+     * debug-mesh normals option for which debugSpatial was generated
+     */
+    private MeshNormals oldNormals;
     /**
      * character to visualize (not null)
      */
@@ -88,16 +88,16 @@ public class BulletCharacterDebugControl extends CollisionShapeDebugControl {
      * @param debugAppState which app state (not null, alias created)
      * @param ch the character to visualize (not null, alias created)
      */
-    public BulletCharacterDebugControl(BulletDebugAppState debugAppState,
-            PhysicsCharacter ch) {
+    public BulletCharacterDebugControl(
+            BulletDebugAppState debugAppState, PhysicsCharacter ch) {
         super(debugAppState);
-        character = ch;
+        this.character = ch;
 
         super.setShape(character.getCollisionShape());
-        oldNormals = character.debugMeshNormals();
-        oldResolution = character.debugMeshResolution();
+        this.oldNormals = character.debugMeshNormals();
+        this.oldResolution = character.debugMeshResolution();
 
-        debugSpatial = DebugShapeFactory.getDebugShape(character);
+        this.debugSpatial = DebugShapeFactory.getDebugShape(character);
         debugSpatial.setName(ch.toString());
         updateMaterial();
     }
@@ -114,7 +114,7 @@ public class BulletCharacterDebugControl extends CollisionShapeDebugControl {
     @Override
     protected void controlUpdate(float tpf) {
         CollisionShape newShape = character.getCollisionShape();
-        DebugMeshNormals newNormals = character.debugMeshNormals();
+        MeshNormals newNormals = character.debugMeshNormals();
         int newResolution = character.debugMeshResolution();
 
         boolean rebuild;
@@ -137,7 +137,7 @@ public class BulletCharacterDebugControl extends CollisionShapeDebugControl {
             Node node = (Node) spatial;
             node.detachChild(debugSpatial);
 
-            debugSpatial = DebugShapeFactory.getDebugShape(character);
+            this.debugSpatial = DebugShapeFactory.getDebugShape(character);
             debugSpatial.setName(character.toString());
 
             node.attachChild(debugSpatial);

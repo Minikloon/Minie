@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,7 @@ import jme3utilities.minie.FilterAll;
 
 /**
  * A simple example of non-uniform gravity.
- *
+ * <p>
  * Builds upon HelloRigidBody.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -58,9 +58,9 @@ public class HelloNonUniformGravity
     /**
      * Main entry point for the HelloNonUniformGravity application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloNonUniformGravity application = new HelloNonUniformGravity();
         application.start();
     }
@@ -77,15 +77,16 @@ public class HelloNonUniformGravity
         stateManager.attach(bulletAppState);
         PhysicsSpace physicsSpace = bulletAppState.getPhysicsSpace();
 
-        // To enable the callbacks, add this application as a tick listener.
+        // To enable the callbacks, register the application as a tick listener.
         physicsSpace.addTickListener(this);
 
         // Reduce the time step for better accuracy.
         physicsSpace.setAccuracy(0.005f);
-
-        // Enable debug visualization
-        // (including gravity-vector visualization)
-        // to reveal what occurs in physics space.
+        /*
+         * Enable debug visualization
+         * (including gravity-vector visualization)
+         * to reveal what occurs in physics space.
+         */
         bulletAppState.setDebugEnabled(true);
         bulletAppState.setDebugGravityVectorFilter(new FilterAll(true));
 
@@ -105,7 +106,7 @@ public class HelloNonUniformGravity
         planet.setPhysicsLocation(new Vector3f(2f, 0f, 0f));
         planet.applyCentralImpulse(new Vector3f(0f, -1f, 0f));
 
-        // Add axes to indicate the black hole's location.
+        // Visualize axes to indicate the black hole's location.
         float axisLength = 1f;
         AxesVisualizer axes = new AxesVisualizer(assetManager, axisLength);
         axes.setLineWidth(AxesVisualizer.widthForSolid);
@@ -118,16 +119,14 @@ public class HelloNonUniformGravity
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the simulation is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
-        /*
-         * Calculate the gravitational acceleration GM/r^2.
-         */
+        // Calculate the gravitational acceleration GM/r^2.
         planet.getPhysicsLocation(tmpVector);
         float r2 = tmpVector.lengthSquared(); //squared distance from black hole
         tmpVector.normalizeLocal();
@@ -136,10 +135,10 @@ public class HelloNonUniformGravity
     }
 
     /**
-     * Callback from Bullet, invoked just after the simulation has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
-     * @param space ignored
-     * @param timeStep ignored
+     * @param space the space that was just stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {

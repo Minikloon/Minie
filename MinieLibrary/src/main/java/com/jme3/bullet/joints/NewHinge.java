@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021 jMonkeyEngine
+ * Copyright (c) 2020-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,7 @@ import java.util.logging.Logger;
  * <p>
  * Inspired by Bullet's btHinge2Constraint.
  *
- * @author sgold@sonic.net
+ * @author Stephen Gold sgold@sonic.net
  */
 public class NewHinge extends New6Dof {
     // *************************************************************************
@@ -123,17 +123,15 @@ public class NewHinge extends New6Dof {
                 RotationOrder.XYZ);
         this.axis1 = axis1.clone();
         this.axis2 = axis2.clone();
-        /*
-         * Configure the limits as in btHinge2Constraint.cpp .
-         */
+
+        // Configure the limits as in btHinge2Constraint.cpp .
         TranslationMotor translation = super.getTranslationMotor();
         translation.set(MotorParam.LowerLimit, new Vector3f(0f, 0f, -1f));
         translation.set(MotorParam.UpperLimit, new Vector3f(0f, 0f, 1f));
         setLowerLimit(-FastMath.PI / 4f);
         setUpperLimit(FastMath.PI / 4f);
-        /*
-         * Configure the suspension spring as in btHinge2Constraint.cpp .
-         */
+
+        // Configure the suspension spring as in btHinge2Constraint.cpp .
         super.enableSpring(PhysicsSpace.AXIS_Z, true);
         super.set(MotorParam.Damping, PhysicsSpace.AXIS_Z, 0.01f);
         float stiffness = 4f * FastMath.PI * FastMath.PI;
@@ -196,11 +194,14 @@ public class NewHinge extends New6Dof {
      * @return a direction vector (either storeResult or a new vector, not null)
      */
     public Vector3f getAxis1(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return axis1.clone();
+            result = axis1.clone();
         } else {
-            return storeResult.set(axis1);
+            result = storeResult.set(axis1);
         }
+
+        return result;
     }
 
     /**
@@ -210,11 +211,14 @@ public class NewHinge extends New6Dof {
      * @return a direction vector (either storeResult or a new vector, not null)
      */
     public Vector3f getAxis2(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return axis2.clone();
+            result = axis2.clone();
         } else {
-            return storeResult.set(axis2);
+            result = storeResult.set(axis2);
         }
+
+        return result;
     }
 
     /**
@@ -262,25 +266,18 @@ public class NewHinge extends New6Dof {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
+        assert !hasAssignedNativeObject();
+        NewHinge old = (NewHinge) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
+
         super.cloneFields(cloner, original);
-
-        axis1 = cloner.clone(axis1);
-        axis2 = cloner.clone(axis2);
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public NewHinge jmeClone() {
-        try {
-            NewHinge clone = (NewHinge) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
+        if (hasAssignedNativeObject()) {
+            return;
         }
+
+        this.axis1 = cloner.clone(axis1);
+        this.axis2 = cloner.clone(axis2);
     }
 
     /**
@@ -295,8 +292,8 @@ public class NewHinge extends New6Dof {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        axis1 = (Vector3f) capsule.readSavable(tagAxis1, null);
-        axis2 = (Vector3f) capsule.readSavable(tagAxis2, null);
+        this.axis1 = (Vector3f) capsule.readSavable(tagAxis1, null);
+        this.axis2 = (Vector3f) capsule.readSavable(tagAxis2, null);
     }
 
     /**
@@ -319,9 +316,14 @@ public class NewHinge extends New6Dof {
 
     /**
      * Determine the pivot location in a body's scaled local coordinates.
+     *
+     * @param body the body to use (not null, unaffected)
+     * @param anchor the location in physics-space coordinates (not null,
+     * unaffected)
+     * @return a new location vector (in scaled local coordinates)
      */
-    private static Vector3f pivotInBody(PhysicsRigidBody body,
-            Vector3f anchor) {
+    private static Vector3f
+            pivotInBody(PhysicsRigidBody body, Vector3f anchor) {
         Transform bodyToWorld = body.getTransform(null);
         bodyToWorld.setScale(1f);
         Vector3f result = bodyToWorld.transformInverseVector(anchor, null);
@@ -332,18 +334,22 @@ public class NewHinge extends New6Dof {
     /**
      * Determine the orientation of the constraint in a body's local
      * coordinates.
+     *
+     * @param body the body to use (not null, unaffected)
+     * @param axis1 (not null, unaffected)
+     * @param axis2 (not null, unaffected)
+     * @return a new rotation matrix (in local coordinates)
      */
-    private static Matrix3f rotInBody(PhysicsRigidBody body, Vector3f axis1,
-            Vector3f axis2) {
+    private static Matrix3f
+            rotInBody(PhysicsRigidBody body, Vector3f axis1, Vector3f axis2) {
         Vector3f zAxis = axis1.normalize();
         Vector3f xAxis = axis2.normalize();
         Vector3f yAxis = zAxis.cross(xAxis);
 
         Matrix3f frameInW = new Matrix3f();
         frameInW.fromAxes(xAxis, yAxis, zAxis);
-        /*
-         * Calculate constraint frame rotation in the body's local coordinates.
-         */
+
+        // Calculate constraint frame rotation in the body's local coordinates.
         Matrix3f rotation = body.getPhysicsRotationMatrix(null); // b2w
         rotation.invert(null); // w2b
         Matrix3f result = rotation.mult(frameInW, null);

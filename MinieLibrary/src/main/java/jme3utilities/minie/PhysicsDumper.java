@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2013-2021, Stephen Gold
+ Copyright (c) 2013-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,7 @@ package jme3utilities.minie;
 import com.jme3.app.state.AppState;
 import com.jme3.bounding.BoundingBox;
 import com.jme3.bullet.BulletAppState;
+import com.jme3.bullet.DeformableSpace;
 import com.jme3.bullet.MultiBody;
 import com.jme3.bullet.MultiBodyJointType;
 import com.jme3.bullet.MultiBodyLink;
@@ -65,8 +66,10 @@ import com.jme3.bullet.objects.PhysicsSoftBody;
 import com.jme3.bullet.objects.PhysicsVehicle;
 import com.jme3.bullet.objects.VehicleWheel;
 import com.jme3.bullet.objects.infos.Cluster;
+import com.jme3.bullet.objects.infos.RigidBodyMotionState;
 import com.jme3.bullet.objects.infos.SoftBodyConfig;
 import com.jme3.bullet.objects.infos.SoftBodyMaterial;
+import com.jme3.math.Matrix3f;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import java.io.PrintStream;
@@ -151,7 +154,7 @@ public class PhysicsDumper extends Dumper {
     // constructors
 
     /**
-     * Instantiate a PhysicsDumper that uses System.out for output.
+     * Instantiate a PhysicsDumper that uses {@code System.out} for output.
      */
     public PhysicsDumper() {
         super();
@@ -294,9 +297,8 @@ public class PhysicsDumper extends Dumper {
 
         long objectId = character.nativeId();
         addNativeId(objectId);
-        /*
-         * The 2nd line has the character's configuration.
-         */
+
+        // The 2nd line has the character's configuration.
         addLine(indent);
         Vector3f grav = character.getGravity(null);
         stream.printf(" grav[%s]", MyVector3f.describe(grav));
@@ -349,8 +351,8 @@ public class PhysicsDumper extends Dumper {
 
         addLine(indent);
         int numIgnores = character.countIgnored();
-        stream.printf(" with %d ignore%s",
-                numIgnores, (numIgnores == 1) ? "" : "s");
+        stream.printf(
+                " with %d ignore%s", numIgnores, (numIgnores == 1) ? "" : "s");
         if (dumpIgnores && numIgnores > 0) {
             dumpIgnores(character, indent);
         }
@@ -412,10 +414,90 @@ public class PhysicsDumper extends Dumper {
         stream.print(desc);
 
         int numIgnores = ghost.countIgnored();
-        stream.printf(" with %d ignore%s",
-                numIgnores, (numIgnores == 1) ? "" : "s");
+        stream.printf(
+                " with %d ignore%s", numIgnores, (numIgnores == 1) ? "" : "s");
         if (dumpIgnores && numIgnores > 0) {
             dumpIgnores(ghost, indent);
+        }
+    }
+
+    /**
+     * Dump the specified PhysicsJoint in a PhysicsSpace context.
+     *
+     * @param joint the joint to dump (not null, unaffected)
+     * @param indent (not null)
+     */
+    public void dump(PhysicsJoint joint, String indent) {
+        Validate.nonNull(joint, "joint");
+        Validate.nonNull(indent, "indent");
+
+        String moreIndent = indent + indentIncrement();
+        addLine(moreIndent);
+        PhysicsDescriber describer = getDescriber();
+        String desc
+                = describer.describeJointInSpace(joint, dumpNativeIDs);
+        stream.print(desc);
+
+        String mmIndent = moreIndent + indentIncrement();
+        if (joint instanceof SixDofJoint) {
+            SixDofJoint sixDof = (SixDofJoint) joint;
+
+            desc = describer.describeAngular(sixDof);
+            stream.printf("%n%s %s", moreIndent, desc);
+            desc = describer.describeLinear(sixDof);
+            stream.printf("%n%s %s", moreIndent, desc);
+
+            if (dumpMotors) {
+                for (int axisI = 0; axisI < MyVector3f.numAxes; ++axisI) {
+                    String axisName = MyString.axisName(axisI);
+                    stream.printf("%n%srot%s: ", mmIndent, axisName);
+                    RotationalLimitMotor motor
+                            = sixDof.getRotationalLimitMotor(axisI);
+                    desc = describer.describe(motor);
+                    stream.print(desc);
+                }
+
+                TranslationalLimitMotor motor
+                        = sixDof.getTranslationalLimitMotor();
+                for (int axisI = 0; axisI < MyVector3f.numAxes; ++axisI) {
+                    String axisName = MyString.axisName(axisI);
+                    stream.printf("%n%stra%s: ", mmIndent, axisName);
+                    desc = describer.describe(motor, axisI);
+                    stream.print(desc);
+                }
+            }
+
+        } else if (joint instanceof New6Dof) {
+            New6Dof sixDof = (New6Dof) joint;
+
+            addLine(moreIndent);
+            Vector3f offset = sixDof.getPivotOffset(null);
+            stream.printf(" offset[%s]", MyVector3f.describe(offset));
+            Vector3f locA = sixDof.calculatedOriginA(null);
+            stream.printf(" locA[%s]", MyVector3f.describe(locA));
+            Vector3f locB = sixDof.calculatedOriginB(null);
+            stream.printf(" locB[%s]", MyVector3f.describe(locB));
+
+            addLine(moreIndent);
+            Vector3f angles = sixDof.getAngles(null);
+            stream.printf(" angles[%s]", MyVector3f.describe(angles));
+            desc = sixDof.getRotationOrder().toString();
+            stream.printf(" ro=%s", desc);
+            Matrix3f basA = sixDof.calculatedBasisA(null);
+            stream.printf(" basA[%s]", PhysicsDescriber.describeMatrix(basA));
+            Matrix3f basB = sixDof.calculatedBasisB(null);
+            stream.printf(" basB[%s]", PhysicsDescriber.describeMatrix(basB));
+
+            if (dumpMotors) {
+                for (int dofIndex = 0; dofIndex < 6; ++dofIndex) {
+                    int axisIndex = dofIndex % MyVector3f.numAxes;
+                    String tr = (dofIndex < 3) ? "T" : "R";
+                    String axisName = MyString.axisName(axisIndex);
+                    stream.printf("%n%s%s%s:", mmIndent, tr, axisName);
+                    desc = describer.describeDof(sixDof, dofIndex);
+                    stream.print(desc);
+                }
+            }
         }
     }
 
@@ -445,9 +527,15 @@ public class PhysicsDumper extends Dumper {
         desc = describer.describeUser(body);
         stream.print(desc);
 
+        RigidBodyMotionState motionState = body.getMotionState();
+        Vector3f msLoc = motionState.getLocation(null);
+        String locString = MyVector3f.describe(msLoc);
+        stream.printf(" msLoc[%s]", locString);
         Vector3f location = body.getPhysicsLocation(null);
-        String locString = MyVector3f.describe(location);
-        stream.printf(" loc[%s]", locString);
+        if (!location.equals(msLoc)) {
+            locString = MyVector3f.describe(location);
+            stream.printf(" loc[%s]", locString);
+        }
 
         Quaternion orientation = body.getPhysicsRotation(null);
         if (!MyQuaternion.isRotationIdentity(orientation)) {
@@ -457,17 +545,14 @@ public class PhysicsDumper extends Dumper {
 
         long objectId = body.nativeId();
         addNativeId(objectId);
-        /*
-         * 2nd line: activation state and contact parameters
-         */
+
+        // 2nd line: activation state and contact parameters
         addLine(indent);
         addActivationState(body);
         addContactParameters(body);
 
         if (body.isDynamic()) {
-            /*
-             * The next 3 lines have the dynamic properties.
-             */
+            // The next 3 lines describes the dynamic properties.
             addDynamicProperties(body, indent);
         }
         /*
@@ -499,8 +584,8 @@ public class PhysicsDumper extends Dumper {
         if (body instanceof PhysicsVehicle) {
             PhysicsVehicle vehicle = (PhysicsVehicle) body;
             int numWheels = vehicle.getNumWheels();
-            stream.printf(" %d wheel%s", numWheels,
-                    (numWheels == 1) ? "" : "s");
+            stream.printf(
+                    " %d wheel%s", numWheels, (numWheels == 1) ? "" : "s");
             if (numWheels > 0) {
                 dumpWheels(vehicle, indent, numWheels);
             } else {
@@ -515,8 +600,8 @@ public class PhysicsDumper extends Dumper {
         }
 
         int numJoints = body.countJoints();
-        stream.printf(" and %d joint%s",
-                numJoints, (numJoints == 1) ? "" : "s");
+        stream.printf(
+                " and %d joint%s", numJoints, (numJoints == 1) ? "" : "s");
         if (dumpJointsInBodies && numJoints > 0) {
             dumpJoints(body, indent);
         }
@@ -581,23 +666,20 @@ public class PhysicsDumper extends Dumper {
             desc = MyQuaternion.describe(orientation);
             stream.printf(" orient[%s]", desc);
         }
-        /*
-         * 3rd & 4th lines have the config.
-         */
+
+        // 3rd & 4th lines describe the config.
         SoftBodyConfig config = body.getSoftConfig();
         desc = describer.describe1(config);
         stream.printf("%n%s %s", indent, desc);
         desc = describer.describe2(config);
         stream.printf("%n%s %s", indent, desc);
-        /*
-         * 5th line has the material.
-         */
+
+        // 5th line describes the material.
         SoftBodyMaterial material = body.getSoftMaterial();
         desc = describer.describe(material);
         stream.printf("%n%s %s", indent, desc);
-        /*
-         * 6th line has the world info.
-         */
+
+        // 6th line describes the world info.
         SoftBodyWorldInfo info = body.getWorldInfo();
         desc = describer.describe(info);
         stream.printf("%n%s %s ", indent, desc);
@@ -607,37 +689,33 @@ public class PhysicsDumper extends Dumper {
         stream.print("protected");
         objectId = info.nativeId();
         addNativeId(objectId);
-        /*
-         * 7th line has the group info and number of anchors.
-         */
+
+        // 7th line describes the group info and number of anchors.
         desc = describer.describeGroups(body);
         stream.printf("%n%s%s", indent, desc);
-        /*
-         * physics joints in the soft body
-         */
+
+        // physics joints in the soft body
         int numJoints = body.countJoints();
-        stream.printf(" with %d joint%s", numJoints,
-                (numJoints == 1) ? "" : "s");
+        stream.printf(
+                " with %d joint%s", numJoints, (numJoints == 1) ? "" : "s");
         if (dumpJointsInBodies && numJoints > 0) {
             dumpJoints(body, indent);
             addLine(indent);
         } else {
             stream.print(',');
         }
-        /*
-         * clusters in the soft body
-         */
+
+        // clusters in the soft body
         int numClusters = body.countClusters();
-        stream.printf(" %d cluster%s", numClusters,
-                (numClusters == 1) ? "" : "s");
+        stream.printf(
+                " %d cluster%s", numClusters, (numClusters == 1) ? "" : "s");
         if (dumpClustersInSofts && numClusters > 0) {
             dumpClusters(body, indent);
         } else {
             stream.print(',');
         }
-        /*
-         * nodes in the soft body
-         */
+
+        // nodes in the soft body
         int numNodes = body.countNodes();
         stream.printf(" %d node%s", numNodes, (numNodes == 1) ? "" : "s");
         int numPinned = body.countPinnedNodes();
@@ -689,8 +767,8 @@ public class PhysicsDumper extends Dumper {
         if (space instanceof MultiBodySpace) {
             multibodies = ((MultiBodySpace) space).getMultiBodyList();
             int numMultis = multibodies.size();
-            stream.printf("%d multi%s, ", numMultis,
-                    (numMultis == 1) ? "" : "s");
+            stream.printf(
+                    "%d multi%s, ", numMultis, (numMultis == 1) ? "" : "s");
         }
 
         Collection<PhysicsRigidBody> rigidBodies = space.getRigidBodyList();
@@ -702,6 +780,10 @@ public class PhysicsDumper extends Dumper {
             softBodies = ((PhysicsSoftSpace) space).getSoftBodyList();
             int numSofts = softBodies.size();
             stream.printf("%d soft%s, ", numSofts, (numSofts == 1) ? "" : "s");
+        } else if (space instanceof DeformableSpace) {
+            softBodies = ((DeformableSpace) space).getSoftBodyList();
+            int numSofts = softBodies.size();
+            stream.printf("%d soft%s, ", numSofts, (numSofts == 1) ? "" : "s");
         }
 
         int numVehicles = space.getVehicleList().size();
@@ -710,9 +792,8 @@ public class PhysicsDumper extends Dumper {
 
         long spaceId = space.nativeId();
         addNativeId(spaceId);
-        /*
-         * 2nd line
-         */
+
+        // 2nd line
         addLine(indent);
         PhysicsSpace.BroadphaseType bphase = space.getBroadphaseType();
         stream.printf(" bphase=%s", bphase);
@@ -734,9 +815,8 @@ public class PhysicsDumper extends Dumper {
         int cgCount = space.countCollisionGroupListeners();
         int tCount = space.countTickListeners();
         stream.printf("] listeners[c=%d cg=%d t=%d]", cCount, cgCount, tCount);
-        /*
-         * 3rd line: solver type and info
-         */
+
+        // 3rd line: solver type and info
         addLine(indent);
         SolverType solverType = space.getSolverType();
         SolverInfo solverInfo = space.getSolverInfo();
@@ -757,10 +837,12 @@ public class PhysicsDumper extends Dumper {
         stream.printf(" erp=%s]", MyString.describe(erp));
         int mode = solverInfo.mode();
         stream.printf(" mode=%s]", SolverMode.describe(mode));
-        /*
-         * 4th line: use flags, raytest flags, and world extent
-         */
+
+        // 4th line: use flags, raytest flags, and world extent
         addLine(indent);
+        if (space.isCcdWithStaticOnly()) {
+            stream.print(" CCDwso");
+        }
         if (space.isUsingDeterministicDispatch()) {
             stream.print(" DeterministicDispatch");
         }
@@ -779,9 +861,8 @@ public class PhysicsDumper extends Dumper {
             String maxDesc = MyVector3f.describe(worldMax);
             stream.printf(" worldMin[%s] worldMax[%s]", minDesc, maxDesc);
         }
-        /*
-         * For soft spaces, 5th line has the world info.
-         */
+
+        // For soft spaces, 5th line has the world info.
         PhysicsDescriber describer = getDescriber();
         if (space instanceof PhysicsSoftSpace) {
             SoftBodyWorldInfo info = ((PhysicsSoftSpace) space).getWorldInfo();
@@ -1111,7 +1192,7 @@ public class PhysicsDumper extends Dumper {
 
         int activationState = body.getActivationState();
         if (activationState != expectedState) {
-            stream.printf(" as=%d", activationState);
+            stream.printf(" act=%d", activationState);
         }
     }
 
@@ -1151,9 +1232,7 @@ public class PhysicsDumper extends Dumper {
      */
     private void addDynamicProperties(PhysicsRigidBody rigidBody,
             String indent) {
-        /*
-         * first line: gravity, CCD, damping, and sleep/activation
-         */
+        // first line: gravity, CCD, damping, and sleep/activation
         addLine(indent);
 
         Vector3f gravity = rigidBody.getGravity(null);
@@ -1191,9 +1270,8 @@ public class PhysicsDumper extends Dumper {
             stream.print(MyString.describe(deactivationTime));
         }
         stream.print(']');
-        /*
-         * 2nd line: linear velocity, applied force, linear factor
-         */
+
+        // 2nd line: linear velocity, applied force, linear factor
         addLine(indent);
 
         Vector3f v = rigidBody.getLinearVelocity(null);
@@ -1202,9 +1280,8 @@ public class PhysicsDumper extends Dumper {
         stream.printf(" force[%s]", MyVector3f.describe(force));
         Vector3f lFact = rigidBody.getLinearFactor(null);
         stream.printf(" lFact[%s]", MyVector3f.describe(lFact));
-        /*
-         * 3rd line: inertia, angular velocity, applied torque, angular factor
-         */
+
+        // 3rd line: inertia, angular velocity, applied torque, angular factor
         addLine(indent);
 
         stream.print(" inert[");
@@ -1261,8 +1338,8 @@ public class PhysicsDumper extends Dumper {
         ChildCollisionShape[] children = parent.listChildren();
         for (ChildCollisionShape child : children) {
             addLine(indent);
-            CollisionShape shape = child.getShape();
-            String desc = describer.describe(shape);
+            CollisionShape baseShape = child.getShape();
+            String desc = describer.describe(baseShape);
             stream.print(desc);
 
             Vector3f offset = child.copyOffset(null);
@@ -1281,11 +1358,11 @@ public class PhysicsDumper extends Dumper {
                 stream.print(']');
             }
 
-            Vector3f scale = shape.getScale(null);
+            Vector3f scale = baseShape.getScale(null);
             desc = describer.describeScale(scale);
             addDescription(desc);
 
-            long objectId = shape.nativeId();
+            long objectId = baseShape.nativeId();
             addNativeId(objectId);
         }
     }
@@ -1311,13 +1388,13 @@ public class PhysicsDumper extends Dumper {
             stream.print(MyString.describe(mass));
 
             stream.print(" damp[ang=");
-            float angularDamping = softBody.get(Cluster.AngularDamping,
-                    clusterIndex);
+            float angularDamping
+                    = softBody.get(Cluster.AngularDamping, clusterIndex);
             stream.print(MyString.describe(angularDamping));
 
             stream.print(" lin=");
-            float linearDamping = softBody.get(Cluster.LinearDamping,
-                    clusterIndex);
+            float linearDamping
+                    = softBody.get(Cluster.LinearDamping, clusterIndex);
             stream.print(MyString.describe(linearDamping));
 
             stream.print(" node=");
@@ -1355,13 +1432,11 @@ public class PhysicsDumper extends Dumper {
      */
     private void dumpIgnores(PhysicsCollisionObject pco, String indent) {
         stream.print(':');
-        long[] idList = pco.listIgnoredIds();
+        PhysicsCollisionObject[] ignoreList = pco.listIgnoredPcos();
         String moreIndent = indent + indentIncrement();
-        for (long otherId : idList) {
+        for (PhysicsCollisionObject otherPco : ignoreList) {
             addLine(moreIndent);
             PhysicsDescriber describer = getDescriber();
-            PhysicsCollisionObject otherPco
-                    = PhysicsCollisionObject.findInstance(otherId);
             String desc = describer.describePco(otherPco, dumpNativeIDs);
             stream.print(desc);
         }
@@ -1376,68 +1451,11 @@ public class PhysicsDumper extends Dumper {
      * @param filter determines which physics objects are dumped, or null to
      * dump all (unaffected)
      */
-    private void dumpJoints(Collection<PhysicsJoint> joints, String indent,
-            BulletDebugAppState.DebugAppStateFilter filter) {
-        PhysicsDescriber describer = getDescriber();
-        String moreIndent = indent + indentIncrement();
-        String mmIndent = moreIndent + indentIncrement();
-
+    private void dumpJoints(Collection<? extends PhysicsJoint> joints,
+            String indent, BulletDebugAppState.DebugAppStateFilter filter) {
         for (PhysicsJoint joint : joints) {
             if (filter == null || filter.displayObject(joint)) {
-                addLine(moreIndent);
-                String desc
-                        = describer.describeJointInSpace(joint, dumpNativeIDs);
-                stream.print(desc);
-
-                if (joint instanceof SixDofJoint) {
-                    SixDofJoint sixDof = (SixDofJoint) joint;
-
-                    desc = describer.describeAngular(sixDof);
-                    stream.printf("%n%s %s", moreIndent, desc);
-                    desc = describer.describeLinear(sixDof);
-                    stream.printf("%n%s %s", moreIndent, desc);
-
-                    if (dumpMotors) {
-                        for (int axisIndex = 0; axisIndex < 3; ++axisIndex) {
-                            String axisName = MyString.axisName(axisIndex);
-                            stream.printf("%n%srot%s: ", mmIndent, axisName);
-                            RotationalLimitMotor motor
-                                    = sixDof.getRotationalLimitMotor(axisIndex);
-                            desc = describer.describe(motor);
-                            stream.print(desc);
-                        }
-
-                        TranslationalLimitMotor motor
-                                = sixDof.getTranslationalLimitMotor();
-                        for (int axisIndex = 0; axisIndex < 3; ++axisIndex) {
-                            String axisName = MyString.axisName(axisIndex);
-                            stream.printf("%n%stra%s: ", mmIndent, axisName);
-                            desc = describer.describe(motor, axisIndex);
-                            stream.print(desc);
-                        }
-                    }
-
-                } else if (joint instanceof New6Dof) {
-                    New6Dof sixDof = (New6Dof) joint;
-
-                    desc = sixDof.getRotationOrder().toString();
-                    stream.printf("%n%s rotOrder=%s", moreIndent, desc);
-                    Vector3f angles = sixDof.getAngles(null);
-                    stream.printf(" angles[%s]", MyVector3f.describe(angles));
-                    Vector3f offset = sixDof.getPivotOffset(null);
-                    stream.printf(" offset[%s]", MyVector3f.describe(offset));
-
-                    if (dumpMotors) {
-                        for (int dofIndex = 0; dofIndex < 6; ++dofIndex) {
-                            int axisIndex = dofIndex % 3;
-                            String dofName = (dofIndex < 3) ? "tra" : "rot";
-                            dofName += MyString.axisName(axisIndex);
-                            stream.printf("%n%s%s: ", mmIndent, dofName);
-                            desc = describer.describeDof(sixDof, dofIndex);
-                            stream.print(desc);
-                        }
-                    }
-                }
+                dump(joint, indent);
             }
         }
     }
@@ -1577,8 +1595,8 @@ public class PhysicsDumper extends Dumper {
         int numNodes = softBody.countNodes();
         int numLinks = softBody.countLinks();
         for (int nodeIndex = 0; nodeIndex < numNodes; ++nodeIndex) {
-            int degree = MyBuffer.frequency(linkIndices, 0, 2 * numLinks,
-                    nodeIndex);
+            int degree = MyBuffer
+                    .frequency(linkIndices, 0, 2 * numLinks, nodeIndex);
             float nodeMass = masses.get(nodeIndex);
             String locString = describeVector(locations, nodeIndex);
             String vString = describeVector(velocities, nodeIndex);
@@ -1594,8 +1612,8 @@ public class PhysicsDumper extends Dumper {
      * @param softBody the soft body to dump (not null, unaffected)
      * @param clusterIndex which cluster (&ge;0, &lt;numClusters)
      */
-    private void dumpNodesInCluster(PhysicsSoftBody softBody,
-            int clusterIndex) {
+    private void dumpNodesInCluster(
+            PhysicsSoftBody softBody, int clusterIndex) {
         IntBuffer nodeIndices = softBody.listNodesInCluster(clusterIndex, null);
         int numIndices = nodeIndices.capacity();
         int numNodesInBody = softBody.countNodes();
@@ -1603,9 +1621,8 @@ public class PhysicsDumper extends Dumper {
             stream.print("(all)");
             return;
         }
-        /*
-         * convert the IntBuffer to a BitSet
-         */
+
+        // convert the IntBuffer to a BitSet
         BitSet bitSet = new BitSet(numNodesInBody);
         for (int i = 0; i < numIndices; ++i) {
             int nodeIndex = nodeIndices.get(i);

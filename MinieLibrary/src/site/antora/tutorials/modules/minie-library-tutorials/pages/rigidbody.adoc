@@ -1,4 +1,5 @@
 = An introduction to rigid-body physics
+:Project: Minie
 :experimental:
 :page-pagination:
 :page-toclevels: 3
@@ -53,8 +54,8 @@ However, these last 3 features are optional and can easily be disabled.
 
 === HelloRigidBody
 
-{url-tutorial}/HelloRigidBody.java[HelloRigidBody] is a simple
-application that demonstrates the 5 familiar features of rigid bodies.
+{url-tutorial}/HelloRigidBody.java[HelloRigidBody] is a simple application
+that demonstrates the 5 familiar features of rigid bodies.
 
 IMPORTANT: {url-tutorial}/HelloRigidBody.java[HelloRigidBody] is the first of
 many tutorial apps designed for hands-on learning.
@@ -85,8 +86,10 @@ Unlike a dynamic body,
 a static one is unaffected by forces, torques, and impulses,
 as if its mass were infinite.
 
-{url-tutorial}/HelloStaticBody.java[HelloStaticBody]
-is a simple application that combines static and dynamic rigid bodies.
+NOTE: Java's `static` keyword is completely unrelated to physics.
+
+{url-tutorial}/HelloStaticBody.java[HelloStaticBody] is a simple application
+that combines static and dynamic rigid bodies.
 Things to notice while running the app:
 
 . Two balls: the top one dynamic, the bottom one static.
@@ -94,6 +97,8 @@ Things to notice while running the app:
   that alter the path of the dynamic ball.
 . The static ball stays fixed in place,
   unaffected by gravity and contact forces.
+. In {Project}, dynamic rigid bodies are conventionally colored magenta,
+  while non-dynamic ones are shown in blue.
 
 === Position
 
@@ -132,7 +137,7 @@ _Kinematic_ bodies share some properties with both static and dynamic ones.
 Like dynamic bodies, kinematic ones can move.
 However, they are unaffected by forces, torques, and impulses.
 Their movement is dictated by application logic that may, if desired,
-reposition them prior to every time step.
+reposition them before each simulation step.
 
 In the presence of dynamic bodies, a kinematic body acts like
 an irresistible battering ram.
@@ -151,8 +156,8 @@ rigidBody.setMass(1f);
 rigidBody.setKinematic(true);
 ----
 
-{url-tutorial}/HelloKinematics.java[HelloKinematics]
-is a simple application that combines kinematic and dynamic rigid bodies.
+{url-tutorial}/HelloKinematics.java[HelloKinematics] is a simple application
+that combines kinematic and dynamic rigid bodies.
 Things to notice while running the app:
 
 . Two balls: the top one dynamic, the bottom one kinematic.
@@ -171,7 +176,8 @@ To disable contact response for a particular rigid body,
 use `rigidBody.setContactResponse(false)`.
 
 {url-tutorial}/HelloContactResponse.java[HelloContactResponse]
-is a simple application that demonstrates contact response.
+is a simple application
+that demonstrates contact response.
 Things to notice while running the app:
 
 . The ball falls until it collides with the blue (static) box,
@@ -179,11 +185,15 @@ Things to notice while running the app:
 . Press kbd:[Space bar] to disable the ball's contact response.
 . Afterwards, the box no longer exerts any force on the ball.
   Gravity takes over, and the ball falls through the box.
+. In {Project}, non-responsive rigid bodies are shown in yellow.
+
+NOTE: This documentation assumes a keyboard with the "US" (QWERTY) layout.
+On keyboards with other layouts, keys may be labeled differently.
 
 === Velocity
 
 Every dynamic body has a _velocity_ that quantifies its motion as of the
-end of the last time step (or the start of the next).
+end of the last simulation step (and the start of the next).
 
 More precisely, it has 2 velocities: _linear velocity_ and _angular velocity_,
 both represented as 3-D vectors.
@@ -254,8 +264,8 @@ float angularDamping = 0.2f;
 rigidBody.setDamping(linearDamping, angularDamping);
 ----
 
-{url-tutorial}/HelloDamping.java[HelloDamping]
-is a simple application that demonstrates damping.
+{url-tutorial}/HelloDamping.java[HelloDamping] is a simple application
+that demonstrates damping.
 Things to notice while running the app:
 
 . 4 cubes initially share the same linear and angular velocities.
@@ -295,9 +305,10 @@ To protect a rigid body from gravity changes caused by the space
 to which it's added, use `rigidBody.setProtectGravity(true)`.
 
 To simulate a non-uniform gravitational field,
-update the gravity of each body prior to each physics tick.
+update the gravity of each body before each simulation step.
 {url-tutorial}/HelloNonUniformGravity.java[HelloNonUniformGravity]
-is a simple application that demonstrates this technique.
+is a simple application
+that demonstrates this technique.
 The planet's gravity vector is visualized by a thin cyan arrow.
 It orbits a black hole whose location is indicated by 3 thick arrows.
 
@@ -359,7 +370,7 @@ Increasing it yields better traction (think sandpaper or dry rubber).
 For each collision, a _coefficient of friction_
 is calculated by multiplying the parameters of the colliding bodies.
 
-=== Related demo apps
+==== Related demo apps
 
 {url-examples}/DropTest.java[The DropTest demo] and
 {url-examples}/TargetDemo.java[the TargetDemo application]
@@ -370,6 +381,33 @@ This allows you to see how these 4 parameters affect the bodies' motion.
 * Press kbd:[Enter] to add dynamic bodies to the space.
 * Use kbd:[num8] and kbd:[num2] to select the desired parameter.
 * Use kbd:[num4] and kbd:[num6] to cycle through the available parameter values.
+
+=== Rigid-body factors
+
+All forces, torques, and impulses acting on dynamic rigid bodies
+are multiplied by _factors_ that can be configured for each body.
+
+For instance, to prevent a body from rotating:
+
+[source,java]
+----
+body.setAngularFactor(new Vector3f(0f, 0f, 0f)); // default=(1, 1, 1)
+body.setAngularVelocity(new Vector3f(0f, 0f, 0f));
+----
+
+Rigid-body factors can also be used to simulate physics in 2 dimensions.
+For instance, one might constrain a body
+to rotate only around axes parallel to the Z axis
+and translate only in directions parallel to the X-Y plane:
+
+[source,java]
+----
+body.setAngularFactor(new Vector3f(0f, 0f, 1f)); // default=(1, 1, 1)
+body.setLinearFactor(new Vector3f(1f, 1f, 0f));  // default=(1, 1, 1)
+----
+
+NOTE: Factors are defined in terms of world (physics-space) axes,
+not the body's local axes.
 
 == Deactivation
 
@@ -393,10 +431,20 @@ rigidBody.setSleepingThresholds(linearThreshold, angularThreshold);
 
 NOTE: _Sleeping_ is synonym for deactivation.
 
+To disable deactivation globally (for all rigid bodies),
+use `PhysicsBody.setDeactivationEnabled(false)`.
+
 To disable deactivation for a particular rigid body,
 use `physicsSpace.setEnableSleep(false)`.
 
 To test whether a body is deactivated, use `rigidBody.isActive()`.
+
+To globally change the deactivation latency to 5 seconds:
+
+[source,java]
+----
+PhysicsBody.setDeactivationDeadline(5f); // default=2
+----
 
 Deactivated bodies won't be simulated (and won't move)
 unless/until they get reactivated.
@@ -418,8 +466,8 @@ Puzzling behavior may occur if a deactivated body is:
 The deactivated body will seem to be "stuck"
 because the events listed above do not, by themselves, reactivate it.
 
-{url-tutorial}/HelloDeactivation.java[HelloDeactivation]
-is a simple application that demonstrates deactivation.
+{url-tutorial}/HelloDeactivation.java[HelloDeactivation] is a simple application
+that demonstrates deactivation.
 Things to notice while running the app:
 
 . The upper (dynamic) box falls until it collides with the lower (static) box,
@@ -431,12 +479,12 @@ Things to notice while running the app:
 
 == Continuous collision detection
 
-A common issue with discrete-time simulations
+A common issue with discrete-time physics simulation
 involves a fast-moving dynamic body passing through a thin obstacle
 without any collision being detected.
 The issue arises because the body can pass from one side of the obstacle to
-the other in a single time step.
-The dynamic body doesn't intersect the obstacle on any time step,
+the other in a single simulation step.
+The dynamic body doesn't intersect the obstacle after any step,
 so no collision is detected and no contact forces are simulated.
 
 To some extent, this issue could be mitigated by reducing the time step.
@@ -445,15 +493,15 @@ this approach quickly becomes inefficient.
 
 To solve this issue,
 the simulator offers _continuous collision detection_ (CCD),
-an algorithm for detecting collisions that occur *between* time steps.
+an algorithm for detecting collisions that occur *between* simulation steps.
 CCD substitutes a sphere for the collision shape of the fast-moving body,
 sweeps that sphere forward along the body's projected path,
-and then performs more detailed collision tests on any potential
-obstacles found by the sweep.
+and performs detailed collision tests on any potential
+obstacles found during the sweep.
 
 Because CCD involves extra computation, it's disabled by default.
 Since it's only necessary for fast-moving bodies, it's enabled only
-when a body's distance traveled per time step exceeds a threshold.
+when a body's distance traveled per simulation step exceeds a threshold.
 To enable CCD for a particular rigid body,
 set its activation threshold to a positive value using
 `rigidBody.setCcdMotionThreshold(distancePerTimeStep)`.
@@ -472,8 +520,8 @@ if (rigidBody.isDynamic()) {
 }
 ----
 
-{url-tutorial}/HelloCcd.java[HelloCcd]
-is a simple application that demonstrates CCD.
+{url-tutorial}/HelloCcd.java[HelloCcd] is a simple application
+that demonstrates CCD.
 Things to notice while running the app:
 
 . The 2 balls have the same size, mass, initial height, and initial velocity.
@@ -481,7 +529,14 @@ Things to notice while running the app:
   making the time steps noticeable.
 . The ball with CCD enabled (on the left) sticks the landing on the platform.
 . The control ball (on the right) falls through the platform,
-  passing from one side to the other in a single time step.
+  passing from one side to the other in a single simulation step.
+
+By default, CCD tests for
+both dynamic-dynamic collisions and dynamic-static ones.
+For some applications (such as simulation of fast-moving ragdolls),
+testing for dynamic-dynamic collisions is undesirable.
+You can disable dynamic-dynamic CCD
+by invoking `physicsSpace.setCcdWithStaticOnly(true)`.
 
 == Summary
 
@@ -493,7 +548,7 @@ Things to notice while running the app:
 | |Static |Kinematic |Dynamic
 
 a|Movement
-a|prior to first time step only: `setPhysicsLocation()` `setPhysicsRotation()`
+a|prior to first simulation step only: `setPhysicsLocation()` `setPhysicsRotation()`
 a|`setPhysicsLocation()` `setPhysicsRotation()`
 a|`applyCentralForce()` `applyCentralImpulse()` `applyForce()` `applyImpulse()`
   `applyTorque()` `applyTorqueImpulse()` `setAngularVelocity()`

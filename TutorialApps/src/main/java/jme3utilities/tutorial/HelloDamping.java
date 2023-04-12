@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@ import com.jme3.math.Vector3f;
 
 /**
  * A simple example illustrating the effect of damping on dynamic rigid bodies.
- *
+ * <p>
  * Builds upon HelloRigidBody.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -48,9 +48,9 @@ public class HelloDamping extends SimpleApplication {
     /**
      * Main entry point for the HelloDamping application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloDamping application = new HelloDamping();
         application.start();
     }
@@ -80,7 +80,7 @@ public class HelloDamping extends SimpleApplication {
         // Create 4 cubes (dynamic rigid bodies) and add them to the space.
         int numCubes = 4;
         float cubeMass = 2f;
-        PhysicsRigidBody[] cube = new PhysicsRigidBody[4];
+        PhysicsRigidBody[] cube = new PhysicsRigidBody[numCubes];
         for (int cubeIndex = 0; cubeIndex < numCubes; ++cubeIndex) {
             cube[cubeIndex] = new PhysicsRigidBody(cubeShape, cubeMass);
             physicsSpace.addCollisionObject(cube[cubeIndex]);
@@ -95,7 +95,7 @@ public class HelloDamping extends SimpleApplication {
         cube[2].setPhysicsLocation(new Vector3f(0f, -2f, 0f));
         cube[3].setPhysicsLocation(new Vector3f(4f, -2f, 0f));
 
-        // Give each cube its own set of damping parameters.
+        // Give each cube its own set of damping parameters (linear, angular).
         cube[0].setDamping(0f, 0f);
         cube[1].setDamping(0f, 0.9f);
         cube[2].setDamping(0.9f, 0f);

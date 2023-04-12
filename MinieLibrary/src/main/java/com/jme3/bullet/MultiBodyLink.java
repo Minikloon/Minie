@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021 jMonkeyEngine
+ * Copyright (c) 2020-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@ import java.util.logging.Logger;
 import jme3utilities.Validate;
 
 /**
- * A single link in a MultiBody, based on Bullet's btMultibodyLink.
+ * A single link in a MultiBody, based on Bullet's {@code btMultibodyLink}.
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -77,7 +77,7 @@ public class MultiBodyLink
 
     /**
      * index of this link in its MultiBody, which is also the index of the
-     * btMultiBodyLink in its btMultiBody (&ge;0)
+     * {@code btMultiBodyLink} in its {@code btMultiBody} (&ge;0)
      */
     private int linkIndex;
     /**
@@ -85,7 +85,7 @@ public class MultiBodyLink
      */
     private int numDofs;
     /**
-     * copy of the ID of the btMultiBody
+     * copy of the ID of the {@code btMultiBody}
      */
     private long multiBodyId;
     /**
@@ -434,8 +434,8 @@ public class MultiBodyLink
 
     /**
      * Determine the torque applied to the indexed DOF using
-     * {@link #addJointTorque(int, float)}, which is zeroed after each physics
-     * tick.
+     * {@link #addJointTorque(int, float)}, which is zeroed after each
+     * simulation step.
      *
      * @param dofIndex which degree of freedom (&ge;0, &lt;numDofs)
      * @return the torque
@@ -627,14 +627,14 @@ public class MultiBodyLink
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        multiBody = cloner.clone(multiBody);
-        multiBodyId = multiBody.nativeId();
-        parentLink = cloner.clone(parentLink);
+        this.multiBody = cloner.clone(multiBody);
+        this.multiBodyId = multiBody.nativeId();
+        this.parentLink = cloner.clone(parentLink);
 
         long linkId = getLinkId(multiBodyId, linkIndex);
         reassignNativeId(linkId);
 
-        collider = cloner.clone(collider);
+        this.collider = cloner.clone(collider);
     }
 
     /**
@@ -646,7 +646,7 @@ public class MultiBodyLink
     @Override
     public MultiBodyLink jmeClone() {
         try {
-            MultiBodyLink clone = (MultiBodyLink) super.clone();
+            MultiBodyLink clone = (MultiBodyLink) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -666,11 +666,13 @@ public class MultiBodyLink
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        collider = (MultiBodyCollider) capsule.readSavable(tagCollider, null);
-        linkIndex = capsule.readInt(tagLinkIndex, -1);
-        multiBody = (MultiBody) capsule.readSavable(tagMultiBody, null);
-        numDofs = capsule.readInt(tagNumDofs, 0);
-        parentLink = (MultiBodyLink) capsule.readSavable(tagParentLink, null);
+        this.collider
+                = (MultiBodyCollider) capsule.readSavable(tagCollider, null);
+        this.linkIndex = capsule.readInt(tagLinkIndex, -1);
+        this.multiBody = (MultiBody) capsule.readSavable(tagMultiBody, null);
+        this.numDofs = capsule.readInt(tagNumDofs, 0);
+        this.parentLink
+                = (MultiBodyLink) capsule.readSavable(tagParentLink, null);
     }
 
     /**
@@ -693,38 +695,38 @@ public class MultiBodyLink
     // *************************************************************************
     // native private methods
 
-    native private static void addConstraintForce(long linkId,
-            Vector3f forceVector);
+    native private static void
+            addConstraintForce(long linkId, Vector3f forceVector);
 
-    native private static void addConstraintTorque(long linkId,
-            Vector3f torqueVector);
+    native private static void
+            addConstraintTorque(long linkId, Vector3f torqueVector);
 
     native private static void addForce(long linkId, Vector3f forceVector);
 
-    native private static void addJointTorque(long linkId, int dofIndex,
-            float torque);
+    native private static void
+            addJointTorque(long linkId, int dofIndex, float torque);
 
     native private static void addTorque(long linkId, Vector3f torqueVector);
 
-    native private static void getAppliedForce(long linkId,
-            Vector3f storeVector);
+    native private static void
+            getAppliedForce(long linkId, Vector3f storeVector);
 
-    native private static void getAppliedTorque(long linkId,
-            Vector3f storeVector);
+    native private static void
+            getAppliedTorque(long linkId, Vector3f storeVector);
 
-    native private static void getAxisBottom(long linkId, int dofIndex,
-            Vector3f storeVector);
+    native private static void
+            getAxisBottom(long linkId, int dofIndex, Vector3f storeVector);
 
-    native private static void getAxisTop(long linkId, int dofIndex,
-            Vector3f storeVector);
+    native private static void
+            getAxisTop(long linkId, int dofIndex, Vector3f storeVector);
 
     native private static long getCollider(long multiBodyId, int linkIndex);
 
-    native private static void getConstraintForce(long linkId,
-            Vector3f storeVector);
+    native private static void
+            getConstraintForce(long linkId, Vector3f storeVector);
 
-    native private static void getConstraintTorque(long linkId,
-            Vector3f storeVector);
+    native private static void
+            getConstraintTorque(long linkId, Vector3f storeVector);
 
     native private static int getDofCount(long linkId);
 
@@ -734,8 +736,8 @@ public class MultiBodyLink
 
     native private static int getFlags(long multiBodyId);
 
-    native private static void getInertiaLocal(long linkId,
-            Vector3f storeVector);
+    native private static void
+            getInertiaLocal(long linkId, Vector3f storeVector);
 
     native private static float getJointPos(long linkId, int dofIndex);
 
@@ -743,31 +745,31 @@ public class MultiBodyLink
 
     native private static int getJointType(long linkId);
 
-    native private static float getJointVel(long multiBodyId, int linkIndex,
-            int dofIndex);
+    native private static float
+            getJointVel(long multiBodyId, int linkIndex, int dofIndex);
 
     native private static long getLinkId(long multiBodyId, int linkIndex);
 
     native private static float getMass(long linkId);
 
-    native private static void getParent2LinkRotation(long linkId,
-            Quaternion storeQuaternion);
+    native private static void
+            getParent2LinkRotation(long linkId, Quaternion storeQuaternion);
 
     native private static int getParentIndex(long linkId);
 
     native private static int getPosVarCount(long linkId);
 
-    native private static void getQ0Parent2LinkRotation(long linkId,
-            Quaternion storeQuaternion);
+    native private static void
+            getQ0Parent2LinkRotation(long linkId, Quaternion storeQuaternion);
 
-    native private static void getWorldTransform(long linkId,
-            Transform storeTransform);
+    native private static void
+            getWorldTransform(long linkId, Transform storeTransform);
 
-    native private static void localFrameToWorld(long multiBodyId,
-            int linkIndex, Matrix3f rotationMatrix);
+    native private static void localFrameToWorld(
+            long multiBodyId, int linkIndex, Matrix3f rotationMatrix);
 
-    native private static void localPosToWorld(long multiBodyId, int linkIndex,
-            Vector3f locationVector);
+    native private static void localPosToWorld(
+            long multiBodyId, int linkIndex, Vector3f locationVector);
 
     native private static void setCollider(long linkId, long colliderId);
 
@@ -777,6 +779,6 @@ public class MultiBodyLink
     native private static void setJointVel(long multiBodyId, int linkIndex,
             int dofIndex, float velocityVector);
 
-    native private static void worldPosToLocal(long multiBodyId, int linkIndex,
-            Vector3f locationVector);
+    native private static void worldPosToLocal(
+            long multiBodyId, int linkIndex, Vector3f locationVector);
 }

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,8 @@ import jme3utilities.mesh.ClothGrid;
 
 /**
  * A simple cloth simulation using a soft body.
+ * <p>
+ * Builds upon HelloSoftBody.
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -52,9 +54,9 @@ public class HelloCloth extends SimpleApplication {
     /**
      * Main entry point for the HelloCloth application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloCloth application = new HelloCloth();
         application.start();
     }
@@ -68,8 +70,8 @@ public class HelloCloth extends SimpleApplication {
     public void simpleInitApp() {
         // Set up Bullet physics (with debug enabled).
         SoftPhysicsAppState bulletAppState = new SoftPhysicsAppState();
-        bulletAppState.setDebugEnabled(true);
         stateManager.attach(bulletAppState);
+        bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSoftSpace physicsSpace = bulletAppState.getPhysicsSoftSpace();
 
         // Relocate the camera.
@@ -95,12 +97,13 @@ public class HelloCloth extends SimpleApplication {
         // Make the cloth flexible by altering the angular stiffness
         // of its material.
         SoftBodyMaterial mat = cloth.getSoftMaterial();
-        mat.setAngularStiffness(0f); // default = 1
-
-        // Improve simulation quality by increasing
-        // the number of position iterations for the cloth.
+        mat.setAngularStiffness(0f); // default=1
+        /*
+         * Improve simulation accuracy by increasing
+         * the number of position-solver iterations for the cloth.
+         */
         SoftBodyConfig config = cloth.getSoftConfig();
-        config.setPositionIterations(9);  // default = 1
+        config.setPositionIterations(9);  // default=1
 
         // Translate the cloth upward to its starting location.
         cloth.applyTranslation(new Vector3f(0f, 2f, 0f));

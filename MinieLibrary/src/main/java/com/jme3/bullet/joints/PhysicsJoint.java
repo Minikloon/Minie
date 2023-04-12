@@ -89,9 +89,9 @@ abstract public class PhysicsJoint
     // constructors
 
     /**
-     * No-argument constructor needed by SavableClassUtil.
+     * Instantiate a PhysicsJoint.
      */
-    protected PhysicsJoint() {
+    protected PhysicsJoint() { // to avoid a warning from JDK 18 javadoc
     }
     // *************************************************************************
     // new methods exposed
@@ -199,11 +199,13 @@ abstract public class PhysicsJoint
     }
 
     /**
-     * Read the ID of the btTypedConstraint, btSoftBody::Anchor, or
-     * btSoftBody::Joint. For compatibility with the jme3-bullet library.
+     * Return the ID of the native object ({@code btTypedConstraint},
+     * {@code btSoftBody::Anchor}, or {@code btSoftBody::Joint}).
      *
-     * @return the identifier (not zero)
+     * @return the native identifier (not zero)
+     * @deprecated use {@link NativePhysicsObject#nativeId()}
      */
+    @Deprecated
     final public long getObjectId() {
         long jointId = nativeId();
         return jointId;
@@ -233,7 +235,7 @@ abstract public class PhysicsJoint
      * @param physicsSpace (may be null)
      */
     public void setPhysicsSpace(PhysicsSpace physicsSpace) {
-        space = physicsSpace;
+        this.space = physicsSpace;
     }
     // *************************************************************************
     // new protected methods
@@ -246,7 +248,7 @@ abstract public class PhysicsJoint
     final protected void setBodyA(PhysicsBody body) {
         assert body != null;
         assert bodyA == null : bodyA;
-        bodyA = body;
+        this.bodyA = body;
     }
 
     /**
@@ -257,7 +259,7 @@ abstract public class PhysicsJoint
     final protected void setBodyB(PhysicsBody body) {
         assert body != null;
         assert bodyB == null : bodyB;
-        bodyB = body;
+        this.bodyB = body;
     }
     // *************************************************************************
     // JmeCloneable methods
@@ -273,13 +275,29 @@ abstract public class PhysicsJoint
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        bodyA = cloner.clone(bodyA);
-        bodyB = cloner.clone(bodyB);
-        space = null;
-        unassignNativeObject();
+        assert !hasAssignedNativeObject();
+        PhysicsJoint old = (PhysicsJoint) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
+
+        PhysicsBody oldBodyA = old.bodyA;
+        this.bodyA = cloner.clone(oldBodyA);
+        if (bodyA != null && !bodyA.hasAssignedNativeObject()) {
+            bodyA.cloneFields(cloner, oldBodyA);
+        }
+        assert bodyA == null || bodyA.hasAssignedNativeObject() : bodyA;
+
+        PhysicsBody oldBodyB = old.bodyB;
+        this.bodyB = cloner.clone(oldBodyB);
+        if (bodyB != null && !bodyB.hasAssignedNativeObject()) {
+            bodyB.cloneFields(cloner, oldBodyB);
+        }
+        assert bodyB == null || bodyB.hasAssignedNativeObject() : bodyA;
+
+        this.space = null;
         /*
          * Each subclass must create the btTypedConstraint, btSoftBody::Anchor,
-         * or btSoftBody::Joint and invoke setNativeId()
+         * or btSoftBody::Joint and invoke setNativeId().
          */
     }
 
@@ -291,7 +309,8 @@ abstract public class PhysicsJoint
     @Override
     public PhysicsJoint jmeClone() {
         try {
-            PhysicsJoint clone = (PhysicsJoint) super.clone();
+            PhysicsJoint clone = (PhysicsJoint) clone();
+            clone.unassignNativeObject();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -311,11 +330,11 @@ abstract public class PhysicsJoint
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        bodyA = (PhysicsBody) capsule.readSavable(tagNodeA, null);
-        bodyB = (PhysicsBody) capsule.readSavable(tagNodeB, null);
+        this.bodyA = (PhysicsBody) capsule.readSavable(tagNodeA, null);
+        this.bodyB = (PhysicsBody) capsule.readSavable(tagNodeB, null);
         /*
          * Each subclass must create the btTypedConstraint, btSoftBody::Anchor,
-         * or btSoftBody::Joint.
+         * or btSoftBody::Joint and then read the remaining properties.
          */
     }
 
@@ -332,6 +351,7 @@ abstract public class PhysicsJoint
 
         capsule.write(bodyA, tagNodeA, null);
         capsule.write(bodyB, tagNodeB, null);
+        // space is never written.
     }
     // *************************************************************************
     // NativePhysicsObject methods
@@ -360,8 +380,12 @@ abstract public class PhysicsJoint
         result = result.replace("Physics", "");
         result = result.replace("Point", "P");
         result = result.replace("Six", "6");
-        long jointId = nativeId();
-        result += "#" + Long.toHexString(jointId);
+        if (hasAssignedNativeObject()) {
+            long jointId = nativeId();
+            result += "#" + Long.toHexString(jointId);
+        } else {
+            result += "#unassigned";
+        }
 
         return result;
     }

@@ -33,6 +33,11 @@ package com.jme3.bullet.objects.infos;
 
 import com.jme3.bullet.NativePhysicsObject;
 import com.jme3.bullet.objects.PhysicsVehicle;
+import com.jme3.export.InputCapsule;
+import com.jme3.export.JmeExporter;
+import com.jme3.export.JmeImporter;
+import com.jme3.export.OutputCapsule;
+import com.jme3.export.Savable;
 import com.jme3.math.Matrix3f;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Transform;
@@ -40,6 +45,10 @@ import com.jme3.math.Vector3f;
 import com.jme3.scene.Spatial;
 import com.jme3.util.clone.Cloner;
 import com.jme3.util.clone.JmeCloneable;
+import com.simsilica.mathd.Matrix3d;
+import com.simsilica.mathd.Quatd;
+import com.simsilica.mathd.Vec3d;
+import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -50,7 +59,7 @@ import java.util.logging.Logger;
  */
 public class RigidBodyMotionState
         extends NativePhysicsObject
-        implements JmeCloneable {
+        implements JmeCloneable, Savable {
     // *************************************************************************
     // constants and loggers
 
@@ -59,6 +68,11 @@ public class RigidBodyMotionState
      */
     final public static Logger logger
             = Logger.getLogger(RigidBodyMotionState.class.getName());
+    /**
+     * field names for serialization
+     */
+    final private static String tagApplyPhysicsLocal = "applyPhysicsLocal";
+    final private static String tagVehicle = "vehicle";
     // *************************************************************************
     // fields
 
@@ -74,7 +88,7 @@ public class RigidBodyMotionState
     /**
      * temporary storage for a Quaternion
      */
-    private Quaternion tmp_inverseWorldRotation = new Quaternion();
+    private Quaternion tmpInverseWorldRotation = new Quaternion();
     // *************************************************************************
     // constructors
 
@@ -98,8 +112,8 @@ public class RigidBodyMotionState
      */
     public boolean applyTransform(Spatial spatial) {
         long motionStateId = nativeId();
-        Vector3f localLocation = spatial.getLocalTranslation();
-        Quaternion localRotationQuat = spatial.getLocalRotation();
+        Vector3f localLocation = spatial.getLocalTranslation(); // alias
+        Quaternion localRotationQuat = spatial.getLocalRotation(); // alias
         boolean physicsLocationDirty = applyTransform(motionStateId,
                 localLocation, localRotationQuat);
         if (!physicsLocationDirty) {
@@ -109,9 +123,9 @@ public class RigidBodyMotionState
             localLocation.subtractLocal(
                     spatial.getParent().getWorldTranslation());
             localLocation.divideLocal(spatial.getParent().getWorldScale());
-            tmp_inverseWorldRotation.set(spatial.getParent().getWorldRotation())
+            tmpInverseWorldRotation.set(spatial.getParent().getWorldRotation())
                     .inverseLocal().multLocal(localLocation);
-            tmp_inverseWorldRotation.mult(localRotationQuat, localRotationQuat);
+            tmpInverseWorldRotation.mult(localRotationQuat, localRotationQuat);
 
             spatial.setLocalTranslation(localLocation);
             spatial.setLocalRotation(localRotationQuat);
@@ -127,7 +141,7 @@ public class RigidBodyMotionState
     }
 
     /**
-     * Copy the location from this motion state.
+     * Copy the location to a Vector3f.
      *
      * @param storeResult storage for the result (modified if not null)
      * @return the location vector (in physics-space coordinates, either
@@ -144,22 +158,40 @@ public class RigidBodyMotionState
     }
 
     /**
-     * Read the ID of the native object. For compatibility with the jme3-bullet
-     * library.
+     * Copy the location to a Vector3d.
      *
-     * @return the native ID (not zero)
+     * @param storeResult storage for the result (modified if not null)
+     * @return the location vector (in physics-space coordinates, either
+     * storeResult or a new vector, not null, finite)
      */
+    public Vec3d getLocationDp(Vec3d storeResult) {
+        Vec3d result = (storeResult == null) ? new Vec3d() : storeResult;
+
+        long motionStateId = nativeId();
+        getWorldLocationDp(motionStateId, result);
+
+        assert result.isFinite() : result;
+        return result;
+    }
+
+    /**
+     * Return the ID of the native object.
+     *
+     * @return the native identifier (not zero)
+     * @deprecated use {@link NativePhysicsObject#nativeId()}
+     */
+    @Deprecated
     public long getObjectId() {
         long motionStateId = nativeId();
         return motionStateId;
     }
 
     /**
-     * Copy the orientation from this motion state (as a matrix).
+     * Copy the orientation to a Matrix3f.
      *
      * @param storeResult storage for the result (modified if not null)
-     * @return the rotation matrix (in physics-space coordinates, either
-     * storeResult or a new vector, not null)
+     * @return the orientation (in physics-space coordinates, either storeResult
+     * or a new matrix, not null)
      */
     public Matrix3f getOrientation(Matrix3f storeResult) {
         Matrix3f result = (storeResult == null) ? new Matrix3f() : storeResult;
@@ -171,11 +203,11 @@ public class RigidBodyMotionState
     }
 
     /**
-     * Copy the orientation from this motion state (as a Quaternion).
+     * Copy the orientation to a Quaternion.
      *
      * @param storeResult storage for the result (modified if not null)
-     * @return the rotation Quaternion (in physics-space coordinates, either
-     * storeResult or a new vector, not null)
+     * @return the orientation (in physics-space coordinates, either storeResult
+     * or a new instance, not null)
      */
     public Quaternion getOrientation(Quaternion storeResult) {
         Quaternion result
@@ -183,6 +215,38 @@ public class RigidBodyMotionState
 
         long motionStateId = nativeId();
         getWorldRotationQuat(motionStateId, result);
+
+        return result;
+    }
+
+    /**
+     * Copy the orientation to a Matrix3d.
+     *
+     * @param storeResult storage for the result (modified if not null)
+     * @return the orientation (in physics-space coordinates, either storeResult
+     * or a new matrix, not null)
+     */
+    public Matrix3d getOrientationMatrixDp(Matrix3d storeResult) {
+        Matrix3d result = (storeResult == null) ? new Matrix3d() : storeResult;
+
+        long motionStateId = nativeId();
+        getWorldRotationDp(motionStateId, result);
+
+        return result;
+    }
+
+    /**
+     * Copy the orientation to a Quatd.
+     *
+     * @param storeResult storage for the result (modified if not null)
+     * @return the orientation (in physics-space coordinates, either storeResult
+     * or a new instance, not null)
+     */
+    public Quatd getOrientationQuaternionDp(Quatd storeResult) {
+        Quatd result = (storeResult == null) ? new Quatd() : storeResult;
+
+        long motionStateId = nativeId();
+        getWorldRotationQuatDp(motionStateId, result);
 
         return result;
     }
@@ -255,8 +319,8 @@ public class RigidBodyMotionState
         long motionStateId = createMotionState();
         reassignNativeId(motionStateId);
 
-        tmp_inverseWorldRotation = cloner.clone(tmp_inverseWorldRotation);
-        vehicle = cloner.clone(vehicle);
+        this.tmpInverseWorldRotation = cloner.clone(tmpInverseWorldRotation);
+        this.vehicle = cloner.clone(vehicle);
     }
 
     /**
@@ -267,11 +331,45 @@ public class RigidBodyMotionState
     @Override
     public RigidBodyMotionState jmeClone() {
         try {
-            RigidBodyMotionState clone = (RigidBodyMotionState) super.clone();
+            RigidBodyMotionState clone = (RigidBodyMotionState) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
         }
+    }
+    // *************************************************************************
+    // Savable methods
+
+    /**
+     * De-serialize this state from the specified importer, for example when
+     * loading from a J3O file.
+     *
+     * @param importer (not null)
+     * @throws IOException from the importer
+     */
+    @Override
+    public void read(JmeImporter importer) throws IOException {
+        InputCapsule capsule = importer.getCapsule(this);
+
+        this.applyPhysicsLocal
+                = capsule.readBoolean(tagApplyPhysicsLocal, false);
+        this.vehicle = (PhysicsVehicle) capsule.readSavable(tagVehicle, null);
+    }
+
+    /**
+     * Serialize this object to the specified exporter, for example when saving
+     * to a J3O file.
+     *
+     * @param exporter (not null)
+     * @throws IOException from the exporter
+     */
+    @Override
+    public void write(JmeExporter exporter) throws IOException {
+        OutputCapsule capsule = exporter.getCapsule(this);
+
+        capsule.write(applyPhysicsLocal, tagApplyPhysicsLocal, false);
+        capsule.write(vehicle, tagVehicle, null);
+        // tmpInverseWorldRotation is never written.
     }
     // *************************************************************************
     // Java private methods
@@ -288,19 +386,28 @@ public class RigidBodyMotionState
     // *************************************************************************
     // native private methods
 
-    native private static boolean applyTransform(long stateId,
-            Vector3f location, Quaternion rotation);
+    native private static boolean applyTransform(
+            long stateId, Vector3f location, Quaternion rotation);
 
     native private static long createMotionState();
 
     native private static void finalizeNative(long objectId);
 
-    native private static void getWorldLocation(long stateId,
-            Vector3f storeResult);
+    native private static void
+            getWorldLocation(long stateId, Vector3f storeVector);
 
-    native private static void getWorldRotation(long stateId,
-            Matrix3f storeResult);
+    native private static void
+            getWorldLocationDp(long stateId, Vec3d storeVector);
 
-    native private static void getWorldRotationQuat(long stateId,
-            Quaternion storeResult);
+    native private static void
+            getWorldRotation(long stateId, Matrix3f storeMatrix);
+
+    native private static void
+            getWorldRotationDp(long stateId, Matrix3d storeMatrix);
+
+    native private static void
+            getWorldRotationQuat(long stateId, Quaternion storeQuat);
+
+    native private static void
+            getWorldRotationQuatDp(long stateId, Quatd storeQuat);
 }

@@ -32,7 +32,6 @@
 package com.jme3.bullet.debug;
 
 import com.jme3.bullet.collision.shapes.CollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.bullet.objects.infos.RigidBodyMotionState;
 import com.jme3.bullet.util.DebugShapeFactory;
@@ -42,6 +41,7 @@ import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jme3utilities.MeshNormals;
 
 /**
  * A physics-debug control used to visualize a PhysicsRigidBody.
@@ -61,13 +61,13 @@ public class BulletRigidBodyDebugControl extends CollisionShapeDebugControl {
     // fields
 
     /**
-     * debug-mesh normals option for which debugSpatial was generated
-     */
-    private DebugMeshNormals oldNormals;
-    /**
      * debug-mesh resolution for which debugSpatial was generated
      */
     private int oldResolution;
+    /**
+     * mesh normals option for which debugSpatial was generated
+     */
+    private MeshNormals oldNormals;
     /**
      * rigid body to visualize (not null)
      */
@@ -89,16 +89,16 @@ public class BulletRigidBodyDebugControl extends CollisionShapeDebugControl {
      * @param debugAppState which app state (not null, alias created)
      * @param body which body to visualize (not null, alias created)
      */
-    public BulletRigidBodyDebugControl(BulletDebugAppState debugAppState,
-            PhysicsRigidBody body) {
+    public BulletRigidBodyDebugControl(
+            BulletDebugAppState debugAppState, PhysicsRigidBody body) {
         super(debugAppState);
         this.body = body;
 
         super.setShape(body.getCollisionShape());
-        oldNormals = body.debugMeshNormals();
-        oldResolution = body.debugMeshResolution();
+        this.oldNormals = body.debugMeshNormals();
+        this.oldResolution = body.debugMeshResolution();
 
-        debugSpatial = DebugShapeFactory.getDebugShape(body);
+        this.debugSpatial = DebugShapeFactory.getDebugShape(body);
         debugSpatial.setName(body.toString());
         updateMaterial();
     }
@@ -115,7 +115,7 @@ public class BulletRigidBodyDebugControl extends CollisionShapeDebugControl {
     @Override
     protected void controlUpdate(float tpf) {
         CollisionShape newShape = body.getCollisionShape();
-        DebugMeshNormals newNormals = body.debugMeshNormals();
+        MeshNormals newNormals = body.debugMeshNormals();
         int newResolution = body.debugMeshResolution();
 
         boolean rebuild;
@@ -133,13 +133,13 @@ public class BulletRigidBodyDebugControl extends CollisionShapeDebugControl {
             logger.log(Level.INFO, "Rebuild debugSpatial for {0}.", body);
 
             setShape(newShape);
-            oldNormals = newNormals;
-            oldResolution = newResolution;
+            this.oldNormals = newNormals;
+            this.oldResolution = newResolution;
 
             Node node = (Node) spatial;
             node.detachChild(debugSpatial);
 
-            debugSpatial = DebugShapeFactory.getDebugShape(body);
+            this.debugSpatial = DebugShapeFactory.getDebugShape(body);
             debugSpatial.setName(body.toString());
 
             node.attachChild(debugSpatial);

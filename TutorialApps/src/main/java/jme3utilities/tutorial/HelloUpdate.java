@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,7 @@ import com.jme3.system.AppSettings;
 
 /**
  * A simple example without an AppState.
- *
+ * <p>
  * Builds upon HelloRbc.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -53,16 +53,19 @@ public class HelloUpdate extends SimpleApplication {
     // *************************************************************************
     // fields
 
-    private PhysicsSpace physicsSpace;
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloUpdate application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloUpdate application = new HelloUpdate();
 
         // Enable gamma correction for accurate lighting.
@@ -134,8 +137,10 @@ public class HelloUpdate extends SimpleApplication {
 
     /**
      * Add lighting to the specified scene.
+     *
+     * @param scene the scene to augment (not null)
      */
-    private void addLighting(Spatial scene) {
+    private static void addLighting(Spatial scene) {
         // Light the scene with ambient and directional lights.
         ColorRGBA ambientColor = new ColorRGBA(0.02f, 0.02f, 0.02f, 1f);
         AmbientLight ambient = new AmbientLight(ambientColor);

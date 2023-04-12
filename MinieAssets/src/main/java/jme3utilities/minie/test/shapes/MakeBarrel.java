@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@ import jme3utilities.math.VectorSet;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MakeBarrel {
+final public class MakeBarrel {
     // *************************************************************************
     // constants and loggers
 
@@ -62,6 +62,15 @@ public class MakeBarrel {
     final private static String assetDirPath
             = "../MinieExamples/src/main/resources";
     // *************************************************************************
+    // constructors
+
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private MakeBarrel() {
+        // do nothing
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
@@ -71,28 +80,17 @@ public class MakeBarrel {
      */
     public static void main(String[] arguments) {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
-        /*
-         * Mute the chatty loggers found in some imported packages.
-         */
+
+        // Mute the chatty loggers found in some imported packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Set the logging level for this class.
-         */
-        //logger.setLevel(Level.INFO);
-        /*
-         * Instantiate the application.
-         */
-        MakeBarrel application = new MakeBarrel();
-        /*
-         * Log the working directory.
-         */
+
+        // Log the working directory.
         String userDir = System.getProperty("user.dir");
         logger.log(Level.INFO, "working directory is {0}",
                 MyString.quote(userDir));
-        /*
-         * Generate the collision shape.
-         */
-        application.makeBarrel();
+
+        // Generate the collision shape.
+        makeBarrel();
     }
     // *************************************************************************
     // private methods
@@ -100,7 +98,7 @@ public class MakeBarrel {
     /**
      * Generate a collision shape for a barrel or cask.
      */
-    private void makeBarrel() {
+    private static void makeBarrel() {
         AssetManager assetManager = new DesktopAssetManager();
         assetManager.registerLoader(GlbLoader.class, "glb");
         assetManager.registerLoader(J3MLoader.class, "j3md");
@@ -110,15 +108,13 @@ public class MakeBarrel {
          * from src/main/resources:
          */
         Spatial cgmRoot = assetManager.loadModel("Models/Barrel/Barrel.glb");
-        /*
-         * Generate a HullCollisionShape based on mesh vertices.
-         */
+
+        // Generate a HullCollisionShape based on mesh vertices.
         VectorSet locations = MyMesh.listVertexLocations(cgmRoot, null);
         FloatBuffer buffer = locations.toBuffer();
         HullCollisionShape shape = new HullCollisionShape(buffer);
-        /*
-         * Write the shape to the asset file.
-         */
+
+        // Write the shape to the asset file.
         String assetPath = "CollisionShapes/barrel.j3o";
         String writeFilePath = String.format("%s/%s", assetDirPath, assetPath);
         Heart.writeJ3O(writeFilePath, shape);

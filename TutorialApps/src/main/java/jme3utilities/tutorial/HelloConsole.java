@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -36,21 +36,27 @@ import com.jme3.system.NativeLibraryLoader;
 
 /**
  * A simple example of a console application without a scene graph.
- *
+ * <p>
  * Builds upon HelloStaticBody.
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class HelloConsole {
+final public class HelloConsole {
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private HelloConsole() {
+        // do nothing
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloConsole application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         // Load the native library for this platform.
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
 

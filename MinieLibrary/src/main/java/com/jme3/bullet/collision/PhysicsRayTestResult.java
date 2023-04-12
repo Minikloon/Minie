@@ -39,7 +39,7 @@ import java.util.logging.Logger;
  *
  * @author Empire-Phoenix, normenhansen
  */
-public class PhysicsRayTestResult {
+final public class PhysicsRayTestResult {
     // *************************************************************************
     // constants and loggers
 
@@ -105,7 +105,8 @@ public class PhysicsRayTestResult {
     }
 
     /**
-     * For compatibility with jme3-bullet.
+     * For compatibility with jme3-jbullet. The jme3-jbullet version returns a
+     * pre-existing vector instead of a new one.
      *
      * @return a new unit vector
      */
@@ -121,11 +122,14 @@ public class PhysicsRayTestResult {
      * or a new vector, not null)
      */
     public Vector3f getHitNormalLocal(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return normal.clone();
+            result = normal.clone();
         } else {
-            return storeResult.set(normal);
+            result = storeResult.set(normal);
         }
+
+        return result;
     }
 
     /**

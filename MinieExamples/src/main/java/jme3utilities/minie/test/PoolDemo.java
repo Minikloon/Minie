@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -40,7 +40,6 @@ import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.bullet.util.CollisionShapeFactory;
 import com.jme3.font.BitmapText;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.light.AmbientLight;
@@ -64,11 +63,13 @@ import com.jme3.shadow.PointLightShadowRenderer;
 import com.jme3.system.AppSettings;
 import com.jme3.texture.Texture;
 import java.util.List;
+import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
+import jme3utilities.MyString;
 import jme3utilities.math.MyVector3f;
 import jme3utilities.math.noise.Generator;
 import jme3utilities.math.noise.Permutation;
@@ -123,47 +124,50 @@ public class PoolDemo extends PhysicsDemo {
     /**
      * text displayed in the upper-left corner of the GUI node
      */
-    final private BitmapText[] statusLines = new BitmapText[1];
+    final private static BitmapText[] statusLines = new BitmapText[1];
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * Mesh shared by all balls in the scene
      */
-    private Mesh ballMesh;
+    private static Mesh ballMesh;
     /**
      * scene-graph node to parent all spatials with physics controls
      */
-    final private Node rbcNode = new Node("rbc node");
+    final private static Node rbcNode = new Node("rbc node");
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the PoolDemo application.
+     */
+    public PoolDemo() { // made explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the PoolDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new PoolDemo();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new PoolDemo();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -173,18 +177,19 @@ public class PoolDemo extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        addStatusLines();
+        super.acorusInit();
+
         rootNode.attachChild(rbcNode);
         addLighting(rootNode);
-        addStatusLines();
         configureCamera();
         configureDumper();
         configurePhysics();
         generateMaterials();
         generateShapes();
-        /*
-         * Hide the render-statistics overlay.
-         */
+
+        // Hide the render-statistics overlay.
         stateManager.getState(StatsAppState.class).toggleStats();
 
         ColorRGBA bgColor = new ColorRGBA(0.02f, 0.02f, 0.02f, 1f);
@@ -211,9 +216,8 @@ public class PoolDemo extends PhysicsDemo {
     @Override
     public void generateMaterials() {
         super.generateMaterials();
-        /*
-         * Change the platform material to double-sided.
-         */
+
+        // Change the platform material to double-sided.
         Material platformMaterial = findMaterial("platform");
         RenderState ars = platformMaterial.getAdditionalRenderState();
         ars.setFaceCullMode(RenderState.FaceCullMode.Off);
@@ -226,8 +230,8 @@ public class PoolDemo extends PhysicsDemo {
             String ballName = ballName(ballId);
             String assetPath = "Textures/poolBalls/" + ballName + ".png";
             final boolean generateMips = false;
-            Texture texture = MyAsset.loadTexture(assetManager, assetPath,
-                    generateMips);
+            Texture texture = MyAsset
+                    .loadTexture(assetManager, assetPath, generateMips);
 
             Material material
                     = MyAsset.createShadedMaterial(assetManager, texture);
@@ -310,10 +314,7 @@ public class PoolDemo extends PhysicsDemo {
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind("toggle scene", KeyInput.KEY_M);
         dim.bind(asToggleVArrows, KeyInput.KEY_K);
-        /*
-         * Don't create the help node until the hotkey bindings are complete.
-         */
-        addHelp();
+        dim.bind(asToggleWArrows, KeyInput.KEY_N);
     }
 
     /**
@@ -339,9 +340,25 @@ public class PoolDemo extends PhysicsDemo {
                     toggleScene();
                     return;
 
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        for (int lineIndex = 0; lineIndex < statusLines.length; ++lineIndex) {
+            float y = newHeight - 20f * lineIndex;
+            statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
+        }
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -358,21 +375,9 @@ public class PoolDemo extends PhysicsDemo {
     // private methods
 
     /**
-     * Attach a Node to display hotkey help/hints.
-     */
-    private void addHelp() {
-        final float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + 20f);
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
-    }
-
-    /**
      * Add lighting and shadows to the specified scene.
+     *
+     * @param rootSpatial which scene (not null)
      */
     private void addLighting(Spatial rootSpatial) {
         ColorRGBA ambientColor = new ColorRGBA(0.02f, 0.02f, 0.02f, 1f);
@@ -405,8 +410,6 @@ public class PoolDemo extends PhysicsDemo {
     private void addStatusLines() {
         for (int lineIndex = 0; lineIndex < statusLines.length; ++lineIndex) {
             statusLines[lineIndex] = new BitmapText(guiFont);
-            float y = cam.getHeight() - 20f * lineIndex;
-            statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
             guiNode.attachChild(statusLines[lineIndex]);
         }
     }
@@ -450,7 +453,7 @@ public class PoolDemo extends PhysicsDemo {
     }
 
     /**
-     * Create and configure a new PhysicsSpace.
+     * Configure physics during startup.
      */
     private void configurePhysics() {
         bulletAppState = new BulletAppState();
@@ -487,6 +490,8 @@ public class PoolDemo extends PhysicsDemo {
      *
      * @param location the desired location (in physics-space coordinates, not
      * null, unaffected)
+     * @param ballId which ball (0=cue ball, 8=eight ball, &ge;0,
+     * &le;numberedBalls)
      */
     private void setUpBall(Vector3f location, int ballId) {
         String ballName = ballName(ballId);
@@ -510,8 +515,8 @@ public class PoolDemo extends PhysicsDemo {
         rbc.setFriction(0.03f);
         rbc.setPhysicsLocation(location);
 
-        Generator generator = getGenerator();
-        Quaternion rotation = generator.nextQuaternion(null);
+        Generator random = getGenerator();
+        Quaternion rotation = random.nextQuaternion(null);
         rbc.setPhysicsRotation(rotation);
 
         PhysicsSpace space = getPhysicsSpace();
@@ -529,10 +534,10 @@ public class PoolDemo extends PhysicsDemo {
         final float z0 = -60f;
         final int numRows = 5;
 
-        Generator generator = getGenerator();
+        Random random = getGenerator();
         Permutation permutation;
         while (true) {
-            long seed = generator.nextLong();
+            long seed = random.nextLong();
             permutation = new Permutation(numberedBalls, seed);
 
             boolean eightBallInCenter = (1 + permutation.permute(4) == 8);
@@ -577,7 +582,7 @@ public class PoolDemo extends PhysicsDemo {
         rbcNode.attachChild(platformNode);
 
         Transform tmpTransform = new Transform();
-        Quaternion rotation = tmpTransform.getRotation();
+        Quaternion rotation = tmpTransform.getRotation(); // alias
 
         for (int offsetIndex = 0; offsetIndex < 2; ++offsetIndex) {
             float zOffset = (2 * offsetIndex - 1) * legLength;
@@ -648,13 +653,13 @@ public class PoolDemo extends PhysicsDemo {
             Object appObject = pco.getApplicationData();
             if (appObject instanceof Integer && cueBallId == (int) appObject) {
                 Vector3f impulseVector = farLocation.subtract(nearLocation);
-                float impulseMagnitude = 1_000f;//TODO player-controlled impulse
+                float impulseMagnitude = 1_000f; // TODO player-controlled
                 float factor = impulseMagnitude / impulseVector.length();
                 impulseVector.multLocal(factor);
 
                 float hitFraction = hit.getHitFraction();
-                Vector3f location = MyVector3f.lerp(hitFraction, nearLocation,
-                        farLocation, null);
+                Vector3f location = MyVector3f
+                        .lerp(hitFraction, nearLocation, farLocation, null);
                 Vector3f ballCenter = pco.getPhysicsLocation(null);
                 location.subtractLocal(ballCenter);
 
@@ -672,7 +677,7 @@ public class PoolDemo extends PhysicsDemo {
     /**
      * Toggle mesh rendering on/off.
      */
-    private void toggleScene() {
+    private static void toggleScene() {
         Spatial.CullHint hint = rbcNode.getLocalCullHint();
         if (hint == Spatial.CullHint.Inherit
                 || hint == Spatial.CullHint.Never) {

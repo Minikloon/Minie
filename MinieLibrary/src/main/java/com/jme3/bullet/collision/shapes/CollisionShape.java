@@ -45,6 +45,7 @@ import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import com.jme3.util.clone.Cloner;
 import com.jme3.util.clone.JmeCloneable;
+import com.simsilica.mathd.Vec3d;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -54,11 +55,11 @@ import jme3utilities.minie.MyShape;
 
 /**
  * The abstract base class for collision shapes based on Bullet's
- * btCollisionShape.
+ * {@code btCollisionShape}.
  * <p>
  * Subclasses include ConvexShape and MeshCollisionShape. As suggested in the
- * Bullet manual, a single CollisionShape can be shared among multiple collision
- * objects.
+ * Bullet manual, a single collision shape can be shared among multiple
+ * collision objects.
  *
  * @author normenhansen
  */
@@ -112,7 +113,32 @@ abstract public class CollisionShape
      */
     protected Vector3f scale = new Vector3f(1f, 1f, 1f);
     // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate a collision shape with no tracker and no assigned native
+     * object.
+     */
+    protected CollisionShape() { // to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
     // new methods exposed
+
+    /**
+     * Return the center of the shape's axis-aligned bounding box in local
+     * coordinates.
+     *
+     * @param storeResult storage for the result (modified if not null)
+     * @return a location in the local coordinate system (either
+     * {@code storeResult} or a new vector)
+     */
+    public Vector3f aabbCenter(Vector3f storeResult) {
+        Vector3f result = (storeResult == null) ? new Vector3f() : storeResult;
+        BoundingBox aabb = boundingBox(translateIdentity, rotateIdentity, null);
+        aabb.getCenter(result);
+
+        return result;
+    }
 
     /**
      * Calculate a quick upper bound for the scaled volume of a shape, based on
@@ -140,8 +166,8 @@ abstract public class CollisionShape
      * @param storeResult storage for the result (modified if not null)
      * @return a bounding box (either storeResult or a new instance, not null)
      */
-    public BoundingBox boundingBox(Vector3f translation, Matrix3f rotation,
-            BoundingBox storeResult) {
+    public BoundingBox boundingBox(
+            Vector3f translation, Matrix3f rotation, BoundingBox storeResult) {
         Validate.finite(translation, "translation");
         Validate.nonNull(rotation, "rotation");
         BoundingBox result
@@ -178,8 +204,7 @@ abstract public class CollisionShape
         recalculateAabb();
 
         long shapeId = nativeId();
-        Matrix3f basisMatrix = new Matrix3f();
-        basisMatrix.set(rotation);
+        Matrix3f basisMatrix = new Matrix3f().set(rotation);
         Vector3f maxima = new Vector3f();
         Vector3f minima = new Vector3f();
         getAabb(shapeId, translation, basisMatrix, minima, maxima);
@@ -208,7 +233,17 @@ abstract public class CollisionShape
     }
 
     /**
-     * Read the default margin for new shapes that are neither capsules nor
+     * Test whether this shape can be split by an arbitrary plane. Meant to be
+     * overridden.
+     *
+     * @return true if splittable, false otherwise
+     */
+    public boolean canSplit() {
+        return false;
+    }
+
+    /**
+     * Return the default margin for new shapes that are neither capsules nor
      * spheres.
      *
      * @return the margin distance (in physics-space units, &gt;0)
@@ -219,7 +254,7 @@ abstract public class CollisionShape
     }
 
     /**
-     * Read the collision margin for this shape.
+     * Return the collision margin for this shape.
      *
      * @return the margin distance (in physics-space units, &ge;0)
      */
@@ -230,11 +265,12 @@ abstract public class CollisionShape
     }
 
     /**
-     * Read the native ID of the btCollisionShape. For compatibility with the
-     * jme3-bullet library.
+     * Return the ID of the native object ({@code btCollisionShape}).
      *
-     * @return the identifier (not zero)
+     * @return the native identifier (not zero)
+     * @deprecated use {@link NativePhysicsObject#nativeId()}
      */
+    @Deprecated
     final public long getObjectId() {
         long shapeId = nativeId();
         return shapeId;
@@ -257,9 +293,24 @@ abstract public class CollisionShape
     }
 
     /**
-     * Read the type of this shape.
+     * Copy the scale factors.
      *
-     * @return the type value (from enum BroadphaseNativeTypes)
+     * @param storeResult storage for the result (modified if not null)
+     * @return the scale factor for each local axis (either {@code storeResult}
+     * or a new vector, not null, no negative component)
+     */
+    public Vec3d getScaleDp(Vec3d storeResult) {
+        long shapeId = nativeId();
+        Vec3d result = (storeResult == null) ? new Vec3d() : storeResult;
+        getLocalScalingDp(shapeId, result);
+
+        return result;
+    }
+
+    /**
+     * Return the type of this shape.
+     *
+     * @return the type value (from Bullet's {@code enum BroadphaseNativeTypes})
      */
     public int getShapeType() {
         long shapeId = nativeId();
@@ -294,7 +345,8 @@ abstract public class CollisionShape
      * @return true if enabled, otherwise false
      */
     public boolean isContactFilterEnabled() {
-        assert enableContactFilter == isContactFilterEnabled(nativeId()) : enableContactFilter;
+        assert enableContactFilter == isContactFilterEnabled(nativeId()) :
+                "copy of flag = " + enableContactFilter;
         return enableContactFilter;
     }
 
@@ -363,9 +415,19 @@ abstract public class CollisionShape
      * infinite)
      */
     public float maxRadius() {
-        float result = DebugShapeFactory.maxDistance(this, transformIdentity,
-                DebugShapeFactory.lowResolution);
+        float result = DebugShapeFactory.maxDistance(
+                this, transformIdentity, DebugShapeFactory.lowResolution);
         return result;
+    }
+
+    /**
+     * Estimate the volume of this shape, including scale and margin. Meant to
+     * be overridden.
+     *
+     * @return the volume (in physics-space units cubed, &ge;0)
+     */
+    public float scaledVolume() {
+        throw new UnsupportedOperationException("Not implemented for: " + this);
     }
 
     /**
@@ -459,14 +521,27 @@ abstract public class CollisionShape
         logger.log(Level.FINE, "Scaling {0}.", this);
         this.scale.set(scale);
     }
+
+    /**
+     * Approximate this shape with a splittable shape. Meant to be overridden.
+     *
+     * @return a new splittable shape
+     */
+    public CollisionShape toSplittableShape() {
+        if (canSplit()) {
+            return this;
+        } else {
+            throw new IllegalArgumentException("this = " + this);
+        }
+    }
     // *************************************************************************
     // new protected methods
 
     /**
-     * Read the type of this shape.
+     * Return the type of this shape.
      *
-     * @param shapeId the ID of the btCollisionShape (not zero)
-     * @return the type value (from enum BroadphaseNativeTypes)
+     * @param shapeId the ID of the {@code btCollisionShape} (not zero)
+     * @return the type value (from Bullet's {@code enum BroadphaseNativeTypes})
      */
     final native protected static int getShapeType(long shapeId);
 
@@ -479,7 +554,7 @@ abstract public class CollisionShape
     }
 
     /**
-     * Synchronize the copied scale factors with the btCollisionShape.
+     * Synchronize the copied scale factors with the {@code btCollisionShape}.
      */
     protected void updateScale() {
         long shapeId = nativeId();
@@ -499,7 +574,7 @@ abstract public class CollisionShape
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        scale = cloner.clone(scale);
+        this.scale = cloner.clone(scale);
         unassignNativeObject();
         // subclass must create the btCollisionShape and invoke setNativeId()
     }
@@ -512,7 +587,7 @@ abstract public class CollisionShape
     @Override
     public CollisionShape jmeClone() {
         try {
-            CollisionShape clone = (CollisionShape) super.clone();
+            CollisionShape clone = (CollisionShape) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -532,11 +607,11 @@ abstract public class CollisionShape
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        enableContactFilter
+        this.enableContactFilter
                 = capsule.readBoolean(tagEnableContactFilter, false);
         Savable s = capsule.readSavable(tagScale, new Vector3f(1f, 1f, 1f));
         scale.set((Vector3f) s);
-        margin = capsule.readFloat(tagMargin, 0.04f);
+        this.margin = capsule.readFloat(tagMargin, 0.04f);
         // subclass must create the btCollisionShape and
         // apply contact-filter enable, margin, and scale
     }
@@ -562,7 +637,7 @@ abstract public class CollisionShape
     /**
      * Initialize the native ID.
      *
-     * @param shapeId the identifier of the btCollisionShape (not zero)
+     * @param shapeId the identifier of the {@code btCollisionShape} (not zero)
      */
     @Override
     protected void setNativeId(long shapeId) {
@@ -626,8 +701,11 @@ abstract public class CollisionShape
     native private static void getAabb(long shapeId, Vector3f location,
             Matrix3f basisMatrix, Vector3f storeMinima, Vector3f storeMaxima);
 
-    native private static void getLocalScaling(long shapeId,
-            Vector3f storeVector);
+    native private static void
+            getLocalScaling(long shapeId, Vector3f storeVector);
+
+    native private static void
+            getLocalScalingDp(long shapeId, Vec3d storeVector);
 
     native private static float getMargin(long shapeId);
 
@@ -643,8 +721,8 @@ abstract public class CollisionShape
 
     native private static boolean isPolyhedral(long shapeId);
 
-    native private static void setContactFilterEnabled(long shapeId,
-            boolean setting);
+    native private static void
+            setContactFilterEnabled(long shapeId, boolean setting);
 
     native private static void setLocalScaling(long shapeId, Vector3f scale);
 

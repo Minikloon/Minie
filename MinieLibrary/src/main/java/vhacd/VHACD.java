@@ -1,16 +1,31 @@
 /*
-Copyright (c) 2016, Riccardo Balbo
-All rights reserved.
+ Copyright (c) 2016, Riccardo Balbo
+ All rights reserved.
 
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are met:
 
-1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+ 1. Redistributions of source code must retain the above copyright notice, this
+    list of conditions and the following disclaimer.
 
-2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
 
-3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+ 3. Neither the name of the copyright holder nor the names of its
+    contributors may be used to endorse or promote products derived from
+    this software without specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 package vhacd;
 
@@ -29,7 +44,7 @@ import jme3utilities.math.MyVector3f;
  * Utility class to perform Volumetric-Hierarchical Approximate Convex
  * Decomposition on an indexed mesh.
  */
-public class VHACD {
+final public class VHACD {
     // *************************************************************************
     // constants and loggers
 
@@ -94,10 +109,11 @@ public class VHACD {
         assert positions.length % MyVector3f.numAxes == 0 : positions.length;
         assert indices.length % vpt == 0 : indices.length;
 
-        FloatBuffer b_pos = BufferUtils.createFloatBuffer(positions);
-        IntBuffer b_ind = BufferUtils.createIntBuffer(indices);
+        FloatBuffer positionsBuffer = BufferUtils.createFloatBuffer(positions);
+        IntBuffer indexBuffer = BufferUtils.createIntBuffer(indices);
         results = new ArrayList<>(50);
-        compute(b_pos, b_ind, params.nativeId(), params.getDebugEnabled());
+        compute(positionsBuffer, indexBuffer, params.nativeId(),
+                params.getDebugEnabled());
 
         return results;
     }
@@ -120,6 +136,8 @@ public class VHACD {
      * Add a hull to the result.
      * <p>
      * This method is invoked by native code.
+     *
+     * @param hullId the native ID of the ConvexHull to add (not zero)
      */
     private static void addHull(long hullId) {
         VHACDHull hull = new VHACDHull(hullId);

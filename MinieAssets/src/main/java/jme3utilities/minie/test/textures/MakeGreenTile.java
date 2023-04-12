@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2020, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -40,7 +40,7 @@ import jme3utilities.MyString;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MakeGreenTile {
+final public class MakeGreenTile {
     // *************************************************************************
     // constants and loggers
 
@@ -59,6 +59,15 @@ public class MakeGreenTile {
     final private static String assetDirPath
             = "../MinieExamples/src/main/resources";
     // *************************************************************************
+    // constructors
+
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private MakeGreenTile() {
+        // do nothing
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
@@ -67,29 +76,16 @@ public class MakeGreenTile {
      * @param arguments array of command-line arguments (not null)
      */
     public static void main(String[] arguments) {
-        /*
-         * Mute the chatty loggers found in some imported packages.
-         */
+        // Mute the chatty loggers found in some imported packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Set the logging level for this class and also for writeImage().
-         */
-        //logger.setLevel(Level.INFO);
-        //Logger.getLogger(Heart.class.getName()).setLevel(Level.INFO);
-        /*
-         * Instantiate the application.
-         */
-        MakeGreenTile application = new MakeGreenTile();
-        /*
-         * Log the working directory.
-         */
+
+        // Log the working directory.
         String userDir = System.getProperty("user.dir");
         logger.log(Level.INFO, "working directory is {0}",
                 MyString.quote(userDir));
-        /*
-         * Generate color image map.
-         */
-        application.makeGreenTile();
+
+        // Generate color image map.
+        makeGreenTile();
     }
     // *************************************************************************
     // private methods
@@ -97,10 +93,8 @@ public class MakeGreenTile {
     /**
      * Generate an image map for a green square with a dark border.
      */
-    private void makeGreenTile() {
-        /*
-         * Create a blank, color, buffered image for the texture map.
-         */
+    private static void makeGreenTile() {
+        // Create a blank, color, buffered image for the texture map.
         BufferedImage image = new BufferedImage(textureSize, textureSize,
                 BufferedImage.TYPE_4BYTE_ABGR);
         Graphics2D graphics = image.createGraphics();
@@ -113,9 +107,8 @@ public class MakeGreenTile {
         Color green = new Color(0f, 0.4f, 0f, opacity);
         graphics.setColor(green);
         graphics.fillRect(4, 4, textureSize - 8, textureSize - 8);
-        /*
-         * Write the image to the asset file.
-         */
+
+        // Write the image to the asset file.
         String assetPath = "Textures/greenTile.png";
         String filePath = String.format("%s/%s", assetDirPath, assetPath);
         try {

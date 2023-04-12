@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,6 @@ import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.joints.HingeJoint;
 import com.jme3.bullet.joints.JointEnd;
 import com.jme3.bullet.objects.PhysicsRigidBody;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.math.ColorRGBA;
@@ -47,6 +46,7 @@ import java.util.logging.Logger;
 import java.util.prefs.BackingStoreException;
 import jme3utilities.Heart;
 import jme3utilities.MyCamera;
+import jme3utilities.MyString;
 import jme3utilities.Validate;
 import jme3utilities.minie.test.common.PhysicsDemo;
 import jme3utilities.ui.CameraOrbitAppState;
@@ -102,39 +102,47 @@ public class JointElasticity extends PhysicsDemo {
     /**
      * signal names for the CameraOrbitAppState
      */
-    final public static String signalOrbitLeft = "cameraOrbitLeft";
-    final public static String signalOrbitRight = "cameraOrbitRight";
+    final private static String signalOrbitLeft = "cameraOrbitLeft";
+    final private static String signalOrbitRight = "cameraOrbitRight";
     // *************************************************************************
     // fields
 
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * AppState to manage the status overlay
      */
-    private JointElasticityStatus status;
+    private static JointElasticityStatus status;
     /**
      * dynamic ball
      */
-    private PhysicsRigidBody ballBody;
+    private static PhysicsRigidBody ballBody;
     /**
      * dynamic door
      */
-    private PhysicsRigidBody doorBody;
+    private static PhysicsRigidBody doorBody;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the JointElasticity application.
+     */
+    public JointElasticity() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the JointElasticity application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
         boolean loadDefaults = true;
@@ -145,9 +153,8 @@ public class JointElasticity extends PhysicsDemo {
             logger.warning("Failed to load AppSettings.");
         }
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
-        settings.setTitle(applicationName); // Customize the window's title bar.
-        settings.setVSync(true);
+        settings.setResizable(true);
+        settings.setTitle(title); // Customize the window's title bar.
 
         JointElasticity application = new JointElasticity();
         application.setSettings(settings);
@@ -160,7 +167,7 @@ public class JointElasticity extends PhysicsDemo {
      * @param massRatio the mass of the ball as a multiple of the door's mass
      * (&gt;0)
      */
-    public void setMassRatio(float massRatio) {
+    static void setMassRatio(float massRatio) {
         Validate.positive(massRatio, "mass ratio");
 
         float newMass = massRatio * doorMass;
@@ -173,10 +180,12 @@ public class JointElasticity extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
         status = new JointElasticityStatus();
         boolean success = stateManager.attach(status);
         assert success;
+
+        super.acorusInit();
 
         configureCamera();
         configureDumper();
@@ -201,7 +210,7 @@ public class JointElasticity extends PhysicsDemo {
     }
 
     /**
-     * Determine the length of debug axis arrows (when they're visible).
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -211,7 +220,8 @@ public class JointElasticity extends PhysicsDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -220,16 +230,16 @@ public class JointElasticity extends PhysicsDemo {
         dim.bind(asDumpScenes, KeyInput.KEY_P);
         dim.bind(asDumpSpace, KeyInput.KEY_O);
 
-        dim.bind("next field", KeyInput.KEY_NUMPAD2);
-        dim.bind("next value", KeyInput.KEY_EQUALS, KeyInput.KEY_NUMPAD6);
+        dim.bind(asNextField, KeyInput.KEY_NUMPAD2);
+        dim.bind(asNextValue, KeyInput.KEY_EQUALS, KeyInput.KEY_NUMPAD6);
 
         dim.bindSignal(CameraInput.FLYCAM_LOWER, KeyInput.KEY_DOWN);
         dim.bindSignal(CameraInput.FLYCAM_RISE, KeyInput.KEY_UP);
         dim.bindSignal(signalOrbitLeft, KeyInput.KEY_LEFT);
         dim.bindSignal(signalOrbitRight, KeyInput.KEY_RIGHT);
 
-        dim.bind("previous field", KeyInput.KEY_NUMPAD8);
-        dim.bind("previous value", KeyInput.KEY_MINUS, KeyInput.KEY_NUMPAD4);
+        dim.bind(asPreviousField, KeyInput.KEY_NUMPAD8);
+        dim.bind(asPreviousValue, KeyInput.KEY_MINUS, KeyInput.KEY_NUMPAD4);
 
         dim.bind("restart", KeyInput.KEY_NUMPAD5, KeyInput.KEY_SPACE,
                 KeyInput.KEY_RETURN);
@@ -239,11 +249,6 @@ public class JointElasticity extends PhysicsDemo {
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind(asToggleVArrows, KeyInput.KEY_K);
-        /*
-         * Build and attach the help node for default mode.
-         * The help node can't be created until all hotkeys are bound.
-         */
-        addHelp();
     }
 
     /**
@@ -273,16 +278,29 @@ public class JointElasticity extends PhysicsDemo {
                 case "restart":
                     restartScenario();
                     return;
+
+                default:
             }
             String[] words = actionString.split(" ");
             if (words.length == 2 && "load".equals(words[0])) {
                 return;
             }
         }
-        /*
-         * The action is not handled: forward it to the superclass.
-         */
+
+        // The action is not handled: forward it to the superclass.
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        status.resize(newWidth, newHeight);
+        super.onViewPortResize(newWidth, newHeight);
     }
     // *************************************************************************
     // private methods
@@ -308,27 +326,13 @@ public class JointElasticity extends PhysicsDemo {
      */
     private void addDoor() {
         float halfHeight = 4f;
-        BoxCollisionShape shape = new BoxCollisionShape(doorHalfWidth,
-                halfHeight, halfThickness);
+        BoxCollisionShape shape = new BoxCollisionShape(
+                doorHalfWidth, halfHeight, halfThickness);
         doorBody = new PhysicsRigidBody(shape, doorMass);
         addCollisionObject(doorBody);
 
         // Disable sleep (deactivation).
         doorBody.setEnableSleep(false);
-    }
-
-    /**
-     * Attach a Node to display hotkey help/hints.
-     */
-    private void addHelp() {
-        float margin = 10f; // in pixels
-        float width = 250f; // in pixels
-        float height = cam.getHeight() - (2f * margin);
-        float leftX = cam.getWidth() - (width + margin);
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -343,16 +347,16 @@ public class JointElasticity extends PhysicsDemo {
         flyCam.setMoveSpeed(10f);
         flyCam.setZoomSpeed(10f);
 
-        cam.setLocation(new Vector3f(0.0f, 8.8f, 6.2f));
-        cam.setRotation(new Quaternion(0.0f, 0.9f, -0.43589f, 0.0f));
+        cam.setLocation(new Vector3f(0f, 8.8f, 6.2f));
+        cam.setRotation(new Quaternion(0f, 0.9f, -0.43589f, 0f));
 
-        AppState orbitState = new CameraOrbitAppState(cam,
-                signalOrbitRight, signalOrbitLeft);
+        AppState orbitState = new CameraOrbitAppState(
+                cam, signalOrbitRight, signalOrbitLeft);
         stateManager.attach(orbitState);
     }
 
     /**
-     * Create and configure a new PhysicsSpace.
+     * Configure physics during startup.
      */
     private void configurePhysics() {
         bulletAppState = new BulletAppState();
@@ -387,8 +391,8 @@ public class JointElasticity extends PhysicsDemo {
         Vector3f pivotInWorld = new Vector3f(doorHalfWidth, 0f, 0f);
         HingeJoint joint = new HingeJoint(doorBody, pivotInDoor, pivotInWorld,
                 Vector3f.UNIT_Y, Vector3f.UNIT_Y, JointEnd.B);
-        float lowAngle = 0;
-        float highAngle = 0;
+        float lowAngle = 0f;
+        float highAngle = 0f;
         joint.setLimit(lowAngle, highAngle); // disable rotation
         addJoint(joint);
 

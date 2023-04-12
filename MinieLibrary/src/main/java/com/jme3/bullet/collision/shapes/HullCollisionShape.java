@@ -32,12 +32,14 @@
 package com.jme3.bullet.collision.shapes;
 
 import com.jme3.bullet.PhysicsSpace;
-import com.jme3.bullet.util.DebugShapeFactory;
+import com.jme3.bullet.collision.shapes.infos.ChildCollisionShape;
 import com.jme3.export.InputCapsule;
 import com.jme3.export.JmeExporter;
 import com.jme3.export.JmeImporter;
 import com.jme3.export.OutputCapsule;
 import com.jme3.math.FastMath;
+import com.jme3.math.Plane;
+import com.jme3.math.Triangle;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Mesh;
 import com.jme3.scene.VertexBuffer.Type;
@@ -49,14 +51,18 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.logging.Logger;
 import jme3utilities.Validate;
+import jme3utilities.math.MyBuffer;
 import jme3utilities.math.MyMath;
 import jme3utilities.math.MyVector3f;
 import jme3utilities.math.RectangularSolid;
+import jme3utilities.math.VectorSet;
+import jme3utilities.math.VectorSetUsingBuffer;
 import vhacd.VHACDHull;
+import vhacd4.Vhacd4Hull;
 
 /**
- * A convex-hull CollisionShape based on Bullet's btConvexHullShape. For a 2-D
- * convex hull, use Convex2dShape.
+ * A convex-hull collision shape based on Bullet's {@code btConvexHullShape}.
+ * For a 2-D convex hull, use Convex2dShape.
  */
 public class HullCollisionShape extends ConvexShape {
     // *************************************************************************
@@ -111,12 +117,12 @@ public class HullCollisionShape extends ConvexShape {
         Validate.nonEmpty(locations, "locations");
 
         int numLocations = locations.size();
-        points = new float[numAxes * numLocations];
+        this.points = new float[numAxes * numLocations];
         int j = 0;
         for (Vector3f location : locations) {
-            points[j + PhysicsSpace.AXIS_X] = location.x;
-            points[j + PhysicsSpace.AXIS_Y] = location.y;
-            points[j + PhysicsSpace.AXIS_Z] = location.z;
+            this.points[j + PhysicsSpace.AXIS_X] = location.x;
+            this.points[j + PhysicsSpace.AXIS_Y] = location.y;
+            this.points[j + PhysicsSpace.AXIS_Z] = location.z;
             j += numAxes;
         }
 
@@ -133,23 +139,10 @@ public class HullCollisionShape extends ConvexShape {
      */
     public HullCollisionShape(float... points) {
         Validate.nonEmpty(points, "points");
-        Validate.require(points.length % numAxes == 0,
-                "length a multiple of 3");
+        Validate.require(
+                points.length % numAxes == 0, "length a multiple of 3");
 
         this.points = points.clone();
-        createShape();
-    }
-
-    /**
-     * Instantiate a shape based on a VHACDHull. For best performance and
-     * stability, the convex hull should have no more than 100 vertices.
-     *
-     * @param vhacdHull (not null, unaffected)
-     */
-    public HullCollisionShape(VHACDHull vhacdHull) {
-        Validate.nonNull(vhacdHull, "V-HACD hull");
-
-        points = vhacdHull.clonePositions();
         createShape();
     }
 
@@ -167,9 +160,9 @@ public class HullCollisionShape extends ConvexShape {
         Validate.positive(numFloats, "limit");
         Validate.require(numFloats % numAxes == 0, "limit a multiple of 3");
 
-        points = new float[numFloats];
+        this.points = new float[numFloats];
         for (int i = 0; i < numFloats; ++i) {
-            points[i] = flippedBuffer.get(i);
+            this.points[i] = flippedBuffer.get(i);
         }
 
         createShape();
@@ -185,7 +178,7 @@ public class HullCollisionShape extends ConvexShape {
      */
     public HullCollisionShape(Mesh... meshes) {
         Validate.nonEmpty(meshes, "meshes");
-        points = getPoints(meshes);
+        this.points = getPoints(meshes);
         Validate.require(points.length > 0, "at least one vertex");
 
         createShape();
@@ -199,9 +192,8 @@ public class HullCollisionShape extends ConvexShape {
     public HullCollisionShape(RectangularSolid rectangularSolid) {
         Vector3f maxima = rectangularSolid.maxima(null);
         Vector3f minima = rectangularSolid.minima(null);
-        /*
-         * Enumerate the local coordinates of the 8 corners of the box.
-         */
+
+        // Enumerate the local coordinates of the 8 corners of the box.
         Collection<Vector3f> cornerLocations = new ArrayList<>(8);
         cornerLocations.add(new Vector3f(maxima.x, maxima.y, maxima.z));
         cornerLocations.add(new Vector3f(maxima.x, maxima.y, minima.z));
@@ -211,21 +203,69 @@ public class HullCollisionShape extends ConvexShape {
         cornerLocations.add(new Vector3f(minima.x, maxima.y, minima.z));
         cornerLocations.add(new Vector3f(minima.x, minima.y, maxima.z));
         cornerLocations.add(new Vector3f(minima.x, minima.y, minima.z));
-        /*
-         * Transform corner locations to shape coordinates.
-         */
+
+        // Transform corner locations to shape coordinates.
         int numFloats = numAxes * cornerLocations.size();
-        points = new float[numFloats];
+        this.points = new float[numFloats];
         int floatIndex = 0;
         Vector3f tempVector = new Vector3f();
         for (Vector3f location : cornerLocations) {
             rectangularSolid.localToWorld(location, tempVector);
-            points[floatIndex + PhysicsSpace.AXIS_X] = tempVector.x;
-            points[floatIndex + PhysicsSpace.AXIS_Y] = tempVector.y;
-            points[floatIndex + PhysicsSpace.AXIS_Z] = tempVector.z;
+            this.points[floatIndex + PhysicsSpace.AXIS_X] = tempVector.x;
+            this.points[floatIndex + PhysicsSpace.AXIS_Y] = tempVector.y;
+            this.points[floatIndex + PhysicsSpace.AXIS_Z] = tempVector.z;
             floatIndex += numAxes;
         }
 
+        createShape();
+    }
+
+    /**
+     * Instantiate a shape based on an array of locations. For best performance
+     * and stability, the convex hull should have no more than 100 vertices.
+     *
+     * @param locations an array of location vectors (in shape coordinates, not
+     * null, not empty, unaffected)
+     */
+    public HullCollisionShape(Vector3f... locations) {
+        Validate.nonEmpty(locations, "points");
+
+        int numFloats = numAxes * locations.length;
+        this.points = new float[numFloats];
+        int floatIndex = 0;
+        for (Vector3f location : locations) {
+            this.points[floatIndex + PhysicsSpace.AXIS_X] = location.x;
+            this.points[floatIndex + PhysicsSpace.AXIS_Y] = location.y;
+            this.points[floatIndex + PhysicsSpace.AXIS_Z] = location.z;
+            floatIndex += numAxes;
+        }
+
+        createShape();
+    }
+
+    /**
+     * Instantiate a shape based on a Vhacd4Hull. For best performance and
+     * stability, the convex hull should have no more than 100 vertices.
+     *
+     * @param vhacd4Hull (not null, unaffected)
+     */
+    public HullCollisionShape(Vhacd4Hull vhacd4Hull) {
+        Validate.nonNull(vhacd4Hull, "V-HACD hull");
+
+        this.points = vhacd4Hull.clonePositions();
+        createShape();
+    }
+
+    /**
+     * Instantiate a shape based on a VHACDHull. For best performance and
+     * stability, the convex hull should have no more than 100 vertices.
+     *
+     * @param vhacdHull (not null, unaffected)
+     */
+    public HullCollisionShape(VHACDHull vhacdHull) {
+        Validate.nonNull(vhacdHull, "V-HACD hull");
+
+        this.points = vhacdHull.clonePositions();
         createShape();
     }
     // *************************************************************************
@@ -340,18 +380,135 @@ public class HullCollisionShape extends ConvexShape {
     }
 
     /**
-     * Estimate the scaled volume of the hull, based on its debug mesh.
+     * Attempt to divide this shape into 2 child shapes.
      *
-     * @return the volume (in physics-space units cubed, &ge;0)
+     * @param splittingTriangle to define the splitting plane (in shape
+     * coordinates, not null, unaffected)
+     * @return a pair of hull-based children, the first child generated by the
+     * plane's minus side and the 2nd child generated by its plus side; either
+     * child may be null, indicating an empty shape
      */
-    public float scaledVolume() {
-        int meshResolution = DebugShapeFactory.lowResolution;
-        float volume = DebugShapeFactory.volumeConvex(this, meshResolution);
-        assert volume >= 0f : volume;
-        return volume;
+    public ChildCollisionShape[] split(Triangle splittingTriangle) {
+        Validate.nonNull(splittingTriangle, "splitting triangle");
+
+        int numVertices = countHullVertices();
+        int numFloats = numAxes * numVertices;
+        FloatBuffer originalHull = BufferUtils.createFloatBuffer(numFloats);
+        long shapeId = nativeId();
+        getHullVerticesF(shapeId, originalHull);
+
+        Vector3f normal = splittingTriangle.getNormal(); // alias
+        Plane splittingPlane = new Plane(normal, splittingTriangle.get3());
+        /*
+         * Organize the hull vertices into 2 sets based on
+         * which side of the splitting plane they are on.
+         */
+        VectorSet minusSet = new VectorSetUsingBuffer(numVertices, true);
+        VectorSet plusSet = new VectorSetUsingBuffer(numVertices, true);
+        Vector3f tmpVertex = new Vector3f();
+        for (int vertexI = 0; vertexI < numVertices; ++vertexI) {
+            int startPosition = numAxes * vertexI;
+            MyBuffer.get(originalHull, startPosition, tmpVertex);
+            float pseudoDistance = splittingPlane.pseudoDistance(tmpVertex);
+            if (pseudoDistance <= 0f) {
+                minusSet.add(tmpVertex);
+            }
+            if (pseudoDistance >= 0f) {
+                plusSet.add(tmpVertex);
+            }
+            // Note: vertices that lie in the plane will appear in both sets.
+        }
+
+        ChildCollisionShape[] result = new ChildCollisionShape[2];
+        int numMinus = minusSet.numVectors();
+        int numPlus = plusSet.numVectors();
+        if (numMinus == 0 || numPlus == 0) {
+            // Degenerate case:  all vertices lie to one side of the plane.
+            ChildCollisionShape child
+                    = new ChildCollisionShape(new Vector3f(), this);
+            if (numMinus > 0) {
+                result[0] = child;
+            } else if (numPlus > 0) {
+                result[1] = child;
+            }
+            return result;
+        }
+
+        // Copy all minus-side vertices to a new set.
+        FloatBuffer minusBuffer = minusSet.toBuffer();
+        VectorSet newMinusSet = new VectorSetUsingBuffer(numVertices, true);
+        for (int jNegative = 0; jNegative < numMinus; ++jNegative) {
+            MyBuffer.get(minusBuffer, numAxes * jNegative, tmpVertex);
+            newMinusSet.add(tmpVertex);
+        }
+        /*
+         * Copy all plus-side vertices to a new set.
+         * Also: interpolate each of the original plus-side vertices
+         * with each of the original minus-side vertices
+         * and add the interpolated locations to both of the new sets.
+         */
+        FloatBuffer plusBuffer = plusSet.toBuffer();
+        VectorSet newPlusSet = new VectorSetUsingBuffer(numVertices, true);
+        Vector3f tmp2 = new Vector3f();
+        for (int plusI = 0; plusI < numPlus; ++plusI) {
+            MyBuffer.get(plusBuffer, numAxes * plusI, tmpVertex);
+            newPlusSet.add(tmpVertex);
+            float pd = splittingPlane.pseudoDistance(tmpVertex);
+
+            for (int minusI = 0; minusI < numMinus; ++minusI) {
+                MyBuffer.get(minusBuffer, numAxes * minusI, tmp2);
+                float md = splittingPlane.pseudoDistance(tmp2);
+                float denominator = pd - md;
+                if (denominator != 0f) {
+                    float t = -md / denominator;
+                    MyVector3f.lerp(t, tmp2, tmpVertex, tmp2);
+                    newMinusSet.add(tmp2);
+                    newPlusSet.add(tmp2);
+                }
+            }
+        }
+        /*
+         * Translate minus-side vertices so their AABB is centered at (0,0,0)
+         * and use them to form a new hull shape.
+         */
+        Vector3f max = tmpVertex; // alias
+        Vector3f min = tmp2; // alias
+        Vector3f offset = tmpVertex; // alias
+        newMinusSet.maxMin(max, min);
+        Vector3f minusCenter = MyVector3f.midpoint(max, min, null);
+        offset.set(minusCenter).negateLocal();
+        FloatBuffer flippedBuffer = newMinusSet.toBuffer();
+        MyBuffer.translate(flippedBuffer, 0, flippedBuffer.limit(), offset);
+        HullCollisionShape minusShape = new HullCollisionShape(flippedBuffer);
+        minusShape.setScale(scale);
+        result[0] = new ChildCollisionShape(minusCenter, minusShape);
+        /*
+         * Translate plus-side vertices so their AABB is centered at (0,0,0)
+         * and use them to form a new hull shape.
+         */
+        newPlusSet.maxMin(max, min);
+        Vector3f plusCenter = MyVector3f.midpoint(max, min, null);
+        offset.set(plusCenter).negateLocal();
+        flippedBuffer = newPlusSet.toBuffer();
+        MyBuffer.translate(flippedBuffer, 0, flippedBuffer.limit(), offset);
+        HullCollisionShape plusShape = new HullCollisionShape(flippedBuffer);
+        plusShape.setScale(scale);
+        result[1] = new ChildCollisionShape(plusCenter, plusShape);
+
+        return result;
     }
     // *************************************************************************
-    // CollisionShape methods
+    // ConvexShape methods
+
+    /**
+     * Test whether this shape can be split by an arbitrary plane.
+     *
+     * @return true if splittable, false otherwise
+     */
+    @Override
+    public boolean canSplit() {
+        return true;
+    }
 
     /**
      * Callback from {@link com.jme3.util.clone.Cloner} to convert this
@@ -365,24 +522,9 @@ public class HullCollisionShape extends ConvexShape {
     @Override
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
-        directBuffer = null; // directBuffer not cloned
-        points = cloner.clone(points);
+        this.directBuffer = null; // directBuffer is never cloned.
+        this.points = cloner.clone(points);
         createShape();
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public HullCollisionShape jmeClone() {
-        try {
-            HullCollisionShape clone = (HullCollisionShape) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -429,9 +571,9 @@ public class HullCollisionShape extends ConvexShape {
         // for backwards compatibility
         Mesh mesh = (Mesh) capsule.readSavable(tagHullMesh, null);
         if (mesh != null) {
-            points = getPoints(mesh);
+            this.points = getPoints(mesh);
         } else {
-            points = capsule.readFloatArray(tagPoints, new float[0]);
+            this.points = capsule.readFloatArray(tagPoints, new float[0]);
         }
         createShape();
     }
@@ -474,7 +616,7 @@ public class HullCollisionShape extends ConvexShape {
         assert (numFloats % numAxes == 0) : numFloats;
         int numVertices = numFloats / numAxes;
 
-        directBuffer = BufferUtils.createFloatBuffer(numFloats);
+        this.directBuffer = BufferUtils.createFloatBuffer(numFloats);
         for (float f : points) {
             if (!Float.isFinite(f)) {
                 throw new IllegalArgumentException("illegal coordinate: " + f);
@@ -496,7 +638,7 @@ public class HullCollisionShape extends ConvexShape {
      * @param meshes the mesh(es) to read (not null)
      * @return a new array (not null, length a multiple of 3)
      */
-    private float[] getPoints(Mesh... meshes) {
+    private static float[] getPoints(Mesh... meshes) {
         int numVectors = 0;
         for (Mesh mesh : meshes) {
             numVectors += mesh.getVertexCount();
@@ -522,11 +664,11 @@ public class HullCollisionShape extends ConvexShape {
 
     native private static int countHullVertices(long shapeId);
 
-    native private static long createShapeF(FloatBuffer vertices,
-            int numVertices);
+    native private static long
+            createShapeF(FloatBuffer vertices, int numVertices);
 
-    native private static void getHullVerticesF(long shapeId,
-            FloatBuffer vertices);
+    native private static void
+            getHullVerticesF(long shapeId, FloatBuffer vertices);
 
     native private static void recalcAabb(long shapeId);
 }

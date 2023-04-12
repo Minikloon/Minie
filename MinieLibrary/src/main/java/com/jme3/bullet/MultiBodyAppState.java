@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 jMonkeyEngine
+ * Copyright (c) 2020-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,11 +52,20 @@ public class MultiBodyAppState extends BulletAppState {
     final public static Logger logger2
             = Logger.getLogger(MultiBodyAppState.class.getName());
     // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate an enabled AppState to manage a space with DBVT broadphase
+     * collision detection.
+     */
+    public MultiBodyAppState() { // to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
-     * Access the MultiBodySpace managed by this state. Normally there is none
-     * until the state is attached.
+     * Access the space managed by this state. Normally there is none until the
+     * state is attached.
      *
      * @return the pre-existing instance, or null if no simulation running
      */

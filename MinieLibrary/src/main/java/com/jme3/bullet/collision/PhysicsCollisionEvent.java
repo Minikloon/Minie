@@ -71,7 +71,7 @@ public class PhysicsCollisionEvent extends NativePhysicsObject {
      *
      * @param pcoA the first involved object (not null, alias created)
      * @param pcoB the 2nd involved object (not null, alias created)
-     * @param manifoldPointId the native ID of the btManifoldPoint (not 0)
+     * @param manifoldPointId the native ID of the btManifoldPoint (not zero)
      */
     public PhysicsCollisionEvent(PhysicsCollisionObject pcoA,
             PhysicsCollisionObject pcoB, long manifoldPointId) {
@@ -88,7 +88,7 @@ public class PhysicsCollisionEvent extends NativePhysicsObject {
 
     /**
      * Access the user object of collision object A, provided it's a Spatial.
-     * For compatibility with jme3-bullet.
+     * For compatibility with jme3-jbullet.
      *
      * @return the pre-existing Spatial, or null if none
      */
@@ -104,7 +104,7 @@ public class PhysicsCollisionEvent extends NativePhysicsObject {
 
     /**
      * Access the user object of collision object B, provided it's a Spatial.
-     * For compatibility with jme3-bullet.
+     * For compatibility with jme3-jbullet.
      *
      * @return the pre-existing Spatial, or null if none
      */
@@ -383,12 +383,13 @@ public class PhysicsCollisionEvent extends NativePhysicsObject {
     }
 
     /**
-     * For compatibility with jme3-bullet.
+     * For compatibility with jme3-jbullet.
      *
      * @return a new direction vector
      */
     public Vector3f getNormalWorldOnB() {
-        return getNormalWorldOnB(null);
+        Vector3f result = getNormalWorldOnB(null);
+        return result;
     }
 
     /**
@@ -450,12 +451,13 @@ public class PhysicsCollisionEvent extends NativePhysicsObject {
     }
 
     /**
-     * For compatibility with jme3-bullet.
+     * For compatibility with jme3-jbullet.
      *
      * @return a new location vector
      */
     public Vector3f getPositionWorldOnA() {
-        return getPositionWorldOnA(null);
+        Vector3f result = getPositionWorldOnA(null);
+        return result;
     }
 
     /**
@@ -475,12 +477,13 @@ public class PhysicsCollisionEvent extends NativePhysicsObject {
     }
 
     /**
-     * For compatibility with jme3-bullet.
+     * For compatibility with jme3-jbullet.
      *
      * @return a new location vector
      */
     public Vector3f getPositionWorldOnB() {
-        return getPositionWorldOnB(null);
+        Vector3f result = getPositionWorldOnB(null);
+        return result;
     }
 
     /**
@@ -509,18 +512,5 @@ public class PhysicsCollisionEvent extends NativePhysicsObject {
         boolean result = (flags & ContactPointFlag.LATERAL_FRICTION) != 0x0;
 
         return result;
-    }
-
-    /**
-     * Alter how many points should be used to calculate the area of the convex
-     * hull of a contact point.
-     *
-     * @param setting true to use 3 points (faster), false to use 4 points (more
-     * accurate) (default=true)
-     * @deprecated use ManifoldPoints#setContactCalcArea3Points(boolean)
-     */
-    @Deprecated
-    public static void setContactCalcArea3Points(boolean setting) {
-        ManifoldPoints.setContactCalcArea3Points(setting);
     }
 }

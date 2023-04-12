@@ -126,11 +126,11 @@ public class ConeJoint extends Constraint {
      * @param rotInA the joint orientation in A's local coordinates (rotation
      * matrix, unaffected)
      */
-    public ConeJoint(PhysicsRigidBody rigidBodyA, Vector3f pivotInA,
-            Matrix3f rotInA) {
+    public ConeJoint(
+            PhysicsRigidBody rigidBodyA, Vector3f pivotInA, Matrix3f rotInA) {
         super(rigidBodyA, JointEnd.A, pivotInA, translateIdentity);
-        rotA = rotInA.clone();
-        rotB = rotA;
+        this.rotA = rotInA.clone();
+        this.rotB = rotA;
         createJoint();
     }
 
@@ -151,8 +151,8 @@ public class ConeJoint extends Constraint {
     public ConeJoint(PhysicsRigidBody rigidBodyA, PhysicsRigidBody rigidBodyB,
             Vector3f pivotInA, Vector3f pivotInB) {
         super(rigidBodyA, rigidBodyB, pivotInA, pivotInB);
-        rotA = new Matrix3f();
-        rotB = new Matrix3f();
+        this.rotA = new Matrix3f();
+        this.rotB = new Matrix3f();
         createJoint();
     }
 
@@ -178,8 +178,8 @@ public class ConeJoint extends Constraint {
             Vector3f pivotInA, Vector3f pivotInB, Matrix3f rotInA,
             Matrix3f rotInB) {
         super(rigidBodyA, rigidBodyB, pivotInA, pivotInB);
-        rotA = rotInA.clone();
-        rotB = rotInB.clone();
+        this.rotA = rotInA.clone();
+        this.rotB = rotInB.clone();
         createJoint();
     }
     // *************************************************************************
@@ -255,7 +255,7 @@ public class ConeJoint extends Constraint {
      */
     public void setAngularOnly(boolean value) {
         long constraintId = nativeId();
-        angularOnly = value;
+        this.angularOnly = value;
         setAngularOnly(constraintId, value);
     }
 
@@ -288,37 +288,21 @@ public class ConeJoint extends Constraint {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        super.cloneFields(cloner, original);
+        assert !hasAssignedNativeObject();
+        ConeJoint old = (ConeJoint) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
 
-        rotA = cloner.clone(rotA);
-        rotB = cloner.clone(rotB);
+        super.cloneFields(cloner, original);
+        if (hasAssignedNativeObject()) {
+            return;
+        }
+
+        this.rotA = cloner.clone(rotA);
+        this.rotB = cloner.clone(rotB);
         createJoint();
 
-        ConeJoint old = (ConeJoint) original;
-
-        float bit = old.getBreakingImpulseThreshold();
-        setBreakingImpulseThreshold(bit);
-
-        boolean enableJoint = old.isEnabled();
-        setEnabled(enableJoint);
-
-        int numIterations = old.getOverrideIterations();
-        overrideIterations(numIterations);
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public ConeJoint jmeClone() {
-        try {
-            ConeJoint clone = (ConeJoint) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
+        copyConstraintProperties(old);
     }
 
     /**
@@ -333,13 +317,13 @@ public class ConeJoint extends Constraint {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        rotA = (Matrix3f) capsule.readSavable(tagRotA, new Matrix3f());
-        rotB = (Matrix3f) capsule.readSavable(tagRotB, new Matrix3f());
+        this.rotA = (Matrix3f) capsule.readSavable(tagRotA, new Matrix3f());
+        this.rotB = (Matrix3f) capsule.readSavable(tagRotB, new Matrix3f());
 
-        angularOnly = capsule.readBoolean(tagAngularOnly, false);
-        swingSpan1 = capsule.readFloat(tagSwingSpan1, 1e30f);
-        swingSpan2 = capsule.readFloat(tagSwingSpan2, 1e30f);
-        twistSpan = capsule.readFloat(tagTwistSpan, 1e30f);
+        this.angularOnly = capsule.readBoolean(tagAngularOnly, false);
+        this.swingSpan1 = capsule.readFloat(tagSwingSpan1, 1e30f);
+        this.swingSpan2 = capsule.readFloat(tagSwingSpan2, 1e30f);
+        this.twistSpan = capsule.readFloat(tagTwistSpan, 1e30f);
 
         createJoint();
         readConstraintProperties(capsule);
@@ -390,9 +374,8 @@ public class ConeJoint extends Constraint {
         } else {
             assert pivotB != null;
             assert rotB != null;
-            /*
-             * Create a double-ended joint.
-             */
+
+            // Create a double-ended joint.
             long bId = b.nativeId();
             constraintId = createJoint(aId, bId, pivotA, rotA, pivotB, rotB);
         }
@@ -410,18 +393,18 @@ public class ConeJoint extends Constraint {
             Vector3f pivotInA, Matrix3f rotInA, Vector3f pivotInB,
             Matrix3f rotInB);
 
-    native private static long createJoint1(long bodyIdA, Vector3f pivotInA,
-            Matrix3f rotInA);
+    native private static long
+            createJoint1(long bodyIdA, Vector3f pivotInA, Matrix3f rotInA);
 
-    native private static void getFrameOffsetA(long jointId,
-            Transform frameInA);
+    native private static void
+            getFrameOffsetA(long jointId, Transform frameInA);
 
-    native private static void getFrameOffsetB(long jointId,
-            Transform frameInB);
+    native private static void
+            getFrameOffsetB(long jointId, Transform frameInB);
 
-    native private static void setAngularOnly(long jointId,
-            boolean angularOnly);
+    native private static void
+            setAngularOnly(long jointId, boolean angularOnly);
 
-    native private static void setLimit(long jointId, float swingSpan1,
-            float swingSpan2, float twistSpan);
+    native private static void setLimit(
+            long jointId, float swingSpan1, float swingSpan2, float twistSpan);
 }

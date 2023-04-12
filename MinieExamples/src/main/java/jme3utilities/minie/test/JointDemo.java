@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2021, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,6 @@ import com.jme3.bullet.joints.New6Dof;
 import com.jme3.bullet.joints.motors.MotorParam;
 import com.jme3.bullet.joints.motors.RotationMotor;
 import com.jme3.font.BitmapText;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.light.AmbientLight;
@@ -60,6 +59,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.MyAsset;
+import jme3utilities.MyString;
 import jme3utilities.minie.DumpFlags;
 import jme3utilities.minie.PhysicsDumper;
 import jme3utilities.minie.test.common.PhysicsDemo;
@@ -90,61 +90,63 @@ public class JointDemo extends PhysicsDemo {
     // fields
 
     /**
-     * status displayed in the upper-left corner of the GUI node
+     * text displayed in the upper-left corner of the GUI node
      */
-    private BitmapText statusText;
+    private static BitmapText statusText;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * scene-graph node for visualizing solid objects
      */
-    final private Node meshesNode = new Node("meshes node");
+    final private static Node meshesNode = new Node("meshes node");
     /**
      * motor to rotate the left-front leg
      */
-    private RotationMotor lfMotor;
+    private static RotationMotor lfMotor;
     /**
      * motor to rotate the left-rear leg
      */
-    private RotationMotor lrMotor;
+    private static RotationMotor lrMotor;
     /**
      * motor to rotate the right-front leg
      */
-    private RotationMotor rfMotor;
+    private static RotationMotor rfMotor;
     /**
      * motor to rotate the right-rear leg
      */
-    private RotationMotor rrMotor;
+    private static RotationMotor rrMotor;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the JointDemo application.
+     */
+    public JointDemo() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the JointDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new JointDemo();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new JointDemo();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -154,7 +156,9 @@ public class JointDemo extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        super.acorusInit();
+
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -176,9 +180,8 @@ public class JointDemo extends PhysicsDemo {
 
         rootNode.attachChild(meshesNode);
         meshesNode.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
-        /*
-         * Add the status text to the GUI.
-         */
+
+        // Add the status text to the GUI.
         statusText = new BitmapText(guiFont);
         statusText.setLocalTranslation(0f, cam.getHeight(), 0f);
         guiNode.attachChild(statusText);
@@ -221,7 +224,7 @@ public class JointDemo extends PhysicsDemo {
     }
 
     /**
-     * Determine the length of physics-debug arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -231,7 +234,8 @@ public class JointDemo extends PhysicsDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -256,15 +260,6 @@ public class JointDemo extends PhysicsDemo {
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind("toggle view", KeyInput.KEY_SLASH);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + 20f);
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -282,6 +277,7 @@ public class JointDemo extends PhysicsDemo {
                     toggleMeshes();
                     togglePhysicsDebug();
                     return;
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
@@ -295,9 +291,8 @@ public class JointDemo extends PhysicsDemo {
     @Override
     public void simpleUpdate(float tpf) {
         super.simpleUpdate(tpf);
-        /*
-         * Check UI signals and update motor velocities accordingly.
-         */
+
+        // Check UI signals and update motor velocities accordingly.
         Signals signals = getSignals();
 
         float lfVelocity = signals.test("turnLF") ? 2f : 0f;
@@ -319,6 +314,15 @@ public class JointDemo extends PhysicsDemo {
 
     /**
      * Add a rectangular leg to the robot chassis.
+     *
+     * @param legGeom the geometry for the leg (not null)
+     * @param legInWorld the location of the leg (in world coordinates, not
+     * null)
+     * @param pivotInChassis the pivot offset relative to the chassis (not null)
+     * @param chassisInWorld the chassis location (in world coordinates, not
+     * null)
+     * @param chassisRbc the body for the chassis (not null)
+     * @return the new instance
      */
     private RotationMotor addLeg(Geometry legGeom, Vector3f legInWorld,
             Vector3f pivotInChassis, Vector3f chassisInWorld,
@@ -340,18 +344,16 @@ public class JointDemo extends PhysicsDemo {
                 = pivotInChassis.add(chassisInWorld).subtractLocal(legInWorld);
         New6Dof joint = new New6Dof(chassisRbc, legRbc, pivotInChassis,
                 pivotInLeg, new Matrix3f(), new Matrix3f(), RotationOrder.ZYX);
-        /*
-         * Inhibit X- and Y-axis rotations.
-         */
+
+        // Inhibit X- and Y-axis rotations.
         RotationMotor xMotor = joint.getRotationMotor(PhysicsSpace.AXIS_X);
         xMotor.set(MotorParam.UpperLimit, 0f);
         xMotor.set(MotorParam.LowerLimit, 0f);
         RotationMotor yMotor = joint.getRotationMotor(PhysicsSpace.AXIS_Y);
         yMotor.set(MotorParam.UpperLimit, 0f);
         yMotor.set(MotorParam.LowerLimit, 0f);
-        /*
-         * Enable the motor for Z-axis rotation and return a reference to it.
-         */
+
+        // Enable the motor for Z-axis rotation and return a reference to it.
         RotationMotor zMotor = joint.getRotationMotor(PhysicsSpace.AXIS_Z);
         zMotor.setMotorEnabled(true);
         zMotor.set(MotorParam.MaxMotorForce, 9e9f);
@@ -362,7 +364,7 @@ public class JointDemo extends PhysicsDemo {
     }
 
     /**
-     * Add lighting and shadows to the scene.
+     * Add lighting and shadows to the main scene.
      */
     private void addLighting() {
         ColorRGBA ambientColor = new ColorRGBA(0.5f, 0.5f, 0.5f, 1f);
@@ -378,8 +380,8 @@ public class JointDemo extends PhysicsDemo {
         int mapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                        numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, mapSize, numSplits);
         dlsr.setLight(sun);
         dlsr.setShadowIntensity(0.5f);
         viewPort.addProcessor(dlsr);
@@ -413,26 +415,26 @@ public class JointDemo extends PhysicsDemo {
         Geometry lfGeom = new Geometry("lf leg", legMesh);
         Vector3f lfLegInWorld = new Vector3f(-0.8f, 0.6f, 0.5f);
         Vector3f lfPivotInChassis = new Vector3f(-0.8f, 0f, 0.4f);
-        lfMotor = addLeg(lfGeom, lfLegInWorld, lfPivotInChassis, chassisInWorld,
-                chassisRbc);
+        lfMotor = addLeg(lfGeom, lfLegInWorld, lfPivotInChassis,
+                chassisInWorld, chassisRbc);
 
         Geometry rfGeom = new Geometry("rf leg", legMesh);
         Vector3f rfLegInWorld = new Vector3f(-0.8f, 0.6f, -0.5f);
         Vector3f rfPivotInChassis = new Vector3f(-0.8f, 0f, -0.4f);
-        rfMotor = addLeg(rfGeom, rfLegInWorld, rfPivotInChassis, chassisInWorld,
-                chassisRbc);
+        rfMotor = addLeg(rfGeom, rfLegInWorld, rfPivotInChassis,
+                chassisInWorld, chassisRbc);
 
         Geometry lrGeom = new Geometry("lr leg", legMesh);
         Vector3f lrLegInWorld = new Vector3f(0.8f, 0.6f, 0.5f);
         Vector3f lrPivotInChassis = new Vector3f(0.8f, 0f, 0.4f);
-        lrMotor = addLeg(lrGeom, lrLegInWorld, lrPivotInChassis, chassisInWorld,
-                chassisRbc);
+        lrMotor = addLeg(lrGeom, lrLegInWorld, lrPivotInChassis,
+                chassisInWorld, chassisRbc);
 
         Geometry rrGeom = new Geometry("rr leg", legMesh);
         Vector3f rrLegInWorld = new Vector3f(0.8f, 0.6f, -0.5f);
         Vector3f rrPivotInChassis = new Vector3f(0.8f, 0f, -0.4f);
-        rrMotor = addLeg(rrGeom, rrLegInWorld, rrPivotInChassis, chassisInWorld,
-                chassisRbc);
+        rrMotor = addLeg(rrGeom, rrLegInWorld, rrPivotInChassis,
+                chassisInWorld, chassisRbc);
     }
 
     /**
@@ -460,9 +462,9 @@ public class JointDemo extends PhysicsDemo {
     }
 
     /**
-     * Toggle solid mesh rendering on/off.
+     * Toggle mesh rendering on/off.
      */
-    private void toggleMeshes() {
+    private static void toggleMeshes() {
         Spatial.CullHint hint = meshesNode.getLocalCullHint();
         if (hint == Spatial.CullHint.Inherit
                 || hint == Spatial.CullHint.Never) {

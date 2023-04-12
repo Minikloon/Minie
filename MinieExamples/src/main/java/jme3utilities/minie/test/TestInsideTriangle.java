@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021-2022, Stephen Gold
+ Copyright (c) 2021-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,6 @@ package jme3utilities.minie.test;
 
 import com.jme3.app.Application;
 import com.jme3.bullet.util.NativeLibrary;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.material.Material;
@@ -44,11 +43,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.MyAsset;
+import jme3utilities.MyString;
 import jme3utilities.math.MyVector3f;
 import jme3utilities.math.noise.Generator;
 import jme3utilities.mesh.Icosphere;
 import jme3utilities.mesh.PointMesh;
-import jme3utilities.ui.AbstractDemo;
+import jme3utilities.ui.AcorusDemo;
 import jme3utilities.ui.CameraOrbitAppState;
 import jme3utilities.ui.InputMode;
 
@@ -57,7 +57,7 @@ import jme3utilities.ui.InputMode;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class TestInsideTriangle extends AbstractDemo {
+public class TestInsideTriangle extends AcorusDemo {
     // *************************************************************************
     // constants and loggers
 
@@ -81,39 +81,42 @@ public class TestInsideTriangle extends AbstractDemo {
     /**
      * enhanced pseudo-random generator
      */
-    final private Generator generator = new Generator();
+    final private static Generator generator = new Generator();
     /**
      * scene-graph node for the current trial
      */
-    private Node trialNode = null;
+    private static Node trialNode = null;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestInsideTriangle application.
+     */
+    public TestInsideTriangle() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestInsideTriangle application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new TestInsideTriangle();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new TestInsideTriangle();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -123,18 +126,19 @@ public class TestInsideTriangle extends AbstractDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        super.acorusInit();
         configureCamera();
         attachWorldAxes(2f);
 
         float samplePointSize = 1f;
-        Material sampleMaterial = MyAsset.createWireframeMaterial(assetManager,
-                ColorRGBA.White, samplePointSize);
+        Material sampleMaterial = MyAsset.createWireframeMaterial(
+                assetManager, ColorRGBA.White, samplePointSize);
         registerMaterial("sample", sampleMaterial);
 
         float trianglePointSize = 5f;
-        Material triangleMaterial = MyAsset.createWireframeMaterial(assetManager,
-                ColorRGBA.Green, trianglePointSize);
+        Material triangleMaterial = MyAsset.createWireframeMaterial(
+                assetManager, ColorRGBA.Green, trianglePointSize);
         registerMaterial("triangle", triangleMaterial);
 
         ColorRGBA darkGray = new ColorRGBA(0.03f, 0.03f, 0.03f, 1f);
@@ -144,7 +148,8 @@ public class TestInsideTriangle extends AbstractDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -152,19 +157,12 @@ public class TestInsideTriangle extends AbstractDemo {
 
         dim.bindSignal(CameraInput.FLYCAM_LOWER, KeyInput.KEY_DOWN);
         dim.bindSignal(CameraInput.FLYCAM_RISE, KeyInput.KEY_UP);
+
         dim.bindSignal("orbitLeft", KeyInput.KEY_LEFT);
         dim.bindSignal("orbitRight", KeyInput.KEY_RIGHT);
+
         dim.bind(asToggleHelp, KeyInput.KEY_H);
         dim.bind(asToggleWorldAxes, KeyInput.KEY_SPACE);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + 20f);
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
     // *************************************************************************
     // private methods
@@ -174,8 +172,10 @@ public class TestInsideTriangle extends AbstractDemo {
      *
      * @param location the desired location (in world coordinates, not null)
      * @param materialName the name of the Material to use (not null)
+     * @param radius the radius of the visualization (in mesh units, &ge;0)
      */
-    private void attachPoint(Vector3f location, String materialName, float radius) {
+    private void attachPoint(
+            Vector3f location, String materialName, float radius) {
         Mesh mesh;
         if (radius == 0f) {
             mesh = new PointMesh();
@@ -208,13 +208,12 @@ public class TestInsideTriangle extends AbstractDemo {
     private void trial() {
         trialNode = new Node("trialNode");
         rootNode.attachChild(trialNode);
-        /*
-         * Generate a triangle.
-         */
+
+        // Generate a triangle.
         Vector3f v0 = new Vector3f(1f, 1f, 1f);
         Vector3f v1 = new Vector3f(-1f, 1f, -1f);
         Vector3f v2 = new Vector3f(1f, -1f, -1f);
-        Set<Vector3f> list = new HashSet<Vector3f>(3);
+        Set<Vector3f> list = new HashSet<>(3);
         list.add(v0);
         list.add(v1);
         list.add(v2);
@@ -232,9 +231,8 @@ public class TestInsideTriangle extends AbstractDemo {
                 radius = d;
             }
         }
-        /*
-         * Visualize sample points in the vicinity of the triangle.
-         */
+
+        // Visualize sample points in the vicinity of the triangle.
         Vector3f sampleLocation = new Vector3f();
         for (int numSamples = 0; numSamples < samplesPerTrial;) {
             generator.nextVector3f(sampleLocation);

@@ -32,8 +32,7 @@
 package com.jme3.bullet.debug;
 
 import com.jme3.app.Application;
-import com.jme3.app.state.AbstractAppState;
-import com.jme3.app.state.AppStateManager;
+import com.jme3.app.state.BaseAppState;
 import com.jme3.asset.AssetManager;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.bullet.collision.PhysicsCollisionObject;
@@ -72,7 +71,7 @@ import jme3utilities.math.MyMath;
  *
  * @author normenhansen
  */
-public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
+public class BulletDebugAppState extends BaseAppState {
     // *************************************************************************
     // constants and loggers
 
@@ -204,7 +203,7 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
      */
     public BulletDebugAppState(DebugConfiguration config) {
         Validate.nonNull(config, "configuration");
-        configuration = config;
+        this.configuration = config;
     }
     // *************************************************************************
     // new methods exposed
@@ -220,6 +219,16 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
         Material result = magentas[numSides];
         assert result != null;
         return result;
+    }
+
+    /**
+     * Access the Material for visualizing angular-velocity vectors.
+     *
+     * @return the pre-existing Material (not null)
+     */
+    Material getAngularVelocityMaterial() {
+        assert magentas[2] != null;
+        return magentas[2];
     }
 
     /**
@@ -359,6 +368,23 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
     }
 
     /**
+     * Alter which angular velocities are visualized. For internal use only.
+     *
+     * @param filter the desired filter, or null to visualize no angular
+     * velocities
+     */
+    public void setAngularVelocityFilter(DebugAppStateFilter filter) {
+        configuration.setAngularVelocityFilter(filter);
+
+        for (Node transformedNode : pcoMap.values()) {
+            Node parent = transformedNode.getParent();
+            Control control
+                    = parent.getControl(AngularVelocityDebugControl.class);
+            parent.removeControl(control);
+        }
+    }
+
+    /**
      * Alter which bounding boxes are visualized. For internal use only.
      *
      * @param filter the desired filter, or null to visualize no bounding boxes
@@ -375,9 +401,10 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
 
     /**
      * Alter which physics objects are visualized. For compatibility with the
-     * jme3-bullet library.
+     * jme3-jbullet library.
      *
-     * @param filter the desired filter, or null to visualize all objects
+     * @param filter the desired filter (alias created) or null to visualize all
+     * objects
      */
     public void setFilter(DebugAppStateFilter filter) {
         configuration.setFilter(filter);
@@ -386,7 +413,8 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
     /**
      * Alter which gravity vectors are visualized. For internal use only.
      *
-     * @param filter the desired filter, or null to visualize no gravity vectors
+     * @param filter the desired filter (alias created) or null to visualize no
+     * gravity vectors
      */
     public void setGravityVectorFilter(DebugAppStateFilter filter) {
         configuration.setGravityVectorFilter(filter);
@@ -462,7 +490,7 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
     }
 
     /**
-     * Create the specified wireframe material. TODO make non-static
+     * Create the specified wireframe material.
      *
      * @param assetManager the application's AssetManager (not null)
      * @param color the desired color (not null, unaffected)
@@ -470,7 +498,7 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
      * @param numSides the desired number of sides (1 or 2)
      * @return a new instance
      */
-    protected static Material createWireMaterial(AssetManager assetManager,
+    protected Material createWireMaterial(AssetManager assetManager,
             ColorRGBA color, String name, int numSides) {
         Validate.nonNull(assetManager, "asset manager");
         Validate.nonNull(color, "color");
@@ -488,6 +516,16 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
     }
 
     /**
+     * Access the map from collision objects to transformed visualization nodes.
+     *
+     * @return the pre-existing instance
+     */
+    protected HashMap<PhysicsCollisionObject, Node> getPcoMap() {
+        // TODO should return Map<>
+        return pcoMap;
+    }
+
+    /**
      * Initialize the wireframe materials and child materials.
      *
      * @param am the application's AssetManager (not null)
@@ -496,50 +534,55 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
         assert am != null;
 
         Material invisible = MyAsset.createInvisibleMaterial(am);
-        blues[0] = invisible;
-        blues[1] = createWireMaterial(am, blueColor, "debug blue ss", 1);
-        blues[1].getAdditionalRenderState().setWireframe(true);
-        blues[1].setName("debug blue ss");
-        blues[2] = createWireMaterial(am, blueColor, "debug blue ds", 2);
+        this.blues[0] = invisible;
+        this.blues[1] = createWireMaterial(am, blueColor, "debug blue ss", 1);
+        this.blues[1].getAdditionalRenderState().setWireframe(true);
+        this.blues[1].setName("debug blue ss");
+        this.blues[2] = createWireMaterial(am, blueColor, "debug blue ds", 2);
 
-        childMaterials[0] = MyAsset.createUnshadedMaterial(am, whiteColor);
-        childMaterials[1] = MyAsset.createUnshadedMaterial(am, redColor);
-        childMaterials[2] = MyAsset.createUnshadedMaterial(am, greenColor);
-        childMaterials[3] = MyAsset.createUnshadedMaterial(am, blueColor);
-        childMaterials[4] = MyAsset.createUnshadedMaterial(am, yellowColor);
-        childMaterials[5] = MyAsset.createUnshadedMaterial(am, cyanColor);
-        childMaterials[6] = MyAsset.createUnshadedMaterial(am, orangeColor);
-        childMaterials[7] = MyAsset.createUnshadedMaterial(am, magentaColor);
-        childMaterials[8] = MyAsset.createUnshadedMaterial(am, pinkColor);
-        childMaterials[9] = MyAsset.createUnshadedMaterial(am, brownColor);
+        this.childMaterials[0] = MyAsset.createUnshadedMaterial(am, whiteColor);
+        this.childMaterials[1] = MyAsset.createUnshadedMaterial(am, redColor);
+        this.childMaterials[2] = MyAsset.createUnshadedMaterial(am, greenColor);
+        this.childMaterials[3] = MyAsset.createUnshadedMaterial(am, blueColor);
+        this.childMaterials[4]
+                = MyAsset.createUnshadedMaterial(am, yellowColor);
+        this.childMaterials[5] = MyAsset.createUnshadedMaterial(am, cyanColor);
+        this.childMaterials[6]
+                = MyAsset.createUnshadedMaterial(am, orangeColor);
+        this.childMaterials[7]
+                = MyAsset.createUnshadedMaterial(am, magentaColor);
+        this.childMaterials[8] = MyAsset.createUnshadedMaterial(am, pinkColor);
+        this.childMaterials[9] = MyAsset.createUnshadedMaterial(am, brownColor);
         for (int childI = 0; childI < childMaterials.length; ++childI) {
             childMaterials[childI].setName("debug child " + childI);
         }
 
-        gravity = createWireMaterial(am, cyanColor, "debug gravity", 2);
+        this.gravity = createWireMaterial(am, cyanColor, "debug gravity", 2);
 
-        jointMaterialA = createWireMaterial(am, greenColor,
-                "debug joint A wire", 2);
-        jointMaterialB = createWireMaterial(am, redColor,
-                "debug joint B wire", 2);
+        this.jointMaterialA = createWireMaterial(
+                am, greenColor, "debug joint A wire", 2);
+        this.jointMaterialB = createWireMaterial(
+                am, redColor, "debug joint B wire", 2);
         float jointLineWidth = configuration.jointLineWidth();
         setJointLineWidth(jointLineWidth);
 
-        magentas[0] = invisible;
-        magentas[1] = createWireMaterial(am, magentaColor, "debug magenta ss",
-                1);
-        magentas[2] = createWireMaterial(am, magentaColor, "debug magenta ds",
-                2);
+        this.magentas[0] = invisible;
+        this.magentas[1] = createWireMaterial(
+                am, magentaColor, "debug magenta ss", 1);
+        this.magentas[2] = createWireMaterial(
+                am, magentaColor, "debug magenta ds", 2);
 
-        pink[0] = invisible;
-        pink[1] = createWireMaterial(am, pinkColor, "debug pink ss", 1);
-        pink[2] = createWireMaterial(am, pinkColor, "debug pink ds", 2);
+        this.pink[0] = invisible;
+        this.pink[1] = createWireMaterial(am, pinkColor, "debug pink ss", 1);
+        this.pink[2] = createWireMaterial(am, pinkColor, "debug pink ds", 2);
 
-        white = createWireMaterial(am, whiteColor, "debug white", 2);
+        this.white = createWireMaterial(am, whiteColor, "debug white", 2);
 
-        yellows[0] = invisible;
-        yellows[1] = createWireMaterial(am, yellowColor, "debug yellow ss", 1);
-        yellows[2] = createWireMaterial(am, yellowColor, "debug yellow ds", 2);
+        this.yellows[0] = invisible;
+        this.yellows[1]
+                = createWireMaterial(am, yellowColor, "debug yellow ss", 1);
+        this.yellows[2]
+                = createWireMaterial(am, yellowColor, "debug yellow ds", 2);
     }
 
     /**
@@ -563,8 +606,8 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
                 node.removeControl(control);
             }
         } else if (displayAxes) {
-            control = new AxesVisualizer(assetManager, axisLength,
-                    axisLineWidth);
+            control = new AxesVisualizer(
+                    assetManager, axisLength, axisLineWidth);
             node.addControl(control);
             control.setEnabled(true);
         }
@@ -579,8 +622,8 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
                 : pcoMap.entrySet()) {
             DebugAppStateFilter filter = configuration.getFilter();
             PhysicsCollisionObject pco = entry.getKey();
-            boolean displayShape = (filter == null)
-                    || filter.displayObject(pco);
+            boolean displayShape
+                    = (filter == null) || filter.displayObject(pco);
 
             Node node = entry.getValue();
             Control control;
@@ -589,8 +632,8 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
                 if (control == null && displayShape) {
                     logger.log(Level.FINE,
                             "Create new BulletCharacterDebugControl");
-                    control = new BulletCharacterDebugControl(this,
-                            (PhysicsCharacter) pco);
+                    control = new BulletCharacterDebugControl(
+                            this, (PhysicsCharacter) pco);
                     node.addControl(control);
                 } else if (control != null && !displayShape) {
                     node.removeControl(control);
@@ -602,8 +645,8 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
                 if (control == null && displayShape) {
                     logger.log(Level.FINE,
                             "Create new BulletGhostObjectDebugControl");
-                    control = new BulletGhostObjectDebugControl(this,
-                            (PhysicsGhostObject) pco);
+                    control = new BulletGhostObjectDebugControl(
+                            this, (PhysicsGhostObject) pco);
                     node.addControl(control);
                 } else if (control != null && !displayShape) {
                     node.removeControl(control);
@@ -615,8 +658,8 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
                 if (control == null && displayShape) {
                     logger.log(Level.FINE,
                             "Create new BulletRigidBodyDebugControl");
-                    control = new BulletRigidBodyDebugControl(this,
-                            (PhysicsRigidBody) pco);
+                    control = new BulletRigidBodyDebugControl(
+                            this, (PhysicsRigidBody) pco);
                     node.addControl(control);
                 } else if (control != null && !displayShape) {
                     node.removeControl(control);
@@ -625,35 +668,41 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
             }
         }
     }
+
+    /**
+     * Synchronize the velocity visualizers with the collision objects in the
+     * PhysicsSpace.
+     */
+    protected void updateVelocities() {
+        updateAngularVelocities();
+        updateVelocityVectors();
+    }
     // *************************************************************************
-    // AbstractAppState methods
+    // BaseAppState methods
 
     /**
      * Transition this state from terminating to detached. Should be invoked
-     * only by a subclass or by the AppStateManager. Invoked once for each time
-     * {@link #initialize(com.jme3.app.state.AppStateManager, com.jme3.app.Application)}
-     * is invoked.
+     * only by a subclass or by the AppStateManager.
+     * <p>
+     * Invoked once for each time {@link #initialize(
+     * com.jme3.app.state.AppStateManager, com.jme3.app.Application)} is
+     * invoked.
+     *
+     * @param app the application which owns this state (not null)
      */
     @Override
-    public void cleanup() {
-        ViewPort[] viewPorts = configuration.listViewPorts();
-        for (ViewPort viewPort : viewPorts) {
-            viewPort.detachScene(root);
-        }
-        super.cleanup();
+    protected void cleanup(Application app) {
+        // do nothing
     }
 
     /**
      * Initialize this state prior to its first update. Should be invoked only
      * by a subclass or by the AppStateManager.
      *
-     * @param stateManager the manager for this state (not null)
      * @param app the application which owns this state (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager, Application app) {
-        super.initialize(stateManager, app);
-
+    public void initialize(Application app) {
         assetManager = app.getAssetManager();
         setupMaterials(assetManager);
 
@@ -662,13 +711,30 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
             listener.bulletDebugInit(root);
         }
 
+        RenderQueue.ShadowMode mode = configuration.shadowMode();
+        root.setShadowMode(mode);
+    }
+
+    /**
+     * Transition this state from enabled to disabled.
+     */
+    @Override
+    protected void onDisable() {
+        ViewPort[] viewPorts = configuration.listViewPorts();
+        for (ViewPort viewPort : viewPorts) {
+            viewPort.detachScene(root);
+        }
+    }
+
+    /**
+     * Transition this state from disabled to enabled.
+     */
+    @Override
+    protected void onEnable() {
         ViewPort[] viewPorts = configuration.listViewPorts();
         for (ViewPort viewPort : viewPorts) {
             viewPort.attachScene(root);
         }
-
-        RenderQueue.ShadowMode mode = configuration.shadowMode();
-        root.setShadowMode(mode);
     }
 
     /**
@@ -701,7 +767,7 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
         updateBoundingBoxes();
         updateGravityVectors();
         updateSweptSpheres();
-        updateVelocityVectors();
+        updateVelocities();
         updateJoints();
 
         // Update the (debug) root node.
@@ -710,13 +776,45 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
         if (transformSpatial == null) {
             root.setLocalTransform(transformIdentity);
         } else {
-            Transform transform = transformSpatial.getWorldTransform();
+            Transform transform = transformSpatial.getWorldTransform(); // alias
             root.setLocalTransform(transform);
         }
         root.updateGeometricState();
     }
     // *************************************************************************
     // private methods
+
+    /**
+     * Synchronize the angular-velocity debug controls with the dynamic rigid
+     * bodies in the PhysicsSpace.
+     */
+    private void updateAngularVelocities() {
+        DebugAppStateFilter filter = configuration.getAngularVelocityFilter();
+        if (filter == null) {
+            return;
+        }
+
+        for (Map.Entry<PhysicsCollisionObject, Node> entry
+                : pcoMap.entrySet()) {
+            PhysicsCollisionObject pco = entry.getKey();
+            boolean display = pco instanceof PhysicsRigidBody
+                    && ((PhysicsRigidBody) pco).isDynamic()
+                    && filter.displayObject(pco);
+
+            Node transformedNode = entry.getValue();
+            Node parent = transformedNode.getParent();
+            Control control
+                    = parent.getControl(AngularVelocityDebugControl.class);
+
+            if (control == null && display) {
+                logger.log(Level.FINE, "Create AngularVelocityDebugControl");
+                control = new AngularVelocityDebugControl(this, pco);
+                parent.addControl(control);
+            } else if (control != null && !display) {
+                parent.removeControl(control);
+            }
+        }
+    }
 
     /**
      * Synchronize the bounding-box debug controls with the collision objects in
@@ -789,7 +887,7 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
     private void updateJoints() {
         DebugAppStateFilter filter = configuration.getFilter();
         HashMap<PhysicsJoint, Node> oldMap = jointMap;
-        //create new map
+        // create new map
         jointMap = new HashMap<>(oldMap.size());
         PhysicsSpace space = configuration.getSpace();
         Collection<PhysicsJoint> list = space.getJointList();
@@ -834,11 +932,9 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
      * PhysicsSpace.
      */
     private void updatePcoMap() {
-        /*
-         * Create visualization nodes for PCOs that have been added.
-         */
+        // Create visualization nodes for PCOs that have been added.
         HashMap<PhysicsCollisionObject, Node> oldMap = pcoMap;
-        pcoMap = new HashMap<>(oldMap.size());
+        this.pcoMap = new HashMap<>(oldMap.size());
         PhysicsSpace space = configuration.getSpace();
         Collection<PhysicsCollisionObject> list = space.getPcoList();
         for (PhysicsCollisionObject pco : list) {
@@ -852,9 +948,8 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
             }
             pcoMap.put(pco, node);
         }
-        /*
-         * Detach nodes of PCOs that have been removed from the space.
-         */
+
+        // Detach nodes of PCOs that have been removed from the space.
         for (Node transformedNode : oldMap.values()) {
             Node parent = transformedNode.getParent();
             parent.removeFromParent();
@@ -922,8 +1017,7 @@ public class BulletDebugAppState extends AbstractAppState { // TODO BaseAppState
      * bodies in the PhysicsSpace.
      */
     private void updateVelocityVectors() {
-        DebugAppStateFilter filter
-                = configuration.getVelocityVectorFilter();
+        DebugAppStateFilter filter = configuration.getVelocityVectorFilter();
         if (filter == null) {
             return;
         }

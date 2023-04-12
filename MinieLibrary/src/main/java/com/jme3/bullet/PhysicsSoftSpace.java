@@ -44,7 +44,7 @@ import java.util.logging.Logger;
 
 /**
  * A PhysicsSpace that supports soft bodies, with its own
- * btSoftRigidDynamicsWorld.
+ * {@code btSoftRigidDynamicsWorld}.
  *
  * @author dokthar
  */
@@ -76,10 +76,21 @@ public class PhysicsSoftSpace extends PhysicsSpace {
      * Instantiate a PhysicsSoftSpace with a sequential-impulse solver. Must be
      * invoked on the designated physics thread.
      *
-     * @param worldMin the desired minimum coordinate values (not null,
-     * unaffected, default=(-10k,-10k,-10k))
-     * @param worldMax the desired maximum coordinate values (not null,
-     * unaffected, default=(10k,10k,10k))
+     * @param broadphaseType which broadphase accelerator to use (not null)
+     */
+    public PhysicsSoftSpace(BroadphaseType broadphaseType) {
+        this(new Vector3f(-10000f, -10000f, -10000f),
+                new Vector3f(10000f, 10000f, 10000f), broadphaseType);
+    }
+
+    /**
+     * Instantiate a PhysicsSoftSpace with a sequential-impulse solver. Must be
+     * invoked on the designated physics thread.
+     *
+     * @param worldMin the desired minimum coordinate value for each axis (not
+     * null, unaffected, default=(-10k,-10k,-10k))
+     * @param worldMax the desired maximum coordinate value for each axis (not
+     * null, unaffected, default=(10k,10k,10k))
      * @param broadphaseType which broadphase accelerator to use (not null)
      */
     public PhysicsSoftSpace(Vector3f worldMin, Vector3f worldMax,
@@ -121,7 +132,9 @@ public class PhysicsSoftSpace extends PhysicsSpace {
      */
     public Collection<PhysicsSoftBody> getSoftBodyList() {
         Collection<PhysicsSoftBody> result = softBodyMap.values();
-        return Collections.unmodifiableCollection(result);
+        result = Collections.unmodifiableCollection(result);
+
+        return result;
     }
 
     /**
@@ -131,7 +144,8 @@ public class PhysicsSoftSpace extends PhysicsSpace {
      * @return the pre-existing PhysicsSoftSpace running on this thread
      */
     public static PhysicsSoftSpace getSoftSpace() {
-        return (PhysicsSoftSpace) getCollisionSpace();
+        CollisionSpace result = getCollisionSpace();
+        return (PhysicsSoftSpace) result;
     }
 
     /**
@@ -342,6 +356,6 @@ public class PhysicsSoftSpace extends PhysicsSpace {
 
     native private static long getWorldInfo(long softSpaceId);
 
-    native private static void removeSoftBody(long softSpaceId,
-            long softBodyId);
+    native private static void
+            removeSoftBody(long softSpaceId, long softBodyId);
 }

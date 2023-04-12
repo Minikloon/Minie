@@ -88,14 +88,10 @@ class DebugMeshCallback {
      */
     Vector3f[] footprint(Transform meshToWorld) {
         assert meshToWorld != null;
-        /*
-         * Copy the location list, removing all duplicates in the process.
-         * TODO make this more efficient
-         */
+
+        // Copy the location list, removing all duplicates in the process.
         VectorSet distinct = new VectorSetUsingBuffer(list.size(), false);
-        for (Vector3f vector : list) {
-            distinct.add(vector);
-        }
+        distinct.addAll(list);
         /*
          * Transform vertex locations to world coordinates and set all the
          * Y coordinates to the minimum coordinate value.
@@ -118,9 +114,8 @@ class DebugMeshCallback {
             int position = vectorIndex * numAxes + PhysicsSpace.AXIS_Y;
             floatBuffer.put(position, minY);
         }
-        /*
-         * Fit a rotated rectangular solid to the vertex locations.
-         */
+
+        // Fit a rotated rectangular solid to the vertex locations.
         RectangularSolid solid
                 = new RectangularSolid(floatBuffer, 0, numFloats);
         Vector3f maxima = solid.maxima(null);
@@ -136,9 +131,8 @@ class DebugMeshCallback {
         cornerLocations[1] = new Vector3f(midX, minima.y, maxima.z);
         cornerLocations[2] = new Vector3f(midX, maxima.y, minima.z);
         cornerLocations[3] = new Vector3f(midX, minima.y, minima.z);
-        /*
-         * Transform corner locations into the world coordinate system.
-         */
+
+        // Transform corner locations into the world coordinate system.
         for (Vector3f location : cornerLocations) {
             solid.localToWorld(location, location);
         }
@@ -207,9 +201,8 @@ class DebugMeshCallback {
         double maxSquaredDistance = 0.0;
         Vector3f tmpVector = new Vector3f(); // TODO garbage
         for (Vector3f vertex : list) {
-            tmpVector.set(vertex);
-            meshToWorld.transformVector(vertex, vertex);
-            double lengthSquared = MyVector3f.lengthSquared(vertex);
+            meshToWorld.transformVector(vertex, tmpVector);
+            double lengthSquared = MyVector3f.lengthSquared(tmpVector);
             if (lengthSquared > maxSquaredDistance) {
                 maxSquaredDistance = lengthSquared;
             }

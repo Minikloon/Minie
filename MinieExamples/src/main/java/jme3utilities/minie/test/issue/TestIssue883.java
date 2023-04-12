@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2020, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -51,19 +51,27 @@ public class TestIssue883 extends SimpleApplication {
     // *************************************************************************
     // fields
 
-    private boolean firstPrint = true;
-    private float timeToNextPrint = 1f; // in seconds
-    private double frameTime; // in seconds
-    private double physicsTime; // in seconds
+    private static boolean firstPrint = true;
+    private static float timeToNextPrint = 1f; // in seconds
+    private static double frameTime; // in seconds
+    private static double physicsTime; // in seconds
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue883 application.
+     */
+    public TestIssue883() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestIssue883 application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         Application application = new TestIssue883();
         application.start();
     }
@@ -107,8 +115,8 @@ public class TestIssue883 extends SimpleApplication {
             firstPrint = false;
         }
 
-        System.out.printf(" frameTime= %s   physicsTime= %s%n",
-                frameTime, physicsTime);
+        System.out.printf(
+                " frameTime= %s   physicsTime= %s%n", frameTime, physicsTime);
         timeToNextPrint = 1f;
     }
 }

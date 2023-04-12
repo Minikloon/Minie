@@ -54,12 +54,25 @@ public class SoftPhysicsAppState extends BulletAppState {
     final public static Logger logger2
             = Logger.getLogger(SoftPhysicsAppState.class.getName());
     // *************************************************************************
-    // fields exposed
+    // fields
 
     /**
      * limit which clusters are visualized, or null to visualize no clusters
      */
     private BulletDebugAppState.DebugAppStateFilter clusterFilter;
+    /**
+     * limit which wind velocities are visualized, or null to visualize none
+     */
+    private BulletDebugAppState.DebugAppStateFilter windVelocityFilter;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate an enabled app state with no filters to manage a space with
+     * the DBVT broadphase collision-detection algorithm.
+     */
+    public SoftPhysicsAppState() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
@@ -87,6 +100,21 @@ public class SoftPhysicsAppState extends BulletAppState {
         }
         clusterFilter = filter;
     }
+
+    /**
+     * Alter which wind velocities are included in the debug visualization.
+     *
+     * @param filter the filter to use (alias created) or null to visualize no
+     * wind velocities (default=null)
+     */
+    public void setWindVelocityFilter(
+            BulletDebugAppState.DebugAppStateFilter filter) {
+        SoftDebugAppState sdas = (SoftDebugAppState) getDebugAppState();
+        if (sdas != null) {
+            sdas.setWindVelocityFilter(filter);
+        }
+        this.windVelocityFilter = filter;
+    }
     // *************************************************************************
     // BulletAppState methods
 
@@ -100,6 +128,7 @@ public class SoftPhysicsAppState extends BulletAppState {
         DebugConfiguration debugConfig = getDebugConfiguration();
         SoftDebugAppState appState = new SoftDebugAppState(debugConfig);
         appState.setClusterFilter(clusterFilter);
+        appState.setWindVelocityFilter(windVelocityFilter);
 
         return appState;
     }

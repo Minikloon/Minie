@@ -116,7 +116,7 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
 
     /**
      * Instantiate a SoftPhysicsJoint to join a soft-body cluster and a rigid
-     * body. TODO protect
+     * body.
      * <p>
      * To be fully effective, the joint must be added to the PhysicsSoftSpace of
      * both bodies.
@@ -125,7 +125,7 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
      * @param clusterIndexA the index of the cluster for the A end (&ge;0)
      * @param rigidBodyB the rigid body for the B end (not null, alias created)
      */
-    public SoftPhysicsJoint(PhysicsSoftBody softBodyA, int clusterIndexA,
+    protected SoftPhysicsJoint(PhysicsSoftBody softBodyA, int clusterIndexA,
             PhysicsRigidBody rigidBodyB) {
         int numClustersA = softBodyA.countClusters();
         Validate.inRange(clusterIndexA, "cluster index", 0, numClustersA - 1);
@@ -140,7 +140,7 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
     }
 
     /**
-     * Instantiate a SoftPhysicsJoint to join 2 soft bodies. TODO protect
+     * Instantiate a SoftPhysicsJoint to join 2 soft bodies.
      * <p>
      * To be effective, the joint must be added to the PhysicsSoftSpace of both
      * bodies. Also, the bodies must be distinct.
@@ -150,7 +150,7 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
      * @param softBodyB the body for the B end (not null, alias created)
      * @param clusterIndexB the index of the cluster for the B end (&ge;0)
      */
-    public SoftPhysicsJoint(PhysicsSoftBody softBodyA, int clusterIndexA,
+    protected SoftPhysicsJoint(PhysicsSoftBody softBodyA, int clusterIndexA,
             PhysicsSoftBody softBodyB, int clusterIndexB) {
         int numClustersA = softBodyA.countClusters();
         Validate.inRange(clusterIndexA, "cluster index A", 0, numClustersA - 1);
@@ -169,7 +169,7 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
     // new methods exposed
 
     /**
-     * Compare Bullet parameters against their the local copies.
+     * Compare Bullet parameters against their local copies.
      *
      * @return true if the local copies are accurate, otherwise false
      */
@@ -272,7 +272,7 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
     }
 
     /**
-     * TODO description
+     * Return the split.
      *
      * @return the split value
      */
@@ -353,7 +353,7 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
     }
 
     /**
-     * TODO description
+     * Alter the split.
      *
      * @param split the desired split value (default=1)
      */
@@ -366,9 +366,9 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
     // new protected methods
 
     /**
-     * Finalize the btTypedConstraint.
+     * Finalize the {@code btTypedConstraint}.
      *
-     * @param jointId identifier of the btSoftBody::Joint (not 0)
+     * @param jointId identifier of the {@code btSoftBody::Joint} (not zero)
      */
     native protected static void finalizeNative(long jointId);
     // *************************************************************************
@@ -385,21 +385,6 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
     }
 
     /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public SoftPhysicsJoint jmeClone() {
-        try {
-            SoftPhysicsJoint clone = (SoftPhysicsJoint) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
-    }
-
-    /**
      * De-serialize this joint from the specified importer, for example when
      * loading from a J3O file.
      *
@@ -411,15 +396,13 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        cfm = capsule.readFloat(tagConstraintForceMixing, 1f);
-        erp = capsule.readFloat(tagErrorReductionParameter, 1f);
-        split = capsule.readFloat(tagSplit, 1f);
+        this.cfm = capsule.readFloat(tagConstraintForceMixing, 1f);
+        this.erp = capsule.readFloat(tagErrorReductionParameter, 1f);
+        this.split = capsule.readFloat(tagSplit, 1f);
 
-        clusterIndexA = capsule.readInt(tagClusterIndexA, -1);
-        clusterIndexB = capsule.readInt(tagClusterIndexB, -1);
-        /*
-         * Each subclass must create the btSoftBody::Joint.
-         */
+        this.clusterIndexA = capsule.readInt(tagClusterIndexA, -1);
+        this.clusterIndexB = capsule.readInt(tagClusterIndexB, -1);
+        // Each subclass must create the btSoftBody::Joint.
     }
 
     /**
@@ -450,11 +433,11 @@ public abstract class SoftPhysicsJoint extends PhysicsJoint {
 
     native private static float getSplit(long jointId);
 
-    native private static void setConstraintForceMixing(long jointId,
-            float cfm);
+    native private static void
+            setConstraintForceMixing(long jointId, float cfm);
 
-    native private static void setErrorReductionParameter(long jointId,
-            float erp);
+    native private static void
+            setErrorReductionParameter(long jointId, float erp);
 
     native private static void setSplit(long jointId, float split);
 }

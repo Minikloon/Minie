@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ import com.jme3.math.Vector3f;
 
 /**
  * A simple example combining kinematic and dynamic rigid bodies.
- *
+ * <p>
  * Builds upon HelloStaticBody.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -63,9 +63,9 @@ public class HelloKinematics
     /**
      * Main entry point for the HelloKinematics application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloKinematics application = new HelloKinematics();
         application.start();
     }
@@ -82,7 +82,7 @@ public class HelloKinematics
         stateManager.attach(bulletAppState);
         PhysicsSpace physicsSpace = bulletAppState.getPhysicsSpace();
 
-        // To enable the callbacks, add this application as a tick listener.
+        // To enable the callbacks, register the application as a tick listener.
         physicsSpace.addTickListener(this);
 
         // Enable debug visualization to reveal what occurs in physics space.
@@ -109,16 +109,14 @@ public class HelloKinematics
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the simulation is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param ignored the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
-    public void prePhysicsTick(PhysicsSpace ignored, float timeStep) {
-        /*
-         * Make the kinematic ball orbit the origin.
-         */
+    public void prePhysicsTick(PhysicsSpace space, float timeStep) {
+        // Make the kinematic ball orbit the origin.
         float orbitalPeriod = 0.8f; // seconds
         float phaseAngle = elapsedTime * FastMath.TWO_PI / orbitalPeriod;
 
@@ -132,10 +130,10 @@ public class HelloKinematics
     }
 
     /**
-     * Callback from Bullet, invoked just after the simulation has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
-     * @param space ignored
-     * @param timeStep ignored
+     * @param space the space that was just stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {

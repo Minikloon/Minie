@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ import com.jme3.math.Vector3f;
 
 /**
  * A simple example of a dynamic rigid body with an implausible center.
- *
+ * <p>
  * Builds upon HelloStaticBody.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -50,9 +50,9 @@ public class HelloMadMallet extends SimpleApplication {
     /**
      * Main entry point for the HelloMadMallet application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloMadMallet application = new HelloMadMallet();
         application.start();
     }
@@ -66,8 +66,8 @@ public class HelloMadMallet extends SimpleApplication {
     public void simpleInitApp() {
         // Set up Bullet physics and create a physics space.
         BulletAppState bulletAppState = new BulletAppState();
-        bulletAppState.setDebugEnabled(true);
         stateManager.attach(bulletAppState);
+        bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSpace physicsSpace = bulletAppState.getPhysicsSpace();
 
         physicsSpace.setGravity(new Vector3f(0f, -50f, 0f));
@@ -105,8 +105,8 @@ public class HelloMadMallet extends SimpleApplication {
         // Create a static disc and add it to the space.
         float discRadius = 5f;
         float discThickness = 0.5f;
-        CollisionShape discShape = new CylinderCollisionShape(discRadius,
-                discThickness, PhysicsSpace.AXIS_Y);
+        CollisionShape discShape = new CylinderCollisionShape(
+                discRadius, discThickness, PhysicsSpace.AXIS_Y);
         PhysicsRigidBody disc
                 = new PhysicsRigidBody(discShape, PhysicsBody.massForStatic);
         physicsSpace.addCollisionObject(disc);

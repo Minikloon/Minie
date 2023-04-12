@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -49,6 +49,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import jme3utilities.Validate;
+import jme3utilities.math.MyMath;
 import jme3utilities.math.RectangularSolid;
 import jme3utilities.mesh.Octasphere;
 import jme3utilities.minie.MyShape;
@@ -102,15 +103,15 @@ final public class CompoundTestShapes {
      * &gt;0)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeBarbell(float barLength,
-            float barRadius, float plateRadius) {
+    public static CompoundCollisionShape makeBarbell(
+            float barLength, float barRadius, float plateRadius) {
         float plateOffset = 0.42f * barLength;
-        CollisionShape bar = new CylinderCollisionShape(barRadius,
-                barLength, PhysicsSpace.AXIS_X);
+        CollisionShape bar = new CylinderCollisionShape(
+                barRadius, barLength, PhysicsSpace.AXIS_X);
 
         float plateThickness = 0.08f * barLength;
-        CollisionShape plate = new CylinderCollisionShape(plateRadius,
-                plateThickness, PhysicsSpace.AXIS_X);
+        CollisionShape plate = new CylinderCollisionShape(
+                plateRadius, plateThickness, PhysicsSpace.AXIS_X);
 
         CompoundCollisionShape result = new CompoundCollisionShape(3);
         result.addChildShape(bar);
@@ -128,10 +129,10 @@ final public class CompoundTestShapes {
      * @param thickness (in unscaled shape units, &gt;0, &lt;innerRadius)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeBowl(float innerRadius,
-            float thickness) {
-        Validate.inRange(innerRadius, "inner radius", thickness,
-                Float.MAX_VALUE);
+    public static CompoundCollisionShape makeBowl(
+            float innerRadius, float thickness) {
+        Validate.inRange(
+                innerRadius, "inner radius", thickness, Float.MAX_VALUE);
         Validate.inRange(thickness, "thickness", 0f, innerRadius);
 
         float halfThickness = thickness / 2f;
@@ -206,12 +207,12 @@ final public class CompoundTestShapes {
         RectangularSolid solid = new RectangularSolid(halfExtents);
         CollisionShape seat = new MultiSphere(solid);
 
-        CollisionShape frontLeg = new CylinderCollisionShape(legRadius,
-                legLength, PhysicsSpace.AXIS_Y);
+        CollisionShape frontLeg = new CylinderCollisionShape(
+                legRadius, legLength, PhysicsSpace.AXIS_Y);
 
         float rearLength = legLength + backLength;
-        CollisionShape rearLeg = new CylinderCollisionShape(legRadius,
-                rearLength, PhysicsSpace.AXIS_Y);
+        CollisionShape rearLeg = new CylinderCollisionShape(
+                legRadius, rearLength, PhysicsSpace.AXIS_Y);
 
         float rearHalf = rearLength / 2f;
         float legHalf = legLength / 2f;
@@ -255,8 +256,8 @@ final public class CompoundTestShapes {
      * @param depth rimY minus nadirY (in unscaled shape units, &gt;0)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeCorner(int numSides,
-            float rimRadius, float depth) {
+    public static CompoundCollisionShape makeCorner(
+            int numSides, float rimRadius, float depth) {
         Validate.inRange(numSides, "number of sides", 3, Integer.MAX_VALUE);
         Validate.positive(rimRadius, "rim radius");
         Validate.positive(depth, "depth");
@@ -333,18 +334,18 @@ final public class CompoundTestShapes {
             float flangeWidth, float beamHeight, float thickness) {
         Validate.positive(length, "length");
         Validate.positive(thickness, "thickness");
-        Validate.inRange(flangeWidth, "flange width", thickness,
-                Float.MAX_VALUE);
-        Validate.inRange(beamHeight, "beam height", 2f * thickness,
-                Float.MAX_VALUE);
+        Validate.inRange(
+                flangeWidth, "flange width", thickness, Float.MAX_VALUE);
+        Validate.inRange(
+                beamHeight, "beam height", 2f * thickness, Float.MAX_VALUE);
 
         float halfLength = length / 2f;
         float halfThickness = thickness / 2f;
         float webHalfHeight = beamHeight / 2f - thickness;
-        CollisionShape web = new BoxCollisionShape(halfThickness, webHalfHeight,
-                halfLength);
-        CollisionShape flange = new BoxCollisionShape(flangeWidth / 2f,
-                halfThickness, halfLength);
+        CollisionShape web = new BoxCollisionShape(
+                halfThickness, webHalfHeight, halfLength);
+        CollisionShape flange = new BoxCollisionShape(
+                flangeWidth / 2f, halfThickness, halfLength);
 
         CompoundCollisionShape result = new CompoundCollisionShape(3);
         result.addChildShape(web);
@@ -366,14 +367,14 @@ final public class CompoundTestShapes {
      * &gt;stemRadius)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeKnucklebone(float stemLength,
-            float stemRadius, float ballRadius) {
-        CollisionShape xStem = new CapsuleCollisionShape(stemRadius, stemLength,
-                PhysicsSpace.AXIS_X);
-        CollisionShape yStem = new CapsuleCollisionShape(stemRadius, stemLength,
-                PhysicsSpace.AXIS_Y);
-        CollisionShape zStem = new CapsuleCollisionShape(stemRadius, stemLength,
-                PhysicsSpace.AXIS_Z);
+    public static CompoundCollisionShape makeKnucklebone(
+            float stemLength, float stemRadius, float ballRadius) {
+        CollisionShape xStem = new CapsuleCollisionShape(
+                stemRadius, stemLength, PhysicsSpace.AXIS_X);
+        CollisionShape yStem = new CapsuleCollisionShape(
+                stemRadius, stemLength, PhysicsSpace.AXIS_Y);
+        CollisionShape zStem = new CapsuleCollisionShape(
+                stemRadius, stemLength, PhysicsSpace.AXIS_Z);
 
         CollisionShape ball = new SphereCollisionShape(ballRadius);
 
@@ -402,10 +403,10 @@ final public class CompoundTestShapes {
      * &gt;0)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeLadder(float rungLength,
-            float rungSpacing, float rungRadius) {
-        CollisionShape rung = new CylinderCollisionShape(rungRadius,
-                rungLength, PhysicsSpace.AXIS_X);
+    public static CompoundCollisionShape makeLadder(
+            float rungLength, float rungSpacing, float rungRadius) {
+        CollisionShape rung = new CylinderCollisionShape(
+                rungRadius, rungLength, PhysicsSpace.AXIS_X);
 
         float railLength = 6f * rungSpacing;
         float railHalf = railLength / 2f;
@@ -439,8 +440,8 @@ final public class CompoundTestShapes {
      *
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeLidlessBox(float iHeight,
-            float iWidth, float iDepth, float wallThickness) {
+    public static CompoundCollisionShape makeLidlessBox(
+            float iHeight, float iWidth, float iDepth, float wallThickness) {
         float ihHeight = iHeight / 2f;
         float ihWidth = iWidth / 2f;
         float ihDepth = iDepth / 2f;
@@ -467,8 +468,8 @@ final public class CompoundTestShapes {
      * @param radius half the thickness (in unscaled shape units, &gt;0)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeLink(float ihHeight,
-            float ihWidth, float radius) {
+    public static CompoundCollisionShape makeLink(
+            float ihHeight, float ihWidth, float radius) {
         Validate.positive(ihHeight, "half height");
         Validate.positive(ihWidth, "half width");
         Validate.positive(radius, "radius");
@@ -546,14 +547,15 @@ final public class CompoundTestShapes {
         Validate.positive(thickness, "thickness");
         Validate.positive(zLength, "length");
         Validate.inRange(arc, "arc", 0f, FastMath.TWO_PI);
-        Validate.inRange(numChildren, "number of children", 2,
-                Integer.MAX_VALUE);
+        Validate.inRange(
+                numChildren, "number of children", 2, Integer.MAX_VALUE);
 
         float halfLength = zLength / 2f;
         float outerR = innerR + thickness;
         float segmentAngle = arc / numChildren; // in radians
 
-        float xOff, yOff; // TODO more accurate centering
+        float xOff;
+        float yOff; // TODO more accurate centering
         if (arc < 2) {
             float cos = FastMath.cos(segmentAngle);
             float sin = FastMath.sin(segmentAngle);
@@ -611,9 +613,8 @@ final public class CompoundTestShapes {
         float zHalfExtent = (numXWires - 1) * wireSpacing / 2f;
         CompoundCollisionShape result
                 = new CompoundCollisionShape(numXWires + numZWires + 1);
-        /*
-         * Add numXWires wires parallel to the X axis.
-         */
+
+        // Add numXWires wires parallel to the X axis.
         Vector3f p0 = new Vector3f(-xHalfExtent, 0f, 0f);
         Vector3f p1 = new Vector3f(xHalfExtent, 0f, 0f);
         SimplexCollisionShape xWire = new SimplexCollisionShape(p0, p1);
@@ -622,9 +623,8 @@ final public class CompoundTestShapes {
             float z = -zHalfExtent + wireSpacing * zIndex;
             result.addChildShape(xWire, 0f, yHeight, z);
         }
-        /*
-         * Add numZWires wires parallel to the Z axis.
-         */
+
+        // Add numZWires wires parallel to the Z axis.
         p0.set(0f, 0f, -zHalfExtent);
         p1.set(0f, 0f, zHalfExtent);
         SimplexCollisionShape zWire = new SimplexCollisionShape(p0, p1);
@@ -633,9 +633,8 @@ final public class CompoundTestShapes {
             float x = -xHalfExtent + wireSpacing * xIndex;
             result.addChildShape(zWire, x, yHeight, 0f);
         }
-        /*
-         * Add a plane to catch any drops that pass through the sieve.
-         */
+
+        // Add a plane to catch any drops that pass through the sieve.
         Plane plane = new Plane(Vector3f.UNIT_Y, 0f);
         PlaneCollisionShape pcs = new PlaneCollisionShape(plane);
         result.addChildShape(pcs);
@@ -681,8 +680,8 @@ final public class CompoundTestShapes {
      * @param trianglesPerSlice the number of mesh triangles per slice (4 or 6)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeStar(int numPoints,
-            float outerRadius, float centerY, float radiusRatio,
+    public static CompoundCollisionShape makeStar(
+            int numPoints, float outerRadius, float centerY, float radiusRatio,
             int trianglesPerSlice) {
         Validate.inRange(numPoints, "number of points", 2, Integer.MAX_VALUE);
         Validate.positive(outerRadius, "outer radius");
@@ -716,19 +715,19 @@ final public class CompoundTestShapes {
      * units, &gt;0)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeTable(float topRadius,
-            float pedestalRadius) {
+    public static CompoundCollisionShape makeTable(
+            float topRadius, float pedestalRadius) {
         float thickness = 0.4f;
         float footHalfLength = 0.6f * (topRadius + pedestalRadius);
         CollisionShape foot
                 = new BoxCollisionShape(thickness / 2f, 0.25f, footHalfLength);
 
         float pedestalHeight = 4f;
-        CollisionShape pedestal = new CylinderCollisionShape(pedestalRadius,
-                pedestalHeight, PhysicsSpace.AXIS_Y);
+        CollisionShape pedestal = new CylinderCollisionShape(
+                pedestalRadius, pedestalHeight, PhysicsSpace.AXIS_Y);
 
-        CollisionShape top = new CylinderCollisionShape(topRadius, thickness,
-                PhysicsSpace.AXIS_Y);
+        CollisionShape top = new CylinderCollisionShape(
+                topRadius, thickness, PhysicsSpace.AXIS_Y);
 
         CompoundCollisionShape result = new CompoundCollisionShape(4);
         result.addChildShape(pedestal, 0f, -1f, 0f);
@@ -753,15 +752,15 @@ final public class CompoundTestShapes {
      * @param spikeRadius the radius of the spike (in unscaled units, &gt;0)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeThumbTack(float headRadius,
-            float spikeRadius) {
+    public static CompoundCollisionShape makeThumbTack(
+            float headRadius, float spikeRadius) {
         float headThickness = 0.4f;
-        CollisionShape head = new CylinderCollisionShape(headRadius,
-                headThickness, PhysicsSpace.AXIS_Y);
+        CollisionShape head = new CylinderCollisionShape(
+                headRadius, headThickness, PhysicsSpace.AXIS_Y);
 
         float spikeHeight = 3f;
-        CollisionShape spike = new ConeCollisionShape(spikeRadius, spikeHeight,
-                PhysicsSpace.AXIS_Y);
+        CollisionShape spike = new ConeCollisionShape(
+                spikeRadius, spikeHeight, PhysicsSpace.AXIS_Y);
 
         CompoundCollisionShape result = new CompoundCollisionShape(2);
         result.addChildShape(head, 0f, -0.5f, 0f);
@@ -779,19 +778,19 @@ final public class CompoundTestShapes {
      * &gt;0)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeTop(float bodyRadius,
-            float handleRadius) {
+    public static CompoundCollisionShape makeTop(
+            float bodyRadius, float handleRadius) {
         float bodyHeight = 0.6f;
-        CollisionShape body = new CylinderCollisionShape(bodyRadius,
-                bodyHeight, PhysicsSpace.AXIS_Y);
+        CollisionShape body = new CylinderCollisionShape(
+                bodyRadius, bodyHeight, PhysicsSpace.AXIS_Y);
 
         float coneHeight = 1.5f;
-        CollisionShape cone = new ConeCollisionShape(bodyRadius - 0.06f,
-                coneHeight, PhysicsSpace.AXIS_Y);
+        CollisionShape cone = new ConeCollisionShape(
+                bodyRadius - 0.06f, coneHeight, PhysicsSpace.AXIS_Y);
 
         float handleHeight = 1.5f;
-        CollisionShape handle = new CapsuleCollisionShape(handleRadius,
-                handleHeight, PhysicsSpace.AXIS_Y);
+        CollisionShape handle = new CapsuleCollisionShape(
+                handleRadius, handleHeight, PhysicsSpace.AXIS_Y);
 
         CompoundCollisionShape result = new CompoundCollisionShape(3);
         result.addChildShape(body);
@@ -811,18 +810,18 @@ final public class CompoundTestShapes {
      * @param minorRadius (in unscaled shape units, &gt;0, &lt;majorRadius)
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeTorus(float majorRadius,
-            float minorRadius) {
-        Validate.inRange(majorRadius, "major radius", minorRadius,
-                Float.MAX_VALUE);
-        Validate.inRange(minorRadius, "minor radius", Float.MIN_VALUE,
-                majorRadius);
+    public static CompoundCollisionShape
+            makeTorus(float majorRadius, float minorRadius) {
+        Validate.inRange(
+                majorRadius, "major radius", minorRadius, Float.MAX_VALUE);
+        Validate.inRange(
+                minorRadius, "minor radius", Float.MIN_VALUE, majorRadius);
 
         int numCapsules = 20;
         float angle = FastMath.TWO_PI / numCapsules;
         float length = majorRadius * angle;
-        CollisionShape capsule = new CapsuleCollisionShape(minorRadius,
-                length, PhysicsSpace.AXIS_X);
+        CollisionShape capsule = new CapsuleCollisionShape(
+                minorRadius, length, PhysicsSpace.AXIS_X);
 
         CompoundCollisionShape result = new CompoundCollisionShape(numCapsules);
         Vector3f offset = new Vector3f();
@@ -861,14 +860,13 @@ final public class CompoundTestShapes {
         float baseY = -1.5f;
         Vector3f depress = new Vector3f(0f, baseY, 0f);
         result.translate(depress);
-        /*
-         * Place a tetrahedral deflector in the center.
-         */
+
+        // Place a tetrahedral deflector in the center.
         float size = 3f;
         Vector3f p1 = new Vector3f(0f, size, 0f);
         Vector3f p2 = new Vector3f(-size, baseY, size);
         Vector3f p3 = new Vector3f(-size, baseY, -size);
-        Vector3f p4 = new Vector3f(size * FastMath.sqrt(2f), baseY, 0f);
+        Vector3f p4 = new Vector3f(size * MyMath.root2, baseY, 0f);
         CollisionShape child = new SimplexCollisionShape(p1, p2, p3, p4);
         result.addChildShape(child);
 
@@ -883,27 +881,24 @@ final public class CompoundTestShapes {
      *
      * @return a new compound shape (not null)
      */
-    public static CompoundCollisionShape makeTrident(float shaftLength,
-            float shaftRadius) {
+    public static CompoundCollisionShape
+            makeTrident(float shaftLength, float shaftRadius) {
         Validate.positive(shaftLength, "shaft length");
         Validate.positive(shaftRadius, "shaft radius");
-        /*
-         * Create a cylinder for the shaft.
-         */
-        CollisionShape shaft = new CylinderCollisionShape(shaftRadius,
-                shaftLength, PhysicsSpace.AXIS_Y);
+
+        // Create a cylinder for the shaft.
+        CollisionShape shaft = new CylinderCollisionShape(
+                shaftRadius, shaftLength, PhysicsSpace.AXIS_Y);
         float shaftOffset = 0.2f * shaftLength;
-        /*
-         * Create a box for the crosspiece.
-         */
+
+        // Create a box for the crosspiece.
         float halfCross = 5f * shaftRadius;
         float halfThickness = 0.75f * shaftRadius;
         float margin = CollisionShape.getDefaultMargin();
         CollisionShape crosspiece = new BoxCollisionShape(halfCross + margin,
                 halfThickness + margin, halfThickness + margin);
-        /*
-         * Create pyramidal hulls for each of the 3 prongs.
-         */
+
+        // Create pyramidal hulls for each of the 3 prongs.
         float baseX = halfCross - halfThickness;
         float pointX = halfCross + 2f * halfThickness;
         float crossOffset

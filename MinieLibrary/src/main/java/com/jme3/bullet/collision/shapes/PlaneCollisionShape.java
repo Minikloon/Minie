@@ -42,8 +42,8 @@ import java.io.IOException;
 import java.util.logging.Logger;
 
 /**
- * A planar CollisionShape based on Bullet's btStaticPlaneShape. Not for use in
- * dynamic bodies. Collisions between HeightfieldCollisionShape,
+ * A planar collision shape based on Bullet's {@code btStaticPlaneShape}. Not
+ * for use in dynamic bodies. Collisions between HeightfieldCollisionShape,
  * MeshCollisionShape, and PlaneCollisionShape objects are never detected.
  *
  * @author normenhansen
@@ -95,7 +95,8 @@ public class PlaneCollisionShape extends CollisionShape {
      * @return a new instance (not null)
      */
     final public Plane getPlane() {
-        return plane.clone();
+        Plane result = plane.clone();
+        return result;
     }
     // *************************************************************************
     // CollisionShape methods
@@ -112,23 +113,8 @@ public class PlaneCollisionShape extends CollisionShape {
     @Override
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
-        plane = cloner.clone(plane);
+        this.plane = cloner.clone(plane);
         createShape();
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public PlaneCollisionShape jmeClone() {
-        try {
-            PlaneCollisionShape clone = (PlaneCollisionShape) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -153,7 +139,8 @@ public class PlaneCollisionShape extends CollisionShape {
         super.read(importer);
 
         InputCapsule capsule = importer.getCapsule(this);
-        plane = (Plane) capsule.readSavable(tagCollisionPlane, new Plane());
+        this.plane
+                = (Plane) capsule.readSavable(tagCollisionPlane, new Plane());
         createShape();
     }
 
@@ -175,7 +162,7 @@ public class PlaneCollisionShape extends CollisionShape {
     // Java private methods
 
     /**
-     * Instantiate the configured btStaticPlaneShape.
+     * Instantiate the configured {@code btStaticPlaneShape}.
      */
     private void createShape() {
         long shapeId = createShape(plane.getNormal(), plane.getConstant());

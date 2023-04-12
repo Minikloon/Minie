@@ -1,4 +1,364 @@
-# Release log for the Minie library, DacWizard, and MinieExamples
+# Release log for the Minie library, DacWizard, MinieExamples, and VhacdTuner
+
+## Version 7.4.0 released on 24 March 2023
+
++ Fixed bugs:
+  + `BetterCharacterControl` oscillates while unducking near an overhang
+  + `BetterCharacterController.isOnGround()` is unreliable
+  + `TestIssue18Heightfield` application throws an `IllegalArgumentException`
+  + excessive logging from the `TestIssue13` application
++ Implemented kinematic modes for `BetterCharacterControl`
+  and `JoinedBodyControl`.
++ Deprecated 7 library methods for obtaining native IDs:
+  + `CollisionShape.getObjectId()`
+  + `CollisionSpace.getSpaceId()`
+  + `PhysicsCollisionObject.getObjectId()`
+  + `PhysicsJoint.getObjectId()`
+  + `RigidBodyMotionState.getObjectId()`
+  + `RotationalLimitMotor.getMotor()`
+  + `TranslationalLimitMotor.getMotor()`
++ Based on:
+  + v3.6.0-stable of JMonkeyEngine,
+  + v3.0.0 of the jME-TTF library,
+  + v8.3.2 of the Heart library,
+  + v1.0.0 of the Acorus library,
+  + v0.7.5 of the Wes library, and
+  + v0.9.35 of the jme3-utilities-nifty library.
+
+## Version 7.3.0+for36 released on 3 March 2023
+
++ Fixed bugs:
+  + ignored collision objects may be garbage-collected prematurely
+  + adding a `DynamicAnimControl` to a spatial resets its armature
+  + `PhysicsCollisionObject.cloneIgnoreList()` throws a `NullPointerException`
+  + `BetterCharacterControl.setPhysicsLocation()` never updates the field
+  + tasks passed to `PhysicsSpace.enqueueOnThisThread()` never execute
+  + `TestAttachDriver` example doesn't reset properly (JME issue 1975)
++ Added the `JointedBodyControl` class.
++ Added 7 methods to the library:
+  + `CollisionSpace.isForceUpdateAllAabbs()`
+  + `CollisionSpace.setForceUpdateAllAabbs()`
+  + `DynamicAnimControl.blendToKinematicMode(KinematicSubmode, float, Transform)`
+  + `DynamicAnimControl.saveCurrentPose()`
+  + `DynamicAnimControl.setKinematicMode(KinematicSubmode)`
+  + `PhysicsCollisionObject.listIgnoredPcos()`
+  + `PhysicsCollisionObject.setIgnoreList(PhysicsCollisionObject[])`
++ Added the "reset" kinematic submode to `DynamicAnimControl`.
++ Publicized 3 library methods:
+  + a constructor for the `IndexedMesh` class
+  + `DacLinks.getTransformer()`
+  + `RagUtils.findMainJoint()`
++ Deprecated 2 library methods:
+  + `PhysicsCollisionObject.listIgnoredIds()`
+  + `PhysicsCollisionObject.setIgnoreList(long[])`
++ Added some runtime checks and strengthened others.
++ Made improvements to the DacWizard application:
+  + added the "torso" screen to select the torso's main bone
+  + added posing capability to the "load" and "test" screens
+  + fixed a bug that caused generation of syntactically incorrect Java code
+  + fixed a bug where the wrong main bone was used to estimate ranges of motion
+  + when generating Java code, provide a `configure()` method
+  + generate practical classnames for Java code
++ Based on:
+  + v3.6.0-beta3 of JMonkeyEngine,
+  + v1.6.0 of the SimMath library,
+  + v8.3.1+for36 of the Heart library,
+  + v0.9.18+for36 of the Acorus library,
+  + v0.7.3+for36 of the Wes library, and
+  + v0.9.34+for36 of the jme3-utilities-nifty library.
++ Built using Gradle v8.0.2 .
++ Updated the native libraries to v18.1.0 of Libbulletjme.
+
+## Version 7.2.0 released on 24 January 2023
+
++ Bugfix: `PhysicsCollisionObject.findInstance()`
+  creates a weak global reference that can never be deleted
++ Bugfix:  `DynamicAnimControl.totalMass()` returns `NaN` even when
+  the control is added to a `Spatial`
++ Bugfix: weak global references in `PhysicsCollisionObject` and `MultiBody`
+  can never be deleted
++ Added 2 methods to the library:
+  + `CollisionSpace.jniEnvId()`
+  + `NativeLibrary.jniEnvId()`
++ Updated the native libraries to v17.5.4 of Libbulletjme.
+
+## Version 7.1.0 released on 16 January 2023
+
++ Added the capability to generate cylinder shapes in a ragdoll.
++ Publicized the `RagUtils.makeRectangularSolid()` method.
++ Added `DynamicAnimControl` tunings for a Mixamo rig.
++ Added the capability to display angles in degrees or radians in DacWizard.
++ Updated `DacWizard` and `VhacdTuner` to use v0.9.33
+  of the jme3-utilities-nifty library.
+
+## Version 7.0.2 released on 2 January 2023
+
++ Bugfix:  `NullPointerException` in `rebuildRigidBody()` while de-serializing
+  an old model
++ Bugfix:  DacWizard doesn't write rotation orders to Java source code
+
+## Version 7.0.1 released on 1 January 2023
+
+Bugfix:  `NullPointerException` in `PhysicsCollisionObject.readPcoProperties()`
+
+## Version 7.0.0 released on 24 December 2022
+
++ API changes:
+  + Privatized `PhysicsCollisionObject.getCollisionFlags()` (a native method)
+  + Added the `static` qualifier to `PersistentManifolds.listPointIds()`
+  + Renamed the public logger in the `ConvexShape` class to avoid conflict.
+  + Added a 2nd argument to `PhysicsBody.cloneJoints()`
+  + Corrected the return type of `CharacterController.jmeClone()`
+  + Finalized 3 classes:
+    + `NativeSoftBodyUtil`
+    + `PhysicsRayTestResult`
+    + `PhysicsSweepTestResult`
+
++ Bug fixes:
+  + `DynamicAnimControl` may pass illegal arguments to `MyMath.slerp()`
+  + assertion failure when `toString()` is invoked on a collision object
+    or physics joint with no native object assigned
+  + out-of-range exception upon re-entering DacWizard's "bones" screen
+    with a different model
+  + transforms are not updated for the `getCalculatedOriginA()` and
+    `getCalculatedOriginB()` methods in the `New6Dof` class
+  + `getPhysicsLocationDp()` and `getPhysicsRotationDp()` return incorrect
+    values for a soft body
+  + cloning bugs:
+    + physics joints are cloned inaccurately
+    + ignore lists are cloned inaccurately
+    + cloning or rebuilding a collision object results in
+      different collision flags
+    + the feedback parameter of a `Constraint` isn't cloned
+    + `DacLinks` incompletely cloned
+    + `BoneLink.tmpMatrix` is shared between clones
+  + serialization bugs:
+    + `NullPointerException` in `PreComposer.read()`
+    + `RigidBodyMotionState` is never serialized
+    + the pivot offsets of single-ended constraints
+      are de-serialized incorrectly
+    + `PhysicsLink.density` is never saved or loaded
+    + the feedback parameter of a `Constraint` is never saved or loaded
+    + the `bindTransform` and `preComposer` fields of a `DacLinks`
+      are never saved or loaded
+
++ Publicized the `PhysicsLink.velocity()` method.
++ Added 9 double-precision setters:
+  + `CharacterController.warpDp()`
+  + `MultiBodyCollider.setPhysicsLocationDp()`
+  + `MultiBodyCollider.setPhysicsRotationDp(Matrix3d)`
+  + `PhysicsCharacter.setPhysicsLocationDp()`
+  + `PhysicsGhostObject.setPhysicsLocationDp()`
+  + `PhysicsGhostObject.setPhysicsRotationDp()` (2 signatures)
+  + `PhysicsRigidBody.setPhysicsRotationDp(Matrix3d)`
+  + `PhysicsSoftBody.setPhysicsLocationDp()`
++ Added 8 other double-precision methods:
+  + `CollisionShape.getScaleDp()`
+  + `CollisionSpace.rayTestDp()`
+  + `ManifoldPoints.getPositionWorldOnADp()`
+  + `ManifoldPoints.getPositionWorldOnBDp()`
+  + `PhysicsCollisionObject.getPhysicsRotationMatrixDp()`
+  + `RigidBodyMotionState.getLocationDp()`
+  + `RigidBodyMotionState.getOrientationMatrixDp()`
+  + `RigidBodyMotionState.getOrientationQuaternionDp()`
++ Added 6 other methods:
+  + `New6Dof.calculatedBasisA()`
+  + `New6Dof.calculatedBasisB()`
+  + `New6Dof.getRotationMatrix()`
+  + `PhysicsCollisionObject.collisionFlags()`
+  + `PhysicsDescriber.describeMatrix()`
+  + `PhysicsDumper.dump(PhysicsJoint, String)`
+
++ Added `INFO`-level log messages
+  to the `New6Dof` and `PhysicsRigidBody` classes.
++ Made incremental improvements to the `PhysicsDumper` output format.
++ Strengthened argument validation.
++ Updated the native libraries to v17.4.0 of Libbulletjme.
++ Updated `DacWizard` and `VhacdTuner` to use v0.9.32
+  of the jme3-utilities-nifty library.
++ Built using Gradle v7.6 .
+
+## Version 6.2.0 released on 13 November 2022
+
++ Added 3 methods:
+  + `PhysicsSpace.isCcdWithStaticOnly()`
+  + `PhysicsSpace.setCcdWithStaticOnly()`
+  + `NativeLibrary.countClampedCcdMotions()`
++ Updated the native libraries to v17.0.0 of Libbulletjme.
++ Based on v0.9.17 of the Acorus library.
+
+## Version 6.1.0 released on 1 October 2022
+
++ Bugfix:  `PreComposer` isn't properly cloned or serialized
++ Added library support for dynamic collision-shape splitting:
+  + Added 8 public constructors:
+    + `ChildCollisionShape(Vector3f, CollisionShape)`
+    + `CompoundMesh(CompoundMesh)`
+    + `CompoundMesh(CompoundMesh, Vector3f)`
+    + `GImpactCollisionShape(CompoundMesh, Vector3f)`
+    + `HullCollisionShape(Vector3f...)`
+    + `IndexedMesh(FloatBuffer)`
+    + `MeshCollisionShape(boolean, CompoundMesh)`
+    + `MultiSphere(Vector3f[], float...)`
+  + Added 17 other public methods:
+    + `ChildCollisionShape.split()`
+    + `CollisionShape.aabbCenter()`
+    + `CollisionShape.canSplit()`
+    + `CollisionShape.scaledVolume()`
+    + `CollisionShape.toSplittableShape()`
+    + `CompoundCollisionShape.connectivityMatrix()`
+    + `CompoundCollisionShape.countGroups()`
+    + `CompoundCollisionShape.split()`
+    + `CompoundMesh.maxMin()`
+    + `CompoundMesh.split()`
+    + `ConvexShape.toHullShape()`
+    + `GImpactCollisionShape.split()`
+    + `HullCollisionShape.split()`
+    + `IndexedMesh.copyTriangle()`
+    + `IndexedMesh.maxMin()`
+    + `IndexedMesh.split()`
+    + `MeshCollisionShape.split()`
++ Other library enhancements:
+   + Added the `createGImpactShape()` method
+     to the `CollisionShapeFactory` class.
+   + Added the `pairTest()` method to the `CollisionSpace` class.
+   + Added the `countMeshTriangles()` to the `GImpactCollisionShape` class.
++ Added the `SplitDemo` and `SweepDemo` applications.
++ Enhanced the `ShapeGenerator` class to use diverse axes when generating
+  capsule, cone, and cylinder shapes.
++ Added the "teapotGi" collision shape to the MinieAssets project.
++ Based on v8.2.0 of the Heart library.
++ Updated the native libraries to v16.3.0 of Libbulletjme.
+
+## Version 6.0.1 released on 29 August 2022
+
++ Bugfix:  `DacLinks` never re-enables hardware skinning (performance issue)
++ VhacdTuner GUI tweaks:
+  + Removed the "ACDMode" buttons.
+  + Added buttons to toggle the "async" setting.
+  + Added a button to quit ranking the newest test result.
++ Added glTF loading capability to DacWizard.
+
+## Version 6.0.0 released on 25 August 2022
+
++ Protected the no-arg constructors of 6 abstract classes. (API changes)
++ Bugfix:  issue #30 (`NullPointerException` after removing
+  `DynamicAnimControl` from a `Spatial`)
++ Bugfix:  I/O resources not safely closed in `VHACDParameters`.
++ Added V-HACD version 4 including the `Vhacd4`, `Vhacd4Parameters, `FillMode`,
+  and `Vhacd4Hull` classes plus a new `HullCollisionShape` constructor and a
+  new `CollisionShapeFactory` method.
++ Added the VhacdTuner sub-project.
++ Added the `toMap()` method to the `VHACDParameters` class.
++ Updated the native libraries to v16.1.0 of Libbulletjme.
+
+## Version 5.1.0 released on 6 August 2022
+
++ Bugfix:  `PhysicsRigidBody.setInverseInertiaLocal()` and
+  `PhysicsRigidBody.updateMassProps()` don't update the world inertia tensor
++ Bugfix:  when rebuilding a rigid body, many properties are lost
++ Added a `DynamicAnimControl` mechanism to report the completion
+  of a blend-to-kinematic operation.
++ Added the `CompletionListener` interface.
++ Added the `RigidBodySnapshot` class.
++ Added the `setIgnoreList()` method to the `PhysicsCollisionObject` class.
++ Added a simpler constructor to `PhysicsSoftSpace`.
++ Publicized the `rebuildRigidBody()` method.
++ Updated the native libraries to v16.0.0 of Libbulletjme.
++ Built using Gradle v7.5.1 .
+
+## Version 5.0.1 released on 2 August 2022
+
++ Bugfix:  static rigid body misbehaves after being assigned a positive mass
++ Bugfix:  `DynamicAnimControl` with `AnimComposer` exhibits glitches during
+  blends to kinematic mode
++ Bugfix:  when rebuilding a rigid body, its ignore list is lost
++ Based on v8.1.0 of the Heart library.
++ Built using Gradle v7.5 .
+
+## Version 5.0.0 released on 11 July 2022
+
++ Replaced the "ano" build with "droid" build that includes Java classes.
++ Changes to the library API:
+  + Replaced the `DebugMeshNormals` enum with `MeshNormals` (from Heart).
+  + Protected the no-arg constructors of the `DacConfiguration`
+    and `DacLinks` classes.
+  + Protected the public constructors of 3 classes:
+    + `AbstractPhysicsDebugControl`
+    + `IKController`
+    + `SoftPhysicsJoint`
+  + Qualified 17 utility classes as `final`.
+  + Removed the `static` qualifier from the protected `createWireMaterial()`
+    method of the `BulletDebugAppState` class.
+  + Deleted the deprecated `setContractCalcArea3Points()`
+    method of the `PhysicsCollisionEvent` class.
+
++ Library bugfixes:
+  + `PhysicsCharacter.onGround()` is unreliable (stephengold/Libbulletjme#18)
+  + `TorsoLink` continues writing the model transform
+     after a blend to kinematic completes
+  + `DynamicAnimControl` rebuilds the ragdoll for minute changes to bone scaling
+  + `TorsoLink` plays some bone animations, even in dynamic mode
+  + outdated constant values in `ConfigFlag`
+  + `DynamicAnimControl` is still marked "ready"
+    after removal from the `PhysicsSpace`
+  + `DebugMeshCallback.maxDistance()` modifies the vertex list
+  + `ConfigFlag.describe()` ignores 3 flags
+
++ Other library improvements:
+  + Warn if the native library version differs from the expected version.
+  + Throw an exception in `AbstractPhysicsControl.jmeClone()`
+    if the control is added to a `PhysicsSpace`.
+  + Add capability to specify the main bone of a ragdoll,
+    which needn't be a root bone.
+  + Added accessors for global deactivation settings:
+    + `PhysicsBody.getDeactivationDeadline()`
+    + `PhysicsBody.isDeactivationEnabled()`
+    + `PhysicsBody.setDeactivationDeadline()`
+    + `PhysicsBody.setDeactivationEnabled()`
+  + Added debug visualizations of rigid-body angular velocities
+    and soft-body wind velocities.
+  + Added a "relative tolerance" parameter to `DynamicAnimControl`.
+  + Reimplemented `BulletDebugAppState` using `BaseAppState`.
+  + Added the `DeformableSpace` class that supports both multibodies
+    and soft bodies.
+  + Added `SDF_MDF` and `SDF_RDN` bitmasks to `ConfigFlag`.
+
++ Added the `Pachinko` and `Windlass` apps to MinieExamples.
++ Added the `HelloGhost` and `HelloWind` apps to TutorialApps.
++ Updated the project URL in the POM.
++ Added 10 "package-info.java" files.
++ Based on:
+  + v8.0.0 of the Heart library,
+  + v0.7.2 of the Wes library,
+  + v0.9.16 of the Acorus library, and
+  + v0.9.30 of the jme3-utilities-nifty library.
++ Updated the native libraries to v15.2.1 of Libbulletjme.
++ Added the "checkstyle" plugin to the build.
+
+## Version 4.9.0 released on 2 May 2022
+
++ Eliminated the last dependency on JCenter!
++ Bugfix:  `IllegalArgumentException` caused by slerps in `TorsoLink`
++ Changed `CollisionShapeFactory` to skip meshes without triangles.
++ Added the `GearJoint` class.
++ Changes to the apps:
+  + Bugfix:  rigid body becomes deactivated in `HelloContactReponse`
+  + Bugfix:  `get(Limits.TextureAnisotropy)` returns `null` on some platforms
+  + Renamed `TestDebugToPost` and moved it from MinieExamples to TutorialApps.
+  + Added `TestGearJoint` to MinieExamples.
+  + Added 3rd body to `HelloDeactivation` for a visual reference point.
+  + Added monkey-head test to `TestSoftBodyControl`.
+  + Added display-settings editors to `NewtonsCradle` and `RopeDemo`.
+  + Enabled window resizing for `DacWizard` and all apps in MinieExamples.
++ Based on:
+  + v3.5.2-stable of JMonkeyEngine,
+  + v1.5.0 of the SimMath library,
+  + v7.6.0 of the Heart library,
+  + v0.9.15 of the Acorus library, and
+  + v0.9.29 of the jme3-utilities-nifty library.
++ Built using Gradle v7.4.2 .
++ Updated the native libraries to v14.3.0 of Libbulletjme.
 
 ## Version 4.8.1 released on 29 March 2022
 

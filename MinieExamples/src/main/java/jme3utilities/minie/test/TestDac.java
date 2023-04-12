@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2022, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -82,11 +82,11 @@ import jme3utilities.MySpatial;
 import jme3utilities.MyString;
 import jme3utilities.NameGenerator;
 import jme3utilities.debug.SkeletonVisualizer;
+import jme3utilities.math.noise.Generator;
 import jme3utilities.mesh.Icosphere;
 import jme3utilities.minie.DumpFlags;
 import jme3utilities.minie.PhysicsDumper;
 import jme3utilities.minie.test.common.PhysicsDemo;
-import jme3utilities.minie.test.shape.ShapeGenerator;
 import jme3utilities.minie.test.tunings.BaseMeshControl;
 import jme3utilities.minie.test.tunings.Biped;
 import jme3utilities.minie.test.tunings.ElephantControl;
@@ -96,6 +96,7 @@ import jme3utilities.minie.test.tunings.NinjaControl;
 import jme3utilities.minie.test.tunings.OtoControl;
 import jme3utilities.minie.test.tunings.PuppetControl;
 import jme3utilities.minie.test.tunings.SinbadControl;
+import jme3utilities.ui.ActionApplication;
 import jme3utilities.ui.InputMode;
 import jme3utilities.ui.Signals;
 import jme3utilities.wes.AnimationEdit;
@@ -113,6 +114,10 @@ public class TestDac extends PhysicsDemo {
     // *************************************************************************
     // constants and loggers
 
+    /**
+     * radius of each falling ball (in mesh units)
+     */
+    final private static float ballRadius = 1f;
     /**
      * message logger for this class
      */
@@ -138,98 +143,109 @@ public class TestDac extends PhysicsDemo {
     // fields
 
     /**
-     * status displayed in the upper-left corner of the GUI node
+     * text displayed in the upper-left corner of the GUI node
      */
-    private BitmapText statusText;
+    private static BitmapText statusText;
     /**
      * important linked bones
      */
-    private BoneLink leftClavicle;
-    private BoneLink leftFemur;
-    private BoneLink leftUlna;
-    private BoneLink rightClavicle;
-    private BoneLink rightFemur;
-    private BoneLink upperBody;
+    private static BoneLink leftClavicle;
+    private static BoneLink leftFemur;
+    private static BoneLink leftUlna;
+    private static BoneLink rightClavicle;
+    private static BoneLink rightFemur;
+    private static BoneLink upperBody;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * Control being tested
      */
-    private DynamicAnimControl dac;
-    final private float ballRadius = 1f; // mesh units
+    private static DynamicAnimControl dac;
     /**
      * Mesh for falling balls
      */
-    final private Mesh ballMesh = new Icosphere(2, ballRadius);
+    final private static Mesh ballMesh = new Icosphere(2, ballRadius);
     /**
      * generate names for falling balls
      */
-    final private NameGenerator nameGenerator = new NameGenerator();
+    final private static NameGenerator nameGenerator = new NameGenerator();
     /**
      * root node of the C-G model on which the Control is being tested
      */
-    private Node cgModel;
+    private static Node cgModel;
     /**
      * animation pose, or null if not in use
      */
-    private Pose animPose;
+    private static Pose animPose;
     /**
      * visualizer for the skeleton of the C-G model
      */
-    private SkeletonVisualizer sv;
+    private static SkeletonVisualizer sv;
     /**
      * SkinningControl of the loaded model
      */
-    private SkinningControl sc;
+    private static SkinningControl sc;
     /**
      * name of the Animation/Action to play on the C-G model
      */
-    private String animationName = null;
+    private static String animationName = null;
     /**
      * name the important linked bones
      */
-    private String leftClavicleName;
-    private String leftUlnaName;
-    private String rightClavicleName;
-    private String upperBodyName;
+    private static String leftClavicleName;
+    private static String leftUlnaName;
+    private static String rightClavicleName;
+    private static String upperBodyName;
     /**
      * name of the test (the model that's loaded)
      */
-    private String testName = "";
+    private static String testName = "";
     /**
      * C-G model's local transform when initially loaded
      */
-    private Transform resetTransform;
+    private static Transform resetTransform;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestDac application.
+     */
+    public TestDac() { // made explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestDac application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new TestDac();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new TestDac();
+        application.setSettings(settings);
+        /*
+         * Designate a sandbox directory.
+         * This must be done *prior to* initialization.
+         */
+        try {
+            ActionApplication.designateSandbox("Written Assets");
+        } catch (IOException exception) {
+            // do nothing
+        }
         application.start();
     }
     // *************************************************************************
@@ -239,7 +255,13 @@ public class TestDac extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        // Add the status text to the GUI.
+        statusText = new BitmapText(guiFont);
+        guiNode.attachChild(statusText);
+
+        super.acorusInit();
+
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -249,9 +271,8 @@ public class TestDac extends PhysicsDemo {
         viewPort.setBackgroundColor(skyColor);
 
         addLighting();
-        /*
-         * Hide the render-statistics overlay.
-         */
+
+        // Hide the render-statistics overlay.
         stateManager.getState(StatsAppState.class).toggleStats();
 
         float halfExtent = 250f;
@@ -268,12 +289,6 @@ public class TestDac extends PhysicsDemo {
         registerShape("ball", ballShape);
 
         addModel("Sinbad");
-        /*
-         * Add the status text to the GUI.
-         */
-        statusText = new BitmapText(guiFont);
-        statusText.setLocalTranslation(0f, cam.getHeight(), 0f);
-        guiNode.attachChild(statusText);
     }
 
     /**
@@ -288,6 +303,26 @@ public class TestDac extends PhysicsDemo {
     }
 
     /**
+     * Calculate screen bounds for the detailed help node.
+     *
+     * @param viewPortWidth (in pixels, &gt;0)
+     * @param viewPortHeight (in pixels, &gt;0)
+     * @return a new instance
+     */
+    @Override
+    public Rectangle detailedHelpBounds(int viewPortWidth, int viewPortHeight) {
+        // Position help nodes below the status.
+        float margin = 10f; // in pixels
+        float leftX = margin;
+        float topY = viewPortHeight - 20f - margin;
+        float width = viewPortWidth - leftX - margin;
+        float height = topY - margin;
+        Rectangle result = new Rectangle(leftX, topY, width, height);
+
+        return result;
+    }
+
+    /**
      * Access the active BulletAppState.
      *
      * @return the pre-existing instance (not null)
@@ -299,7 +334,7 @@ public class TestDac extends PhysicsDemo {
     }
 
     /**
-     * Determine the length of physics-debug arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -309,7 +344,8 @@ public class TestDac extends PhysicsDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -372,15 +408,6 @@ public class TestDac extends PhysicsDemo {
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind("toggle skeleton", KeyInput.KEY_V);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + 20f);
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -434,16 +461,16 @@ public class TestDac extends PhysicsDemo {
                 case "go floating":
                     if (dac.isReady()) {
                         animPose = null;
-                        dac.setDynamicSubtree(dac.getTorsoLink(), Vector3f.ZERO,
-                                false);
+                        dac.setDynamicSubtree(
+                                dac.getTorsoLink(), Vector3f.ZERO, false);
                     }
                     return;
                 case "go frozen":
                     if (dac.isReady()) {
                         animPose = null;
                         Vector3f gravity = dac.gravity(null);
-                        dac.setDynamicSubtree(dac.getTorsoLink(), gravity,
-                                true);
+                        dac.setDynamicSubtree(
+                                dac.getTorsoLink(), gravity, true);
                     }
                     return;
                 case "go limp":
@@ -479,8 +506,8 @@ public class TestDac extends PhysicsDemo {
 
                 case "raise leftFoot":
                     if (dac.isReady()) {
-                        dac.setDynamicSubtree(leftFemur,
-                                new Vector3f(0f, 100f, 0f), false);
+                        dac.setDynamicSubtree(
+                                leftFemur, new Vector3f(0f, 100f, 0f), false);
                     }
                     return;
                 case "raise leftHand":
@@ -491,8 +518,8 @@ public class TestDac extends PhysicsDemo {
                     return;
                 case "raise rightFoot":
                     if (dac.isReady()) {
-                        dac.setDynamicSubtree(rightFemur,
-                                new Vector3f(0f, 100f, 0f), false);
+                        dac.setDynamicSubtree(
+                                rightFemur, new Vector3f(0f, 100f, 0f), false);
                     }
                     return;
                 case "raise rightHand":
@@ -525,6 +552,8 @@ public class TestDac extends PhysicsDemo {
                 case "toggle skeleton":
                     toggleSkeleton();
                     return;
+
+                default:
             }
             String[] words = actionString.split(" ");
             if (words.length >= 2 && "load".equals(words[0])) {
@@ -533,6 +562,18 @@ public class TestDac extends PhysicsDemo {
             }
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        statusText.setLocalTranslation(0f, newHeight, 0f);
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -585,13 +626,13 @@ public class TestDac extends PhysicsDemo {
         Material material = findMaterial("ball");
         geometry.setMaterial(material);
         geometry.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
-        ShapeGenerator random = getGenerator();
+        Generator random = getGenerator();
         Vector3f location = random.nextVector3f();
         location.multLocal(2.5f, 5f, 2.5f);
         location.y += 20f;
         geometry.move(location);
 
-        Vector3f worldScale = geometry.getWorldScale();
+        Vector3f worldScale = geometry.getWorldScale(); // alias
         CollisionShape shape = findShape("ball");
         shape.setScale(worldScale);
 
@@ -609,7 +650,7 @@ public class TestDac extends PhysicsDemo {
     }
 
     /**
-     * Add lighting and shadows to the scene.
+     * Add lighting and shadows to the main scene.
      */
     private void addLighting() {
         ColorRGBA ambientColor = new ColorRGBA(0.2f, 0.2f, 0.2f, 1f);
@@ -625,8 +666,8 @@ public class TestDac extends PhysicsDemo {
         int mapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                        numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, mapSize, numSplits);
         dlsr.setLight(sun);
         dlsr.setShadowIntensity(0.5f);
         viewPort.addProcessor(dlsr);
@@ -762,7 +803,7 @@ public class TestDac extends PhysicsDemo {
      * Put all physics links into zero-g dynamic mode, fix the torso, and enable
      * pose matching.
      */
-    private void goAnimPose() {
+    private static void goAnimPose() {
         TorsoLink torsoLink = dac.getTorsoLink();
         torsoLink.setDynamic(Vector3f.ZERO);
         boolean disableForRagdoll = true;
@@ -776,7 +817,7 @@ public class TestDac extends PhysicsDemo {
      * Put all bone/torso links into zero-g dynamic mode and lock all physics
      * joints at bind pose.
      */
-    private void goDynamicBindPose() {
+    private static void goDynamicBindPose() {
         animPose = null;
 
         TorsoLink torsoLink = dac.getTorsoLink();
@@ -792,15 +833,14 @@ public class TestDac extends PhysicsDemo {
      */
     private void load() {
         ModelKey key = new ModelKey(saveAssetPath);
-        /*
-         * Remove any copy from the asset manager's cache.
-         */
+
+        // Remove any copy from the asset manager's cache.
         assetManager.deleteFromCache(key);
 
         Spatial loadedScene;
         try {
             loadedScene = assetManager.loadAsset(key);
-        } catch (AssetNotFoundException e) {
+        } catch (AssetNotFoundException exception) {
             logger.log(Level.SEVERE, "Didn''t find asset {0}",
                     MyString.quote(saveAssetPath));
             return;
@@ -985,11 +1025,10 @@ public class TestDac extends PhysicsDemo {
      * Update the animation pose and apply it to all bones except the main root
      * bone.
      */
-    private void matchAnimPose() {
+    private static void matchAnimPose() {
         assert animPose != null;
-        /*
-         * Update the animation pose.
-         */
+
+        // Update the animation pose.
         Spatial controlledSpatial = sc.getSpatial();
         AnimComposer composer
                 = controlledSpatial.getControl(AnimComposer.class);
@@ -998,16 +1037,14 @@ public class TestDac extends PhysicsDemo {
         animPose.setToClip(clip, time);
 
         Vector3f acceleration = Vector3f.ZERO;
-        /*
-         * Ensure that all attachment links are dynamic.
-         */
+
+        // Ensure that all attachment links are dynamic.
         for (AttachmentLink link : dac.listLinks(AttachmentLink.class)) {
             link.setDynamic(acceleration);
         }
         Transform tmpTransform = new Transform();
-        /*
-         * Apply the animation pose to the torso's managed bones.
-         */
+
+        // Apply the animation pose to the torso's managed bones.
         TorsoLink torsoLink = dac.getTorsoLink();
         int numManagedBones = torsoLink.countManaged();
         for (int mbIndex = 1; mbIndex < numManagedBones; ++mbIndex) {
@@ -1015,12 +1052,11 @@ public class TestDac extends PhysicsDemo {
             animPose.localTransform(boneIndex, tmpTransform);
             torsoLink.setLocalTransform(mbIndex, tmpTransform);
         }
-        /*
-         * Apply the animation pose to all bone links and their managed bones.
-         */
+
+        // Apply the animation pose to all bone links and their managed bones.
         for (BoneLink boneLink : dac.listLinks(BoneLink.class)) {
             int boneIndex = boneLink.boneIndex(0); // the linked bone
-            Quaternion userRotation = tmpTransform.getRotation();
+            Quaternion userRotation = tmpTransform.getRotation(); // alias
             animPose.userRotation(boneIndex, userRotation);
             boneLink.setDynamic(acceleration, userRotation);
 
@@ -1052,8 +1088,11 @@ public class TestDac extends PhysicsDemo {
 
     /**
      * Save the specified model to a J3O or XML file.
+     *
+     * @param model the model to save
+     * @param assetPath the asset-path portion of the save filename (not null)
      */
-    private void save(Spatial model, String assetPath) {
+    private static void save(Spatial model, String assetPath) {
         String filePath = filePath(assetPath);
         File file = new File(filePath);
 
@@ -1085,8 +1124,10 @@ public class TestDac extends PhysicsDemo {
 
     /**
      * Test re-scaling the model.
+     *
+     * @param height the desired height of the model (in world units, &gt;0)
      */
-    private void setHeight(float height) {
+    private static void setHeight(float height) {
         assert height > 0f : height;
 
         setCgmHeight(cgModel, height);
@@ -1116,7 +1157,7 @@ public class TestDac extends PhysicsDemo {
     /**
      * Toggle the skeleton visualizer on/off.
      */
-    private void toggleSkeleton() {
+    private static void toggleSkeleton() {
         boolean enabled = sv.isEnabled();
         sv.setEnabled(!enabled);
     }

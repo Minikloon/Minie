@@ -11,7 +11,7 @@ plugins {
 ext {
     // The URL from which native libraries should be copied:
 
-    libbulletjmeUrl = 'https://github.com/stephengold/Libbulletjme/releases/download/14.2.0/'
+    libbulletjmeUrl = 'https://github.com/stephengold/Libbulletjme/releases/download/18.1.0/'
     //libbulletjmeUrl = 'file:///home/sgold/NetBeansProjects/Libbulletjme/dist/' // to test a local build
     //libbulletjmeUrl = 'file:///c:\\users\\sgold\\My%20Documents\\NetBeansProjects\\Libbulletjme\\dist\\' // to test a local build
 
@@ -36,7 +36,7 @@ ext {
             pdbWindows64 = 'DebugSp'
             metadata = 'debug' + jmeTarget
 
-        } else { // -Pbtdebug specified, but not -Pdp or -Ppdb64
+        } else { // -Pbtdebug specified, but not -Pdp nor -Ppdb64
             configureAndroidBtfs('DebugSp')
             configureDesktopBtfs('DebugSp')
             metadata = 'debug' + jmeTarget
@@ -75,15 +75,14 @@ ext {
         btfWindows64 = 'ReleaseSpMt'
         metadata = 'mt' + jmeTarget
 
-    } else if (rootProject.hasProperty('ano')) {
-        // -Pano specified, but neither -Pbtdebug nor -Pdp nor -Pbare nor -Pbig3 nor -Pmt
+    } else if (rootProject.hasProperty('droid')) {
+        // -Pdroid specified, but neither -Pbtdebug nor -Pdp nor -Pbare nor -Pbig3 nor -Pmt
 
         configureAndroidBtfs('ReleaseSp')
         configureDesktopBtfs('')
-        jarType = 'nativesOnly'
-        metadata = 'ano' + jmeTarget
+        metadata = 'droid' + jmeTarget
 
-    } else { // neither -Pbtdebug nor -Pdp nor -Pbare nor -Pbig3 nor -Pmt not -Pano specified
+    } else { // neither -Pbtdebug nor -Pdp nor -Pbare nor -Pbig3 nor -Pmt nor -Pdroid specified
 
         // Specify the BTF (buildType + flavor) of native library for each platform:
         // (Specify '' for no native library.)
@@ -126,7 +125,7 @@ ext {
 
 dependencies {
     api heartCoordinates
-    api 'com.simsilica:sim-math:1.5.0'
+    api 'com.simsilica:sim-math:1.6.0'
     api 'org.jmonkeyengine:jme3-core:' + jme3Version
     api 'org.jmonkeyengine:jme3-terrain:' + jme3Version
 
@@ -272,6 +271,17 @@ tasks.register('cleanWindows64', Delete) {
 
 tasks.register('copyJavadocToSite') {
     dependsOn 'copyMasterJavadocToSite', \
+     'copy74JavadocToSite', \
+     'copy72JavadocToSite', \
+     'copy71JavadocToSite', \
+     'copy70JavadocToSite', \
+     'copy62JavadocToSite', \
+     'copy61JavadocToSite', \
+     'copy60JavadocToSite', \
+     'copy51JavadocToSite', \
+     'copy50JavadocToSite', \
+     'copy49JavadocToSite', \
+     'copy48JavadocToSite', \
      'copy47JavadocToSite', \
      'copy46JavadocToSite', \
      'copy45JavadocToSite', \
@@ -289,6 +299,17 @@ tasks.register('copyMasterJavadocToSite', Copy) {
     from "${buildDir}/docs/javadoc"
     into '../build/site/javadoc/master'
 }
+defineJavadocTasksForRelease('7', '4', '0')
+defineJavadocTasksForRelease('7', '2', '0')
+defineJavadocTasksForRelease('7', '1', '0')
+defineJavadocTasksForRelease('7', '0', '2')
+defineJavadocTasksForRelease('6', '2', '0')
+defineJavadocTasksForRelease('6', '1', '0')
+defineJavadocTasksForRelease('6', '0', '1')
+defineJavadocTasksForRelease('5', '1', '0')
+defineJavadocTasksForRelease('5', '0', '1')
+defineJavadocTasksForRelease('4', '9', '0')
+defineJavadocTasksForRelease('4', '8', '1')
 defineJavadocTasksForRelease('4', '7', '1')
 defineJavadocTasksForRelease('4', '6', '1')
 defineJavadocTasksForRelease('4', '5', '0')
@@ -318,6 +339,9 @@ jar {
     if (project.ext.jarType == 'nativesOnly') {
         exclude '**/*.class'  // no class files
         includeEmptyDirs false
+    }
+    manifest {
+        attributes 'Created-By': "${JavaVersion.current()} (${System.getProperty("java.vendor")})"
     }
 }
 tasks.register('javadocJar', Jar) {
@@ -393,9 +417,9 @@ publishing {
                     developerConnection = 'scm:git:ssh://github.com:stephengold/Minie.git'
                     url = project.ext.websiteUrl + '/tree/master'
                 }
-                url = project.ext.websiteUrl
+                url = 'https://stephengold.github.io/Minie'
             }
-            version project.ext.version + project.ext.minieSnapshot
+            version project.ext.version + rootProject.ext.minieSnapshot
         }
     }
     // Staging to OSSRH relies on the existence of 2 properties
@@ -408,7 +432,7 @@ publishing {
                 password = project.hasProperty('ossrhPassword') ? ossrhPassword : 'Unknown password'
             }
             name = 'OSSRH'
-            url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
+            url = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2'
         }
     }
 }

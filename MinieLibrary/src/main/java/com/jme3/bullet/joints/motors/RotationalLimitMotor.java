@@ -67,7 +67,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     // new methods exposed
 
     /**
-     * Read the accumulated impulse (m_accumulatedImpulse).
+     * Return the accumulated impulse (native field: m_accumulatedImpulse).
      *
      * @return the total impulse
      */
@@ -79,7 +79,8 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's current rotation angle (m_currentPosition).
+     * Return this motor's current rotation angle (native field:
+     * m_currentPosition).
      *
      * @return the angle (in radians)
      */
@@ -91,7 +92,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's damping (m_damping).
+     * Return this motor's damping (native field: m_damping).
      *
      * @return the viscous damping ratio (0&rarr;no damping, 1&rarr;critically
      * damped)
@@ -104,7 +105,8 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's error-reduction parameter at the limits (m_stopERP).
+     * Return this motor's error-reduction parameter at the limits (native
+     * field: m_stopERP).
      *
      * @return the error-reduction parameter (&ge;0)
      */
@@ -116,7 +118,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's limit softness (m_limitSoftness).
+     * Return this motor's limit softness (native field: m_limitSoftness).
      *
      * @return the limit softness (or relaxation factor)
      */
@@ -128,7 +130,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's constraint lower limit (m_loLimit).
+     * Return this motor's constraint lower limit (native field: m_loLimit).
      *
      * @return the limit value
      */
@@ -140,7 +142,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read the limit maximum force (m_maxLimitForce).
+     * Return the limit maximum force (native field: m_maxLimitForce).
      *
      * @return the maximum force on the limit (default=300)
      */
@@ -152,7 +154,8 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's maximum force for normal conditions (m_maxMotorForce).
+     * Return this motor's maximum force for normal conditions (native field:
+     * m_maxMotorForce).
      *
      * @return the maximum force
      */
@@ -164,19 +167,20 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read the ID of the btRotationalLimitMotor. For compatibility with the
-     * jme3-bullet library.
+     * Return the ID of the native object ({@code btRotationalLimitMotor}).
      *
-     * @return the identifier (not zero)
+     * @return the native identifier (not zero)
+     * @deprecated use {@link NativePhysicsObject#nativeId()}
      */
+    @Deprecated
     public long getMotor() {
         long motorId = nativeId();
         return motorId;
     }
 
     /**
-     * Read this motor's constraint-force mixing parameter for normal conditions
-     * (m_normalCFM).
+     * Return this motor's constraint-force mixing parameter for normal
+     * conditions (native field: m_normalCFM).
      *
      * @return the mixing parameter (&ge;0)
      */
@@ -188,7 +192,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's restitution at the limits (m_bounce).
+     * Return this motor's restitution at the limits (native field: m_bounce).
      *
      * @return the restitution (bounce) factor
      */
@@ -200,8 +204,8 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's constraint-force mixing parameter at the limits
-     * (m_stopCFM).
+     * Return this motor's constraint-force mixing parameter at the limits
+     * (native field: m_stopCFM).
      *
      * @return the mixing parameter (&ge;0)
      */
@@ -213,7 +217,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's target velocity (m_targetVelocity).
+     * Return this motor's target velocity (native field: m_targetVelocity).
      *
      * @return the target velocity (in radians per second)
      */
@@ -225,7 +229,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Read this motor's constraint upper limit (m_hiLimit).
+     * Return this motor's constraint upper limit (native field: m_hiLimit).
      *
      * @return the limit value
      */
@@ -237,7 +241,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Test whether this motor is enabled (m_enableMotor).
+     * Test whether this motor is enabled (native field: m_enableMotor).
      *
      * @return true if enabled, otherwise false
      */
@@ -249,7 +253,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter the accumulated impulse (m_accumulatedImpulse).
+     * Alter the accumulated impulse (native field: m_accumulatedImpulse).
      *
      * @param accumulatedImpulse the desired total (default=0)
      */
@@ -259,7 +263,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter this motor's damping (m_damping).
+     * Alter this motor's damping (native field: m_damping).
      *
      * @param damping the desired viscous damping ratio (0&rarr;no damping,
      * 1&rarr;critically damped, default=1)
@@ -270,7 +274,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Enable or disable this motor (m_enableMotor).
+     * Enable or disable this motor (native field: m_enableMotor).
      *
      * @param enableMotor true&rarr;enable, false&rarr;disable (default=false)
      */
@@ -280,7 +284,8 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter this motor's error-reduction parameter at the limits (m_stopERP).
+     * Alter this motor's error-reduction parameter at the limits (native field:
+     * m_stopERP).
      *
      * @param erp the desired error tolerance at limits (&ge;0, default=0.2)
      */
@@ -290,7 +295,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter this motor's limit softness (m_limitSoftness).
+     * Alter this motor's limit softness (native field: m_limitSoftness).
      *
      * @param limitSoftness the desired limit softness (or relaxation factor)
      * (default=0.5)
@@ -301,7 +306,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter this motor's constraint lower limit (m_loLimit).
+     * Alter this motor's constraint lower limit (native field: m_loLimit).
      *
      * @param lowerLimit the desired limit value (default=1)
      */
@@ -311,7 +316,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter the limit maximum force (m_maxLimitForce).
+     * Alter the limit maximum force (native field: m_maxLimitForce).
      *
      * @param maxLimitForce the desired maximum force on the limit (default=300)
      */
@@ -321,7 +326,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter this motor's maximum force (m_maxMotorForce).
+     * Alter this motor's maximum force (native field: m_maxMotorForce).
      *
      * @param maxMotorForce the desired maximum force (default=6)
      */
@@ -332,7 +337,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
 
     /**
      * Alter this motor's constraint-force mixing parameter for normal
-     * conditions (m_normalCFM).
+     * conditions (native field: m_normalCFM).
      *
      * @param cfm the desired mixing parameter (&ge;0, default=0)
      */
@@ -342,7 +347,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter this motor's restitution at the limits (m_bounce).
+     * Alter this motor's restitution at the limits (native field: m_bounce).
      *
      * @param restitution the desired restitution (bounce) factor (default=0)
      */
@@ -353,7 +358,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
 
     /**
      * Alter this motor's constraint-force mixing parameter at the limits
-     * (m_stopCFM).
+     * (native field: m_stopCFM).
      *
      * @param cfm the desired mixing parameter (&ge;0, default=0)
      */
@@ -363,7 +368,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter this motor's target velocity (m_targetVelocity).
+     * Alter this motor's target velocity (native field: m_targetVelocity).
      *
      * @param targetVelocity the desired target velocity (in radians per second,
      * default=0)
@@ -374,7 +379,7 @@ public class RotationalLimitMotor extends NativePhysicsObject {
     }
 
     /**
-     * Alter this motor's constraint upper limit (m_hiLimit).
+     * Alter this motor's constraint upper limit (native field: m_hiLimit).
      *
      * @param upperLimit the desired limit value (default=-1)
      */
@@ -413,35 +418,35 @@ public class RotationalLimitMotor extends NativePhysicsObject {
 
     native private static boolean isEnableMotor(long motorId);
 
-    native private static void setAccumulatedImpulse(long motorId,
-            float vector);
+    native private static void
+            setAccumulatedImpulse(long motorId, float vector);
 
     native private static void setBounce(long motorId, float bounce);
 
     native private static void setDamping(long motorId, float damping);
 
-    native private static void setEnableMotor(long motorId,
-            boolean enableMotor);
+    native private static void
+            setEnableMotor(long motorId, boolean enableMotor);
 
-    native private static void setERP(long motorId, float ERP);
+    native private static void setERP(long motorId, float erp);
 
     native private static void setHiLimit(long motorId, float hiLimit);
 
-    native private static void setLimitSoftness(long motorId,
-            float limitSoftness);
+    native private static void
+            setLimitSoftness(long motorId, float limitSoftness);
 
     native private static void setLoLimit(long motorId, float loLimit);
 
-    native private static void setMaxLimitForce(long motorId,
-            float maxLimitForce);
+    native private static void
+            setMaxLimitForce(long motorId, float maxLimitForce);
 
-    native private static void setMaxMotorForce(long motorId,
-            float maxMotorForce);
+    native private static void
+            setMaxMotorForce(long motorId, float maxMotorForce);
 
     native private static void setNormalCFM(long motorId, float normalCFM);
 
     native private static void setStopCFM(long motorId, float stopCFM);
 
-    native private static void setTargetVelocity(long motorId,
-            float targetVelocity);
+    native private static void
+            setTargetVelocity(long motorId, float targetVelocity);
 }

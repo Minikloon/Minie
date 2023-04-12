@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,6 @@ import com.jme3.bullet.collision.PhysicsRayTestResult;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.HeightfieldCollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.control.RigidBodyControl;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.objects.PhysicsBody;
@@ -62,14 +61,15 @@ import com.jme3.terrain.heightmap.ImageBasedHeightMap;
 import com.jme3.texture.Image;
 import com.jme3.texture.Texture;
 import java.util.List;
+import jme3utilities.MeshNormals;
 import jme3utilities.debug.PointVisualizer;
 import jme3utilities.math.MyVector3f;
 
 /**
  * A simple example of point-of-impact prediction.
- *
+ * <p>
  * Press the spacebar or LMB to launch a missile.
- *
+ * <p>
  * Builds upon HelloWalk.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -90,32 +90,32 @@ public class HelloPoi
     /**
      * true when a launch has been requested, but it hasn't occurred yet
      */
-    private boolean launchRequested = false;
+    private static boolean launchRequested = false;
     /**
      * Material to visualize missiles
      */
-    private Material redMaterial;
+    private static Material redMaterial;
     /**
      * body to model the terrain
      */
-    private PhysicsRigidBody terrain;
+    private static PhysicsRigidBody terrain;
     /**
      * PhysicsSpace for simulation
      */
-    private PhysicsSpace physicsSpace;
+    private static PhysicsSpace physicsSpace;
     /**
      * visualize the predicted point-of-impact
      */
-    private PointVisualizer poiIndicator;
+    private static PointVisualizer poiIndicator;
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloPoi application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloPoi application = new HelloPoi();
 
         // Enable gamma correction for accurate lighting.
@@ -143,13 +143,13 @@ public class HelloPoi
 
         // Add an indicator for the predicted point of impact.
         int indicatorSize = 15; // in pixels
-        poiIndicator = new PointVisualizer(assetManager, indicatorSize,
-                ColorRGBA.Yellow, "cross");
+        poiIndicator = new PointVisualizer(
+                assetManager, indicatorSize, ColorRGBA.Yellow, "cross");
         rootNode.attachChild(poiIndicator);
         poiIndicator.setDepthTest(true);
 
         // Add a static heightmap to represent the ground.
-        addTerrain(physicsSpace);
+        addTerrain();
     }
 
     /**
@@ -188,10 +188,10 @@ public class HelloPoi
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the physics is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
@@ -202,10 +202,10 @@ public class HelloPoi
     }
 
     /**
-     * Callback from Bullet, invoked just after the physics has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
      * @param space the space that was just stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -215,7 +215,10 @@ public class HelloPoi
     // private methods
 
     /**
-     * Add lighting and shadows to the specified scene.
+     * Add lighting and shadows to the specified scene and set the background
+     * color.
+     *
+     * @param scene the scene to augment (not null)
      */
     private void addLighting(Spatial scene) {
         ColorRGBA ambientColor = new ColorRGBA(0.03f, 0.03f, 0.03f, 1f);
@@ -234,8 +237,8 @@ public class HelloPoi
         int shadowMapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager,
-                        shadowMapSize, numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, shadowMapSize, numSplits);
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
         dlsr.setEdgesThickness(5);
         dlsr.setLight(sun);
@@ -248,11 +251,9 @@ public class HelloPoi
     }
 
     /**
-     * Add a heightfield body to the specified PhysicsSpace.
-     *
-     * @param physicsSpace (not null)
+     * Add a heightfield body to the space.
      */
-    private void addTerrain(PhysicsSpace physicsSpace) {
+    private void addTerrain() {
         // Generate a HeightMap from jme3-testdata-3.1.0-stable.jar
         String assetPath = "Textures/Terrain/splat/mountains512.png";
         Texture texture = assetManager.loadTexture(assetPath);
@@ -269,7 +270,7 @@ public class HelloPoi
         // Customize its debug visualization.
         Material greenMaterial = createLitMaterial(0f, 0.5f, 0f);
         terrain.setDebugMaterial(greenMaterial);
-        terrain.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        terrain.setDebugMeshNormals(MeshNormals.Smooth);
     }
 
     /**
@@ -305,6 +306,8 @@ public class HelloPoi
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
@@ -325,7 +328,7 @@ public class HelloPoi
 
         PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
-        // Activate the PhysicsTickListener interface.
+        // To enable the callbacks, register the application as a tick listener.
         result.addTickListener(this);
 
         return result;
@@ -381,8 +384,8 @@ public class HelloPoi
      * @return a new location vector (in physics-space coordinates) or null for
      * no prediction
      */
-    private Vector3f predictPoi(Vector3f launchLocation,
-            Vector3f launchVelocity) {
+    private Vector3f predictPoi(
+            Vector3f launchLocation, Vector3f launchVelocity) {
         Vector3f gravity = physicsSpace.getGravity(null);
         Vector3f velocity = launchVelocity.clone();
         Vector3f location = launchLocation.clone();
@@ -395,12 +398,12 @@ public class HelloPoi
             MyVector3f.accumulateScaled(velocity, gravity, timeStep);
             List<PhysicsRayTestResult> rayTest
                     = physicsSpace.rayTestRaw(previousLocation, location);
-            /*
-             * Find the closest contact with the terrain.
-             */
+
+            // Find the closest contact with the terrain.
             float closestFraction = 9f;
             for (PhysicsRayTestResult hit : rayTest) {
-                if (hit.getCollisionObject() == terrain) { // ignore other missiles!
+                if (hit.getCollisionObject() == terrain) {
+                    // ignore other missiles!
                     float hitFraction = hit.getHitFraction();
                     if (hitFraction < closestFraction) {
                         closestFraction = hitFraction;
@@ -409,8 +412,8 @@ public class HelloPoi
             }
 
             if (closestFraction <= 1f) {
-                Vector3f result = MyVector3f.lerp(closestFraction,
-                        previousLocation, location, null);
+                Vector3f result = MyVector3f.lerp(
+                        closestFraction, previousLocation, location, null);
                 return result;
             }
         }

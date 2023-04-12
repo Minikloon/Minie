@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, Stephen Gold
+ Copyright (c) 2021-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -41,22 +41,33 @@ import com.jme3.scene.shape.Box;
  *
  * Based on "App.java" provided by Koteinik.
  */
-public class TestIssue19 extends SimpleApplication {
+final public class TestIssue19 extends SimpleApplication {
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue19 application.
+     */
+    public TestIssue19() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestIssue19 application.
      *
-     * @param ignored unused
+     * @param arguments unused
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         TestIssue19 application = new TestIssue19();
         application.start();
     }
     // *************************************************************************
     // SimpleApplication methods
 
+    /**
+     * Initialize this application.
+     */
     @Override
     public void simpleInitApp() {
         BulletAppState bulletAppState = new BulletAppState();

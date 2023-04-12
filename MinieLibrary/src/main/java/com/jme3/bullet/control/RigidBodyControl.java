@@ -189,7 +189,9 @@ public class RigidBodyControl
      */
     public boolean isApplyPhysicsLocal() {
         RigidBodyMotionState ms = getMotionState();
-        return ms.isApplyPhysicsLocal();
+        boolean result = ms.isApplyPhysicsLocal();
+
+        return result;
     }
 
     /**
@@ -236,7 +238,7 @@ public class RigidBodyControl
      * (default=false)
      */
     public void setApplyScale(boolean setting) {
-        applyScale = setting;
+        this.applyScale = setting;
     }
 
     /**
@@ -271,8 +273,8 @@ public class RigidBodyControl
                 shape = new SphereCollisionShape(radius);
             } else if (mesh instanceof Box) {
                 Box box = (Box) mesh;
-                shape = new BoxCollisionShape(box.getXExtent(),
-                        box.getYExtent(), box.getZExtent());
+                shape = new BoxCollisionShape(
+                        box.getXExtent(), box.getYExtent(), box.getZExtent());
             }
         }
         if (shape == null) {
@@ -282,7 +284,7 @@ public class RigidBodyControl
                 shape = CollisionShapeFactory.createMeshShape(spatial);
             }
         }
-        super.setCollisionShape(shape);
+        setCollisionShape(shape);
     }
     // *************************************************************************
     // PhysicsControl methods
@@ -352,10 +354,10 @@ public class RigidBodyControl
                     setPhysicsRotation(getSpatialRotation());
                 }
                 space.addCollisionObject(this);
-                added = true;
+                this.added = true;
             } else if (!enabled && added) {
                 space.removeCollisionObject(this);
-                added = false;
+                this.added = false;
                 // TODO also remove all joints
             }
         }
@@ -375,7 +377,7 @@ public class RigidBodyControl
         }
         if (added) {
             space.removeCollisionObject(this);
-            added = false;
+            this.added = false;
         }
         if (newSpace != null && isEnabled()) {
             if (!hasAssignedNativeObject()) {
@@ -384,13 +386,13 @@ public class RigidBodyControl
                 throw new IllegalStateException(message);
             }
             newSpace.addCollisionObject(this);
-            added = true;
+            this.added = true;
         }
         /*
          * If this Control isn't enabled, its body will be
          * added to the new space when the Control becomes enabled.
          */
-        space = newSpace;
+        this.space = newSpace;
     }
 
     /**
@@ -469,23 +471,17 @@ public class RigidBodyControl
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        super.cloneFields(cloner, original);
-        spatial = cloner.clone(spatial);
-    }
+        assert !hasAssignedNativeObject();
+        RigidBodyControl old = (RigidBodyControl) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
 
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new Control (not null)
-     */
-    @Override
-    public RigidBodyControl jmeClone() {
-        try {
-            RigidBodyControl clone = (RigidBodyControl) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
+        super.cloneFields(cloner, original);
+        if (hasAssignedNativeObject()) {
+            return;
         }
+
+        this.spatial = cloner.clone(spatial);
     }
 
     /**
@@ -500,13 +496,13 @@ public class RigidBodyControl
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        enabled = capsule.readBoolean(tagEnabled, true);
-        kinematicSpatial = capsule.readBoolean(tagKinematicSpatial, true);
-        spatial = (Spatial) capsule.readSavable(tagSpatial, null);
+        this.enabled = capsule.readBoolean(tagEnabled, true);
+        this.kinematicSpatial = capsule.readBoolean(tagKinematicSpatial, true);
+        this.spatial = (Spatial) capsule.readSavable(tagSpatial, null);
         RigidBodyMotionState ms = getMotionState();
         ms.setApplyPhysicsLocal(
                 capsule.readBoolean(tagApplyLocalPhysics, false));
-        applyScale = capsule.readBoolean(tagApplyScale, false);
+        this.applyScale = capsule.readBoolean(tagApplyScale, false);
 
         setUserObject(spatial);
     }
@@ -541,7 +537,7 @@ public class RigidBodyControl
         if (!isApplyPhysicsLocal()) {
             Node parent = spatial.getParent();
             if (parent != null) {
-                Vector3f parentScale = parent.getWorldScale();
+                Vector3f parentScale = parent.getWorldScale(); // alias
                 if (parentScale.x == 0f || parentScale.y == 0f
                         || parentScale.z == 0f) {
                     throw new IllegalStateException("Zero in parent scale.");
@@ -565,10 +561,10 @@ public class RigidBodyControl
         if (MySpatial.isIgnoringTransforms(spatial)) {
             result.set(scaleIdentity);
         } else if (isApplyPhysicsLocal()) {
-            Vector3f scale = spatial.getLocalScale();
+            Vector3f scale = spatial.getLocalScale(); // alias
             result.set(scale);
         } else {
-            Vector3f scale = spatial.getWorldScale();
+            Vector3f scale = spatial.getWorldScale(); // alias
             result.set(scale);
         }
 
@@ -581,16 +577,19 @@ public class RigidBodyControl
      * @return the pre-existing Quaternion (not null)
      */
     private Quaternion getSpatialRotation() {
+        Quaternion result;
         if (MySpatial.isIgnoringTransforms(spatial)) {
-            return rotateIdentity;
+            result = rotateIdentity;
         } else {
             RigidBodyMotionState ms = getMotionState();
             if (ms.isApplyPhysicsLocal()) {
-                return spatial.getLocalRotation();
+                result = spatial.getLocalRotation(); // alias
             } else {
-                return spatial.getWorldRotation();
+                result = spatial.getWorldRotation(); // alias
             }
         }
+
+        return result;
     }
 
     /**
@@ -605,9 +604,9 @@ public class RigidBodyControl
         } else {
             RigidBodyMotionState ms = getMotionState();
             if (ms.isApplyPhysicsLocal()) {
-                result = spatial.getLocalTranslation();
+                result = spatial.getLocalTranslation(); // alias
             } else {
-                result = spatial.getWorldTranslation();
+                result = spatial.getWorldTranslation(); // alias
             }
         }
 

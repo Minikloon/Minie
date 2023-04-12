@@ -45,6 +45,7 @@ import com.jme3.export.OutputCapsule;
 import com.jme3.math.FastMath;
 import com.jme3.math.Vector3f;
 import com.jme3.util.clone.Cloner;
+import com.simsilica.mathd.Vec3d;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -52,7 +53,7 @@ import jme3utilities.Validate;
 
 /**
  * A collision object for simplified character simulation, based on Bullet's
- * btKinematicCharacterController.
+ * {@code btKinematicCharacterController}.
  *
  * @author normenhansen
  */
@@ -131,9 +132,8 @@ public class PhysicsCharacter extends PhysicsCollisionObject {
          */
         setGravity(defaultGravity);
         setUp(unitY);
-        /*
-         * Initialize the location.
-         */
+
+        // Initialize the location.
         warp(translateIdentity);
 
         assert isContactResponse();
@@ -384,13 +384,13 @@ public class PhysicsCharacter extends PhysicsCollisionObject {
      * (default=true)
      */
     public void setContactResponse(boolean newState) {
-        long objectId = nativeId();
-        int flags = getCollisionFlags(objectId);
+        int flags = collisionFlags();
         if (newState) {
             flags &= ~CollisionFlag.NO_CONTACT_RESPONSE;
         } else {
             flags |= CollisionFlag.NO_CONTACT_RESPONSE;
         }
+        long objectId = nativeId();
         setCollisionFlags(objectId, flags);
     }
 
@@ -484,11 +484,21 @@ public class PhysicsCharacter extends PhysicsCollisionObject {
      * Directly alter this character's location. (This is equivalent to
      * {@link #warp(com.jme3.math.Vector3f)}.)
      *
-     * @param location the desired location (not null, unaffected)
+     * @param location the desired location (not null, finite, unaffected)
      */
     public void setPhysicsLocation(Vector3f location) {
-        Validate.nonNull(location, "location");
+        Validate.finite(location, "location");
         controller.warp(location);
+    }
+
+    /**
+     * Directly alter this character's location.
+     *
+     * @param location the desired location (not null, unaffected)
+     */
+    public void setPhysicsLocationDp(Vec3d location) {
+        Validate.nonNull(location, "location");
+        controller.warpDp(location);
     }
 
     /**
@@ -527,7 +537,7 @@ public class PhysicsCharacter extends PhysicsCollisionObject {
      * Alter this character's walk offset. The offset must be perpendicular to
      * the "up" direction. It will continue to be applied until altered again.
      *
-     * @param offset the desired location increment for each physics tick (in
+     * @param offset the desired location increment for each simulation step (in
      * physics-space coordinates, not null, unaffected, default=(0,0,0))
      */
     public void setWalkDirection(Vector3f offset) {
@@ -538,10 +548,11 @@ public class PhysicsCharacter extends PhysicsCollisionObject {
     /**
      * Directly alter the location of this character's center.
      *
-     * @param location the desired physics location (not null, unaffected)
+     * @param location the desired physics location (not null, finite,
+     * unaffected)
      */
     public void warp(Vector3f location) {
-        Validate.nonNull(location, "location");
+        Validate.finite(location, "location");
         controller.warp(location);
     }
     // *************************************************************************
@@ -561,7 +572,7 @@ public class PhysicsCharacter extends PhysicsCollisionObject {
         super.cloneFields(cloner, original);
         unassignNativeObject();
 
-        controller = null;
+        this.controller = null;
         buildObject();
 
         PhysicsCharacter old = (PhysicsCharacter) original;
@@ -571,21 +582,6 @@ public class PhysicsCharacter extends PhysicsCollisionObject {
         setPhysicsLocation(old.getPhysicsLocation(null));
 
         controller.copyAll(old.controller);
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public PhysicsCharacter jmeClone() {
-        try {
-            PhysicsCharacter clone = (PhysicsCharacter) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -654,7 +650,7 @@ public class PhysicsCharacter extends PhysicsCollisionObject {
         long shapeId = shape.nativeId();
         attachCollisionShape(objectId, shapeId);
 
-        controller = new CharacterController(this);
+        this.controller = new CharacterController(this);
         logger2.log(Level.FINE, "Creating {0}.", this);
     }
     // *************************************************************************

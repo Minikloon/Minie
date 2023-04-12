@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2021, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,6 @@ import com.jme3.bullet.PhysicsTickListener;
 import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.font.BitmapText;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.math.ColorRGBA;
@@ -45,6 +44,7 @@ import com.jme3.system.AppSettings;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
+import jme3utilities.MyString;
 import jme3utilities.minie.test.common.PhysicsDemo;
 import jme3utilities.ui.CameraOrbitAppState;
 import jme3utilities.ui.InputMode;
@@ -77,45 +77,48 @@ public class ForceDemo
     // fields
 
     /**
-     * status displayed in the upper-left corner of the GUI node
+     * text displayed in the upper-left corner of the GUI node
      */
-    private BitmapText statusText;
+    private static BitmapText statusText;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * subject body to which forces and torques are applied
      */
-    private PhysicsRigidBody cube;
+    private static PhysicsRigidBody cube;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the ForceDemo application.
+     */
+    public ForceDemo() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the ForceDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new ForceDemo();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new ForceDemo();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -125,7 +128,13 @@ public class ForceDemo
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        // Add the status text to the GUI.
+        statusText = new BitmapText(guiFont);
+        guiNode.attachChild(statusText);
+
+        super.acorusInit();
+
         configureCamera();
         configureDumper();
         configurePhysics();
@@ -135,18 +144,10 @@ public class ForceDemo
 
         float length = 0.8f;
         attachWorldAxes(length);
-        /*
-         * Add the status text to the GUI.
-         */
-        statusText = new BitmapText(guiFont);
-        statusText.setLocalTranslation(0f, cam.getHeight(), 0f);
-        guiNode.attachChild(statusText);
-        /*
-         * Add a spinning cube.
-         */
+
+        // Add a spinning cube.
         BoxCollisionShape shape = new BoxCollisionShape(1f);
-        float mass = 1f;
-        cube = new PhysicsRigidBody(shape, mass);
+        cube = new PhysicsRigidBody(shape);
         cube.setEnableSleep(false);
         Quaternion initialOrientation
                 = new Quaternion().fromAngles(FastMath.HALF_PI, 0f, 0f);
@@ -166,7 +167,7 @@ public class ForceDemo
     }
 
     /**
-     * Determine the length of debug axis arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -176,7 +177,8 @@ public class ForceDemo
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -187,6 +189,7 @@ public class ForceDemo
 
         dim.bindSignal(CameraInput.FLYCAM_LOWER, KeyInput.KEY_DOWN);
         dim.bindSignal(CameraInput.FLYCAM_RISE, KeyInput.KEY_UP);
+
         dim.bindSignal("cf+Y", KeyInput.KEY_F3);
         dim.bindSignal("cf-Y", KeyInput.KEY_F4);
         dim.bindSignal("ci+Y", KeyInput.KEY_F7);
@@ -195,23 +198,27 @@ public class ForceDemo
         dim.bindSignal("imp+Y@+X", KeyInput.KEY_F9);
         dim.bindSignal("orbitLeft", KeyInput.KEY_LEFT);
         dim.bindSignal("orbitRight", KeyInput.KEY_RIGHT);
-        dim.bindSignal("torq+Y", KeyInput.KEY_F1);
-        dim.bindSignal("torq-Y", KeyInput.KEY_F2);
+        dim.bindSignal("torque+Y", KeyInput.KEY_F1);
+        dim.bindSignal("torque-Y", KeyInput.KEY_F2);
 
         dim.bind(asToggleAabbs, KeyInput.KEY_APOSTROPHE);
         dim.bind(asToggleHelp, KeyInput.KEY_H);
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind(asToggleVArrows, KeyInput.KEY_K);
+        dim.bind(asToggleWArrows, KeyInput.KEY_N);
+    }
 
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + 20f);
-        float leftX = margin;
-        float topY = height + margin;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        statusText.setLocalTranslation(0f, newHeight, 0f);
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -230,14 +237,12 @@ public class ForceDemo
     /**
      * Callback from Bullet, invoked just before the physics is stepped.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
-        /*
-         * Check UI signals and apply forces/torques accordingly.
-         */
+        // Check UI signals and apply forces/torques accordingly.
         Signals signals = getSignals();
 
         if (signals.test("cf+Y")) {
@@ -253,17 +258,17 @@ public class ForceDemo
             cube.applyCentralImpulse(new Vector3f(0f, -0.1f, 0f));
         }
         if (signals.test("for+Y@+X")) {
-            cube.applyForce(new Vector3f(0f, 1f, 0f),
-                    new Vector3f(1f, 0f, 0f));
+            cube.applyForce(
+                    new Vector3f(0f, 1f, 0f), new Vector3f(1f, 0f, 0f));
         }
         if (signals.test("imp+Y@+X")) {
-            cube.applyImpulse(new Vector3f(0f, 0.1f, 0f),
-                    new Vector3f(1f, 0f, 0f));
+            cube.applyImpulse(
+                    new Vector3f(0f, 0.1f, 0f), new Vector3f(1f, 0f, 0f));
         }
-        if (signals.test("torq+Y")) {
+        if (signals.test("torque+Y")) {
             cube.applyTorque(new Vector3f(0f, 1f, 0f));
         }
-        if (signals.test("torq-Y")) {
+        if (signals.test("torque-Y")) {
             cube.applyTorque(new Vector3f(0f, -1f, 0f));
         }
     }
@@ -272,7 +277,7 @@ public class ForceDemo
      * Callback from Bullet, invoked just after the physics has been stepped.
      *
      * @param space the space that was just stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -315,7 +320,7 @@ public class ForceDemo
     /**
      * Update the status text in the GUI.
      */
-    private void updateStatusText() {
+    private static void updateStatusText() {
         float v = cube.getLinearVelocity().length();
         float omega = cube.getAngularVelocity().length();
         String message = String.format(" v=%f psu/s, omega=%f rad/s", v, omega);

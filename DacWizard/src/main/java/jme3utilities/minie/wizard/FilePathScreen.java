@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,6 @@ import com.jme3.app.state.AppStateManager;
 import de.lessvoid.nifty.controls.Button;
 import de.lessvoid.nifty.elements.Element;
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -64,7 +63,7 @@ class FilePathScreen extends GuiScreenController {
     // fields
 
     /**
-     * element of GUI button to proceed to the next Screen
+     * element of GUI button to proceed to the "load" screen
      */
     private Element nextElement;
     // *************************************************************************
@@ -87,26 +86,24 @@ class FilePathScreen extends GuiScreenController {
      */
     void browse() {
         Map<String, File> fileMap = Heart.driveMap();
-        /*
-         * Add the current working directory to the file map.
-         */
+
+        // Add the current working directory to the file map.
         String workPath = System.getProperty("user.dir");
         File work = new File(workPath);
         if (work.isDirectory()) {
-            String absolutePath = fixPath(workPath);
+            String absolutePath = Heart.fixPath(workPath);
             fileMap.put(absolutePath, work);
         }
-        /*
-         * Add the user's home directory to the file map.
-         */
+
+        // Add the user's home directory to the file map.
         String homePath = System.getProperty("user.home");
         File home = new File(homePath);
         if (home.isDirectory()) {
-            String absolutePath = fixPath(homePath);
+            String absolutePath = Heart.fixPath(homePath);
             fileMap.put(absolutePath, home);
         }
         /*
-         * If a file-system path is selected, add its parent directory
+         * If a filesystem path is selected, add its parent directory
          * to the file map.
          */
         Model model = DacWizard.getModel();
@@ -115,12 +112,11 @@ class FilePathScreen extends GuiScreenController {
             File file = new File(filePath);
             File parent = file.getParentFile();
             String parentPath = parent.getPath();
-            String absolutePath = fixPath(parentPath);
+            String absolutePath = Heart.fixPath(parentPath);
             fileMap.put(absolutePath, parent);
         }
-        /*
-         * Build and show a popup menu.
-         */
+
+        // Build and show a popup menu.
         String actionPrefix = "set pathPrefix ";
         PopupMenuBuilder builder = buildFileMenu(fileMap);
         showPopupMenu(actionPrefix, builder);
@@ -131,7 +127,7 @@ class FilePathScreen extends GuiScreenController {
      *
      * @return "" if ready to proceed, otherwise an explanatory message
      */
-    String feedback() {
+    static String feedback() {
         Model model = DacWizard.getModel();
         String filePath = model.filePath();
 
@@ -152,7 +148,7 @@ class FilePathScreen extends GuiScreenController {
     void setPathPrefix(String pathPrefix) {
         assert pathPrefix != null;
 
-        String absPathPrefix = fixPath(pathPrefix);
+        String absPathPrefix = Heart.fixPath(pathPrefix);
         File file = new File(absPathPrefix);
 
         boolean isDirectory = file.isDirectory();
@@ -170,7 +166,7 @@ class FilePathScreen extends GuiScreenController {
             } else { // an incomplete path
                 File parent = file.getParentFile();
                 String parentPath = parent.getPath();
-                parentPath = fixPath(parentPath);
+                parentPath = Heart.fixPath(parentPath);
 
                 String name = file.getName();
                 fileMap = directoryMap(parentPath, name);
@@ -179,9 +175,8 @@ class FilePathScreen extends GuiScreenController {
             if (!actionPrefix.endsWith("/")) {
                 actionPrefix += "/";
             }
-            /*
-             * Build and show a popup menu.
-             */
+
+            // Build and show a popup menu.
             PopupMenuBuilder builder = buildFileMenu(fileMap);
             showPopupMenu(actionPrefix, builder);
         }
@@ -196,8 +191,8 @@ class FilePathScreen extends GuiScreenController {
      * @param application (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager,
-            Application application) {
+    public void initialize(
+            AppStateManager stateManager, Application application) {
         super.initialize(stateManager, application);
 
         InputMode inputMode = InputMode.findMode("filePath");
@@ -217,7 +212,7 @@ class FilePathScreen extends GuiScreenController {
         if (nextButton == null) {
             throw new RuntimeException("missing GUI control: nextButton");
         }
-        nextElement = nextButton.getElement();
+        this.nextElement = nextButton.getElement();
     }
 
     /**
@@ -249,24 +244,22 @@ class FilePathScreen extends GuiScreenController {
      * Build a file-selection popup menu based on the specified file map.
      *
      * @param fileMap the map of files to include (not null)
+     * @return a new instance (not null)
      */
     private PopupMenuBuilder buildFileMenu(Map<String, File> fileMap) {
         assert fileMap != null;
-        /*
-         * Generate a list of file names (and prefixes) to display in the menu.
-         */
+
+        // Generate a list of file names (and prefixes) to display in the menu.
         Set<String> nameSet = fileMap.keySet();
         assert !nameSet.contains(".");
         List<String> nameList = new ArrayList<>(nameSet);
-        /*
-         * Reduce the list as necessary to fit on the screen.
-         */
+
+        // Reduce the list as necessary to fit on the screen.
         int height = cam.getHeight();
         int maxMenuItems = height / 26;
         MyString.reduce(nameList, maxMenuItems);
-        /*
-         * Sort the list and build the menu.
-         */
+
+        // Sort the list and build the menu.
         Collections.sort(nameList);
         PopupMenuBuilder result = new PopupMenuBuilder();
         for (String name : nameList) {
@@ -275,6 +268,10 @@ class FilePathScreen extends GuiScreenController {
                 if (file.isDirectory()) {
                     result.add(name, "Textures/icons/folder.png");
                 } else if (name.endsWith(".j3o")) {
+                    result.add(name, "Textures/icons/jme.png");
+                } else if (name.endsWith(".glb")) {
+                    result.add(name, "Textures/icons/jme.png");
+                } else if (name.endsWith(".gltf")) {
                     result.add(name, "Textures/icons/jme.png");
                 }
             } else { // prefix
@@ -289,10 +286,12 @@ class FilePathScreen extends GuiScreenController {
      * Build a map of files, in the specified directory, whose names have the
      * specified prefix.
      *
-     * @param dirPath the file-system path to the directory (not null)
+     * @param dirPath the filesystem path to the directory (not null)
      * @param namePrefix required name prefix (not null)
+     * @return a new instance (not null)
      */
-    private Map<String, File> directoryMap(String dirPath, String namePrefix) {
+    private static Map<String, File> directoryMap(
+            String dirPath, String namePrefix) {
         assert dirPath != null;
         assert namePrefix != null;
 
@@ -313,9 +312,8 @@ class FilePathScreen extends GuiScreenController {
                 }
             }
         }
-        /*
-         * Add ".." if a parent directory exists.
-         */
+
+        // Add ".." if a parent directory exists.
         File parent = directory.getParentFile();
         if (parent != null) {
             if ("..".startsWith(namePrefix)) {
@@ -324,26 +322,5 @@ class FilePathScreen extends GuiScreenController {
         }
 
         return fileMap;
-    }
-
-    /**
-     * Canonicalize a file path and convert backslashes to slashes.
-     *
-     * @param inputPath the file path to fix (not null, not empty)
-     * @return the fixed file path (not null, not empty)
-     */
-    private static String fixPath(String inputPath) {
-        assert inputPath != null;
-        assert !inputPath.isEmpty();
-
-        File file = new File(inputPath);
-        String result;
-        try {
-            result = file.getCanonicalPath();
-        } catch (IOException exception) {
-            result = file.getAbsolutePath();
-        }
-        result = result.replaceAll("\\\\", "/");
-        return result;
     }
 }

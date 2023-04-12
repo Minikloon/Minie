@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -53,7 +53,7 @@ import com.jme3.system.AppSettings;
 
 /**
  * A simple example of a CharacterControl.
- *
+ * <p>
  * Builds upon HelloCharacter.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -64,16 +64,20 @@ public class HelloCharacterControl
     // *************************************************************************
     // fields
 
-    private CharacterControl characterControl;
+    private static CharacterControl characterControl;
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloCharacterControl application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloCharacterControl application = new HelloCharacterControl();
 
         // Enable gamma correction for accurate lighting.
@@ -92,7 +96,7 @@ public class HelloCharacterControl
      */
     @Override
     public void simpleInitApp() {
-        PhysicsSpace physicsSpace = configurePhysics();
+        physicsSpace = configurePhysics();
 
         // Load the Jaime model from jme3-testdata-3.1.0-stable.jar
         Spatial jaime = assetManager.loadModel("Models/Jaime/Jaime.j3o");
@@ -122,7 +126,7 @@ public class HelloCharacterControl
         // Add a square to represent the ground.
         float halfExtent = 4f;
         float y = -2f;
-        addSquare(halfExtent, y, physicsSpace);
+        addSquare(halfExtent, y);
 
         // Add lighting.
         addLighting(rootNode);
@@ -131,10 +135,10 @@ public class HelloCharacterControl
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the physics is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
@@ -145,10 +149,10 @@ public class HelloCharacterControl
     }
 
     /**
-     * Callback from Bullet, invoked just after the physics has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
      * @param space the space that was just stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -158,7 +162,10 @@ public class HelloCharacterControl
     // private methods
 
     /**
-     * Add lighting and shadows to the specified scene.
+     * Add lighting and shadows to the specified scene and set the background
+     * color.
+     *
+     * @param scene the scene to augment (not null)
      */
     private void addLighting(Spatial scene) {
         ColorRGBA ambientColor = new ColorRGBA(0.03f, 0.03f, 0.03f, 1f);
@@ -177,8 +184,8 @@ public class HelloCharacterControl
         int shadowMapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager,
-                        shadowMapSize, numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, shadowMapSize, numSplits);
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
         dlsr.setEdgesThickness(5);
         dlsr.setLight(sun);
@@ -191,16 +198,13 @@ public class HelloCharacterControl
     }
 
     /**
-     * Attach a horizontal square to the scene and also to the specified
-     * PhysicsSpace.
+     * Attach a horizontal square to the scene and also to the space.
      *
      * @param halfExtent (half of the desired side length)
      * @param y (the desired elevation, in physics-space coordinates)
-     * @param physicsSpace (not null)
      * @return the new body (not null)
      */
-    private RigidBodyControl addSquare(float halfExtent, float y,
-            PhysicsSpace physicsSpace) {
+    private RigidBodyControl addSquare(float halfExtent, float y) {
         // Add a Quad to the scene.
         Mesh quad = new Quad(2 * halfExtent, 2 * halfExtent);
         Geometry geometry = new Geometry("square", quad);
@@ -226,13 +230,16 @@ public class HelloCharacterControl
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
+        //bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
-        // Activate the PhysicsTickListener interface.
+        // To enable the callbacks, register the application as a tick listener.
         result.addTickListener(this);
 
         return result;

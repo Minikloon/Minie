@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -64,7 +64,7 @@ class LinksMode extends InputMode {
     // constructors
 
     /**
-     * Instantiate a disabled, uninitialized mode.
+     * Instantiate a disabled, uninitialized input mode.
      */
     LinksMode() {
         super("links");
@@ -99,11 +99,9 @@ class LinksMode extends InputMode {
      * @param application (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager,
-            Application application) {
-        /*
-         * Set the mouse cursor for this mode.
-         */
+    public void initialize(
+            AppStateManager stateManager, Application application) {
+        // Set the mouse cursor for this mode.
         AssetManager manager = application.getAssetManager();
         JmeCursor cursor = (JmeCursor) manager.loadAsset(assetPath);
         setCursor(cursor);
@@ -122,54 +120,52 @@ class LinksMode extends InputMode {
     public void onAction(String actionString, boolean ongoing, float tpf) {
         Validate.nonNull(actionString, "action string");
         if (logger.isLoggable(Level.INFO)) {
-            logger.log(Level.INFO, "Got action {0} ongoing={1}", new Object[]{
-                MyString.quote(actionString), ongoing
-            });
+            logger.log(Level.INFO, "Got action {0} ongoing={1}",
+                    new Object[]{MyString.quote(actionString), ongoing});
         }
 
-        boolean handled = false;
+        boolean handled = true;
         if (ongoing) {
             LinksScreen screen = DacWizard.findAppState(LinksScreen.class);
             switch (actionString) {
                 case Action.nextMassHeuristic:
                     screen.nextMassHeuristic();
-                    handled = true;
                     break;
 
                 case Action.nextScreen:
                     nextScreen();
-                    handled = true;
                     break;
 
                 case Action.previousScreen:
                     previousScreen();
-                    handled = true;
                     break;
 
                 case Action.selectCenterHeuristic:
                     screen.selectCenterHeuristic();
-                    handled = true;
                     break;
 
                 case Action.selectRotationOrder:
                     screen.selectRotationOrder();
-                    handled = true;
                     break;
 
                 case Action.selectShapeHeuristic:
                     screen.selectShapeHeuristic();
-                    handled = true;
                     break;
 
                 case Action.setMassParameter:
                     screen.setMassParameter();
-                    handled = true;
                     break;
 
                 case Action.setShapeScale:
                     screen.setShapeScale();
-                    handled = true;
                     break;
+
+                case Action.toggleAngleMode:
+                    DacWizard.getModel().toggleAngleMode();
+                    break;
+
+                default:
+                    handled = false;
             }
             if (!handled) {
                 handled = testForPrefixes(actionString);
@@ -183,11 +179,10 @@ class LinksMode extends InputMode {
     // private methods
 
     /**
-     * Advance to the TestScreen if possible.
+     * Proceed to the "test" screen if possible.
      */
     private void nextScreen() {
-        LinksScreen screen = DacWizard.findAppState(LinksScreen.class);
-        String feedback = screen.feedback();
+        String feedback = LinksScreen.feedback();
         if (feedback.isEmpty()) {
             setEnabled(false);
             InputMode test = InputMode.findMode("test");
@@ -196,11 +191,11 @@ class LinksMode extends InputMode {
     }
 
     /**
-     * Go back to the BonesScreen.
+     * Go back to the "torso" screen.
      */
     private void previousScreen() {
         setEnabled(false);
-        InputMode bones = InputMode.findMode("bones");
+        InputMode bones = InputMode.findMode("torso");
         bones.setEnabled(true);
     }
 
@@ -210,7 +205,7 @@ class LinksMode extends InputMode {
      * @param actionString textual description of the action (not null)
      * @return true if the action is handled, otherwise false
      */
-    private boolean testForPrefixes(String actionString) {
+    private static boolean testForPrefixes(String actionString) {
         boolean handled = true;
         LinksScreen screen = DacWizard.findAppState(LinksScreen.class);
         String arg;

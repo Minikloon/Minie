@@ -51,7 +51,7 @@ import jme3utilities.Validate;
 
 /**
  * A rigid body for simplified vehicle simulation based on Bullet's
- * btRaycastVehicle.
+ * {@code btRaycastVehicle}.
  * <p>
  * The wheels of a PhysicsVehicle aren't collision objects, so the vehicle's
  * ignore list doesn't affect them.
@@ -111,7 +111,7 @@ public class PhysicsVehicle extends PhysicsRigidBody {
      * Instantiate a responsive vehicle with the specified CollisionShape and
      * mass=1.
      *
-     * @param shape the desired shape (not null, alias created)
+     * @param shape the desired shape of the chassis (not null, alias created)
      */
     public PhysicsVehicle(CollisionShape shape) {
         super(shape);
@@ -121,8 +121,8 @@ public class PhysicsVehicle extends PhysicsRigidBody {
      * Instantiate a responsive vehicle with the specified CollisionShape and
      * mass.
      *
-     * @param shape the desired shape (not null, alias created)
-     * @param mass the desired mass for the chassis (&gt;0)
+     * @param shape the desired shape of the chassis (not null, alias created)
+     * @param mass the desired mass of the chassis (&gt;0, default=1)
      */
     public PhysicsVehicle(CollisionShape shape, float mass) {
         super(shape, mass);
@@ -206,7 +206,7 @@ public class PhysicsVehicle extends PhysicsRigidBody {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @param connectionPoint the location where the suspension connects to the
      * chassis (in chassis coordinates, not null, unaffected)
@@ -225,12 +225,14 @@ public class PhysicsVehicle extends PhysicsRigidBody {
             Vector3f direction, Vector3f axle, float suspensionRestLength,
             float wheelRadius, boolean isFrontWheel) {
         Spatial subtree = null;
-        return addWheel(subtree, connectionPoint, direction, axle,
-                suspensionRestLength, wheelRadius, isFrontWheel);
+        VehicleWheel result = addWheel(subtree, connectionPoint, direction,
+                axle, suspensionRestLength, wheelRadius, isFrontWheel);
+
+        return result;
     }
 
     /**
-     * used internally
+     * Used internally.
      */
     public void applyWheelTransforms() {
         if (wheels != null) {
@@ -301,7 +303,7 @@ public class PhysicsVehicle extends PhysicsRigidBody {
             assert getCollisionSpace() == space;
         }
 
-        controller = new VehicleController(this, space);
+        this.controller = new VehicleController(this, space);
         logger3.log(Level.FINE, "Created {0}", controller);
 
         controller.setCoordinateSystem(PhysicsSpace.AXIS_X,
@@ -457,7 +459,7 @@ public class PhysicsVehicle extends PhysicsRigidBody {
     }
 
     /**
-     * used internally
+     * Used internally.
      *
      * @return the unique identifier (not zero)
      */
@@ -560,8 +562,8 @@ public class PhysicsVehicle extends PhysicsRigidBody {
      * @param maxSuspensionForce the desired maximum force per wheel
      * (default=6000)
      */
-    public void setMaxSuspensionForce(int wheelIndex,
-            float maxSuspensionForce) {
+    public void setMaxSuspensionForce(
+            int wheelIndex, float maxSuspensionForce) {
         VehicleWheel wheel = wheels.get(wheelIndex);
         wheel.setMaxSuspensionForce(maxSuspensionForce);
     }
@@ -593,8 +595,8 @@ public class PhysicsVehicle extends PhysicsRigidBody {
      * can be compressed or expanded, relative to its rest length (in hundredths
      * of a physics-space unit, default=500)
      */
-    public void setMaxSuspensionTravelCm(int wheelIndex,
-            float maxSuspensionTravelCm) {
+    public void setMaxSuspensionTravelCm(
+            int wheelIndex, float maxSuspensionTravelCm) {
         VehicleWheel wheel = wheels.get(wheelIndex);
         wheel.setMaxSuspensionTravelCm(maxSuspensionTravelCm);
     }
@@ -755,7 +757,7 @@ public class PhysicsVehicle extends PhysicsRigidBody {
     }
 
     /**
-     * used internally
+     * Used internally.
      */
     public void updateWheels() {
         if (controller != null) {
@@ -777,28 +779,21 @@ public class PhysicsVehicle extends PhysicsRigidBody {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
+        assert !hasAssignedNativeObject();
+        PhysicsVehicle old = (PhysicsVehicle) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
+
         super.cloneFields(cloner, original);
+        if (hasAssignedNativeObject()) {
+            return;
+        }
 
         RigidBodyMotionState motionState = getMotionState();
         motionState.setVehicle(this);
 
-        wheels = cloner.clone(wheels);
-        tuning = cloner.clone(tuning);
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public PhysicsVehicle jmeClone() {
-        try {
-            PhysicsVehicle clone = (PhysicsVehicle) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
+        this.wheels = cloner.clone(wheels);
+        this.tuning = cloner.clone(tuning);
     }
 
     /**
@@ -814,14 +809,19 @@ public class PhysicsVehicle extends PhysicsRigidBody {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        tuning = (VehicleTuning) capsule.readSavable(tagTuning, null);
-        wheels = capsule.readSavableArrayList(tagWheelsList,
-                new ArrayList<>(6));
+        this.tuning = (VehicleTuning) capsule.readSavable(tagTuning, null);
+        this.wheels = capsule
+                .readSavableArrayList(tagWheelsList, new ArrayList<>(6));
 
         RigidBodyMotionState motionState = getMotionState();
         motionState.setVehicle(this);
     }
 
+    /**
+     * Invoked during a rebuild after the native object is created.
+     * <p>
+     * For use by subclasses.
+     */
     @Override
     protected void postRebuild() {
         super.postRebuild();

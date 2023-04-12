@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -53,7 +53,7 @@ import java.util.List;
 
 /**
  * An example of vehicle physics using NewHinge.
- *
+ * <p>
  * Builds upon HelloVehicle.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -64,19 +64,28 @@ public class HelloNewHinge
     // *************************************************************************
     // fields
 
-    final private List<RotationMotor> steer = new ArrayList<>(2);
-    final private List<PhysicsRigidBody> drive = new ArrayList<>(2);
-    private PhysicsRigidBody chassis;
-    private PhysicsSpace physicsSpace;
+    /**
+     * wheels for steering
+     */
+    final private static List<RotationMotor> steer = new ArrayList<>(2);
+    /**
+     * drive wheels
+     */
+    final private static List<PhysicsRigidBody> drive = new ArrayList<>(2);
+    private static PhysicsRigidBody chassis;
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloNewHinge application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloNewHinge application = new HelloNewHinge();
         application.start();
     }
@@ -88,7 +97,7 @@ public class HelloNewHinge
      */
     @Override
     public void simpleInitApp() {
-        configurePhysics();
+        physicsSpace = configurePhysics();
 
         // Create a wedge-shaped vehicle with a low center of gravity.
         // The local forward direction is +Z.
@@ -137,16 +146,16 @@ public class HelloNewHinge
 
         // Add a static plane to represent the ground.
         float y = -radius - 0.35f;
-        addPlane(y, physicsSpace);
+        addPlane(y);
     }
     // *************************************************************************
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the physics is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
@@ -159,10 +168,10 @@ public class HelloNewHinge
     }
 
     /**
-     * Callback from Bullet, invoked just after the physics has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
      * @param space the space that was just stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -172,12 +181,11 @@ public class HelloNewHinge
     // private methods
 
     /**
-     * Add a horizontal plane body to the specified PhysicsSpace.
+     * Add a horizontal plane body to the space.
      *
      * @param y (the desired elevation, in physics-space coordinates)
-     * @param physicsSpace (not null)
      */
-    private void addPlane(float y, PhysicsSpace physicsSpace) {
+    private void addPlane(float y) {
         Plane plane = new Plane(Vector3f.UNIT_Y, y);
         PlaneCollisionShape shape = new PlaneCollisionShape(plane);
         PhysicsRigidBody body
@@ -194,8 +202,8 @@ public class HelloNewHinge
         texture.setWrap(Texture.WrapMode.Repeat);
 
         // Enable anisotropic filtering, to reduce blurring.
-        int maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
-        int degree = Math.min(8, maxDegree);
+        Integer maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
+        int degree = (maxDegree == null) ? 1 : Math.min(8, maxDegree);
         texture.setAnisotropicFilter(degree);
 
         // Apply a tiled, unshaded debug material to the body.
@@ -213,13 +221,23 @@ public class HelloNewHinge
 
     /**
      * Add a cylindrical wheel, joined to the chassis by a NewHinge.
+     *
+     * @param connectionPoint the location of the connection point (not null)
+     * @param suspensionDirection the direction of suspension motion (not null,
+     * not zero, unaffected)
+     * @param axle the direction of the axle's axis (not null, not zero,
+     * unaffected)
+     * @param restLength the rest length
+     * @param wheelRadius the desired radius of the wheel
+     * @param isFrontWheel true for a front/steer wheel, false for a rear/drive
+     * wheel
      */
     private void addWheel(Vector3f connectionPoint,
             Vector3f suspensionDirection, Vector3f axle, float restLength,
             float wheelRadius, boolean isFrontWheel) {
         float thickness = 0.5f * wheelRadius;
-        CylinderCollisionShape shape = new CylinderCollisionShape(wheelRadius,
-                thickness, PhysicsSpace.AXIS_X);
+        CylinderCollisionShape shape = new CylinderCollisionShape(
+                wheelRadius, thickness, PhysicsSpace.AXIS_X);
         float mass = 0.5f;
         PhysicsRigidBody body = new PhysicsRigidBody(shape, mass);
         body.setEnableSleep(false);
@@ -227,8 +245,8 @@ public class HelloNewHinge
         body.setPhysicsLocation(center);
         physicsSpace.addCollisionObject(body);
 
-        NewHinge joint = new NewHinge(chassis, body, center,
-                suspensionDirection, axle);
+        NewHinge joint = new NewHinge(
+                chassis, body, center, suspensionDirection, axle);
         if (isFrontWheel) {
             RotationMotor motor = joint.getRotationMotor(PhysicsSpace.AXIS_Z);
             motor.setMotorEnabled(true);
@@ -248,14 +266,18 @@ public class HelloNewHinge
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
-    private void configurePhysics() {
+    private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
-        bulletAppState.setDebugEnabled(true);
-        physicsSpace = bulletAppState.getPhysicsSpace();
+        bulletAppState.setDebugEnabled(true); // for debug visualization
+        PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
-        // Activate the PhysicsTickListener interface.
-        physicsSpace.addTickListener(this);
+        // To enable the callbacks, register the application as a tick listener.
+        result.addTickListener(this);
+
+        return result;
     }
 }

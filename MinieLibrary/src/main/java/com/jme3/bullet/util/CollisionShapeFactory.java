@@ -34,6 +34,7 @@ package com.jme3.bullet.util;
 import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
+import com.jme3.bullet.collision.shapes.GImpactCollisionShape;
 import com.jme3.bullet.collision.shapes.HeightfieldCollisionShape;
 import com.jme3.bullet.collision.shapes.HullCollisionShape;
 import com.jme3.bullet.collision.shapes.MeshCollisionShape;
@@ -62,13 +63,16 @@ import jme3utilities.math.MyVector3f;
 import vhacd.VHACD;
 import vhacd.VHACDHull;
 import vhacd.VHACDParameters;
+import vhacd4.Vhacd4;
+import vhacd4.Vhacd4Hull;
+import vhacd4.Vhacd4Parameters;
 
 /**
  * Utility methods for generating collision shapes from models.
  *
  * @author normenhansen, tim8dev
  */
-public class CollisionShapeFactory {
+final public class CollisionShapeFactory {
     // *************************************************************************
     // constants and loggers
 
@@ -108,8 +112,8 @@ public class CollisionShapeFactory {
         if (modelRoot instanceof Geometry) {
             Geometry geometry = (Geometry) modelRoot;
             Vector3f centerOffset = new Vector3f();
-            BoxCollisionShape box = createSingleBoxShape(geometry, geometry,
-                    centerOffset);
+            BoxCollisionShape box = createSingleBoxShape(
+                    geometry, geometry, centerOffset);
             result.addChildShape(box, centerOffset);
 
         } else if (modelRoot instanceof Node) {
@@ -153,6 +157,23 @@ public class CollisionShapeFactory {
             throw new IllegalArgumentException(
                     "The model root must either be a Node or a Geometry!");
         }
+    }
+
+    /**
+     * Create a mesh-accurate shape for an movable object, based on its model.
+     * Terrain is ignored.
+     *
+     * @param modelRoot the model on which to base the shape (not null,
+     * unaffected)
+     * @return a new GImpactCollisionShape
+     */
+    public static GImpactCollisionShape createGImpactShape(Spatial modelRoot) {
+        Validate.nonNull(modelRoot, "model root");
+
+        Mesh mergedMesh = makeMergedMesh(modelRoot);
+        GImpactCollisionShape result = new GImpactCollisionShape(mergedMesh);
+
+        return result;
     }
 
     /**
@@ -232,8 +253,8 @@ public class CollisionShapeFactory {
      */
     public static CollisionShape createMeshShape(Spatial modelRoot) {
         if (modelRoot instanceof Terrain) {
-            return new HeightfieldCollisionShape((Terrain) modelRoot,
-                    modelRoot.getLocalScale());
+            return new HeightfieldCollisionShape(
+                    (Terrain) modelRoot, modelRoot.getLocalScale());
 
         } else if (modelRoot instanceof Geometry) {
             return createSingleMeshShape((Geometry) modelRoot, modelRoot);
@@ -253,7 +274,7 @@ public class CollisionShapeFactory {
     }
 
     /**
-     * Create a shape for a dynamic object using the V-HACD library.
+     * Create a shape for a dynamic object using classic V-HACD.
      *
      * @param modelRoot the model on which to base the shape (not null,
      * unaffected)
@@ -282,9 +303,8 @@ public class CollisionShapeFactory {
         for (int offset = 0; offset < numIndices; ++offset) {
             indexArray[offset] = indexBuffer.get(offset);
         }
-        /*
-         * Use the V-HACD algorithm to generate a list of hulls.
-         */
+
+        // Use the V-HACD algorithm to generate a list of hulls.
         List<VHACDHull> vhacdHulls
                 = VHACD.compute(positionArray, indexArray, parameters);
         /*
@@ -299,6 +319,59 @@ public class CollisionShapeFactory {
             result = addResult;
         }
         for (VHACDHull vhacdHull : vhacdHulls) {
+            HullCollisionShape hullShape = new HullCollisionShape(vhacdHull);
+            result.addChildShape(hullShape);
+        }
+
+        return result;
+    }
+
+    /**
+     * Create a shape for a dynamic object using V-HACD version 4.
+     *
+     * @param modelRoot the model on which to base the shape (not null,
+     * unaffected)
+     * @param parameters (not null, unaffected)
+     * @param addResult the compound shape to append to (modified if not null)
+     * @return a compound shape (either addResult or a new shape, not null)
+     */
+    public static CompoundCollisionShape createVhacdShape(Spatial modelRoot,
+            Vhacd4Parameters parameters, CompoundCollisionShape addResult) {
+        Validate.nonNull(modelRoot, "model root");
+        Validate.nonNull(parameters, "parameters");
+
+        Mesh mergedMesh = makeMergedMesh(modelRoot);
+
+        FloatBuffer positionBuffer
+                = mergedMesh.getFloatBuffer(VertexBuffer.Type.Position);
+        int numFloats = positionBuffer.limit();
+        float[] positionArray = new float[numFloats];
+        for (int offset = 0; offset < numFloats; ++offset) {
+            positionArray[offset] = positionBuffer.get(offset);
+        }
+
+        IndexBuffer indexBuffer = mergedMesh.getIndicesAsList();
+        int numIndices = indexBuffer.size();
+        int[] indexArray = new int[numIndices];
+        for (int offset = 0; offset < numIndices; ++offset) {
+            indexArray[offset] = indexBuffer.get(offset);
+        }
+
+        // Use the V-HACD algorithm to generate a list of hulls.
+        List<Vhacd4Hull> vhacdHulls
+                = Vhacd4.compute(positionArray, indexArray, parameters);
+        /*
+         * Convert each V-HACD hull to a HullCollisionShape
+         * and add that to the result.
+         */
+        CompoundCollisionShape result;
+        if (addResult == null) {
+            int numHulls = vhacdHulls.size();
+            result = new CompoundCollisionShape(numHulls);
+        } else {
+            result = addResult;
+        }
+        for (Vhacd4Hull vhacdHull : vhacdHulls) {
             HullCollisionShape hullShape = new HullCollisionShape(vhacdHull);
             result.addChildShape(hullShape);
         }
@@ -322,9 +395,8 @@ public class CollisionShapeFactory {
     private static void appendTriangles(Geometry geometry, Spatial modelRoot,
             FloatBuffer addPositions, IndexBuffer addIndices) {
         Mesh jmeMesh = geometry.getMesh();
-        /*
-         * Append merged-mesh indices to the IndexBuffer.
-         */
+
+        // Append merged-mesh indices to the IndexBuffer.
         int indexBase = addPositions.position() / numAxes;
         IndexBuffer indexBuffer = jmeMesh.getIndicesAsList();
         int numIndices = indexBuffer.size();
@@ -333,9 +405,8 @@ public class CollisionShapeFactory {
             int indexInMergedMesh = indexBase + indexInGeometry;
             addIndices.put(indexInMergedMesh);
         }
-        /*
-         * Append transformed vertex locations to the FloatBuffer.
-         */
+
+        // Append transformed vertex locations to the FloatBuffer.
         Transform transform = relativeTransform(geometry, modelRoot);
         Vector3f tmpPosition = new Vector3f();
         int numVertices = jmeMesh.getVertexCount();
@@ -379,8 +450,8 @@ public class CollisionShapeFactory {
                         childShape = createSingleMeshShape(geometry, modelRoot);
                     }
                 } else {
-                    childShape = createSingleBoxShape(geometry, modelRoot,
-                            centerOffset);
+                    childShape = createSingleBoxShape(
+                            geometry, modelRoot, centerOffset);
                     transform.getRotation().mult(centerOffset, centerOffset);
                     transform.getTranslation().addLocal(centerOffset);
                 }
@@ -401,8 +472,8 @@ public class CollisionShapeFactory {
      * @param storeCenter storage for the center offset (not null, modified)
      * @return a new instance, or null if the Mesh is null or empty
      */
-    private static BoxCollisionShape createSingleBoxShape(Geometry geometry,
-            Spatial modelRoot, Vector3f storeCenter) {
+    private static BoxCollisionShape createSingleBoxShape(
+            Geometry geometry, Spatial modelRoot, Vector3f storeCenter) {
         Mesh mesh = geometry.getMesh();
         if (mesh == null) {
             return null;
@@ -434,16 +505,18 @@ public class CollisionShapeFactory {
      * @param geometry the Geometry on which to base the shape (not null)
      * @param modelRoot the ancestor for which the shape is being generated (not
      * null, unaffected)
+     * @return a new instance (not null)
      */
-    private static HullCollisionShape createSingleHullShape(Geometry geometry,
-            Spatial modelRoot) {
+    private static HullCollisionShape createSingleHullShape(
+            Geometry geometry, Spatial modelRoot) {
         Mesh mesh = geometry.getMesh();
         if (mesh == null) {
             return null;
         }
 
         Transform transform = relativeTransform(geometry, modelRoot);
-        // TODO recognize AbstractBox, Cylinder, Quad, and Sphere from com.jme3.scene.shape package
+        // TODO recognize AbstractBox, Cylinder, Quad,
+        // and Sphere from com.jme3.scene.shape package
         HullCollisionShape hullShape = new HullCollisionShape(mesh);
         hullShape.setScale(transform.getScale());
 
@@ -459,15 +532,16 @@ public class CollisionShapeFactory {
      * @return a new MeshCollisionShape, or null if the Geometry doesn't contain
      * any triangles
      */
-    private static MeshCollisionShape createSingleMeshShape(Geometry geometry,
-            Spatial modelRoot) {
+    private static MeshCollisionShape createSingleMeshShape(
+            Geometry geometry, Spatial modelRoot) {
         Mesh mesh = geometry.getMesh();
         if (mesh == null || !MyMesh.hasTriangles(mesh)) {
             return null;
         }
 
         Transform transform = relativeTransform(geometry, modelRoot);
-        // TODO recognize AbstractBox, Cylinder, Quad, and Sphere from com.jme3.scene.shape package
+        // TODO recognize AbstractBox, Cylinder, Quad,
+        // and Sphere from com.jme3.scene.shape package
         MeshCollisionShape result = new MeshCollisionShape(mesh);
         result.setScale(transform.getScale());
 
@@ -543,8 +617,8 @@ public class CollisionShapeFactory {
      * null, unaffected)
      * @return a new Transform (not null)
      */
-    private static Transform relativeTransform(Spatial spatial,
-            Spatial modelRoot) {
+    private static Transform relativeTransform(
+            Spatial spatial, Spatial modelRoot) {
         Transform result = new Transform();
         Spatial currentSpatial = spatial;
         while (currentSpatial != modelRoot) {

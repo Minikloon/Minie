@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -29,7 +29,6 @@ package jme3utilities.minie.test;
 import com.jme3.anim.Armature;
 import com.jme3.anim.Joint;
 import com.jme3.anim.SkinningControl;
-import com.jme3.app.Application;
 import com.jme3.app.StatsAppState;
 import com.jme3.app.state.AppState;
 import com.jme3.bullet.BulletAppState;
@@ -69,17 +68,22 @@ import jme3utilities.Heart;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
 import jme3utilities.MySkeleton;
+import jme3utilities.MyString;
 import jme3utilities.NameGenerator;
 import jme3utilities.debug.SkeletonVisualizer;
 import jme3utilities.math.MyMath;
 import jme3utilities.math.MyVector3f;
+import jme3utilities.math.RectSizeLimits;
+import jme3utilities.math.noise.Generator;
 import jme3utilities.minie.DumpFlags;
 import jme3utilities.minie.PhysicsDumper;
 import jme3utilities.minie.test.common.PhysicsDemo;
 import jme3utilities.minie.test.mesh.TubeTreeMesh;
-import jme3utilities.minie.test.shape.ShapeGenerator;
 import jme3utilities.ui.CameraOrbitAppState;
+import jme3utilities.ui.DisplaySettings;
+import jme3utilities.ui.DsEditOverlay;
 import jme3utilities.ui.InputMode;
+import jme3utilities.ui.ShowDialog;
 
 /**
  * Simulate ropes using DynamicAnimControl.
@@ -152,14 +156,14 @@ public class RopeDemo extends PhysicsDemo {
     /**
      * link configuration for leaf joints (shrunken hull shape)
      */
-    final private static LinkConfig leafConfig = new LinkConfig(linkMass,
-            MassHeuristic.Mass, ShapeHeuristic.VertexHull,
+    final private static LinkConfig leafConfig = new LinkConfig(
+            linkMass, MassHeuristic.Mass, ShapeHeuristic.VertexHull,
             new Vector3f(0.84f, 0.84f, 0.84f), CenterHeuristic.Mean);
     /**
      * link configuration for non-leaf joints (stretched capsule shape)
      */
-    final private static LinkConfig ropeConfig = new LinkConfig(linkMass,
-            MassHeuristic.Mass, ShapeHeuristic.TwoSphere,
+    final private static LinkConfig ropeConfig = new LinkConfig(
+            linkMass, MassHeuristic.Mass, ShapeHeuristic.TwoSphere,
             new Vector3f(1f, 1f, 2.5f), CenterHeuristic.Mean);
     /**
      * message logger for this class
@@ -177,60 +181,84 @@ public class RopeDemo extends PhysicsDemo {
     /**
      * true once {@link #initWhenReady()} has been invoked for the latest rope
      */
-    private boolean dacReadyInitDone = false;
+    private static boolean dacReadyInitDone = false;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * physics controls for the ropes, in order of creation
      */
-    final private Deque<DynamicAnimControl> dacs = new ArrayDeque<>(12);
+    final private static Deque<DynamicAnimControl> dacs = new ArrayDeque<>(12);
     /**
      * shapes of the ropes, in order of creation
      */
-    final private Deque<RopeShape> shapes = new ArrayDeque<>(12);
+    final private static Deque<RopeShape> shapes = new ArrayDeque<>(12);
+    /**
+     * proposed display settings (for editing)
+     */
+    private static DisplaySettings proposedSettings;
+    /**
+     * AppState to manage the display-settings editor
+     */
+    private static DsEditOverlay dseOverlay;
     /**
      * generate names for rope geometries
      */
-    final private NameGenerator geometryNamer = new NameGenerator();
+    final private static NameGenerator geometryNamer = new NameGenerator();
     /**
      * parent for rope geometries
      */
-    final private Node meshesNode = new Node("meshes node");
+    final private static Node meshesNode = new Node("meshes node");
     /**
      * visualizer for the Armature of the most recently added rope
      */
-    private SkeletonVisualizer sv;
+    private static SkeletonVisualizer sv;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the RopeDemo application.
+     */
+    public RopeDemo() { // made explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the RopeDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new RopeDemo();
-        /*
-         * Customize the window's title bar.
-         */
-        boolean loadDefaults = true;
-        AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
+        // Process any command-line arguments.
+        ShowDialog showDialog = ShowDialog.Never;
+        for (String arg : arguments) {
+            switch (arg) {
+                case "--deleteOnly":
+                    Heart.deleteStoredSettings(applicationName);
+                    return;
 
-        settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
-        settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+                case "--showSettingsDialog":
+                    showDialog = ShowDialog.FirstTime;
+                    break;
 
-        application.start();
+                case "--verbose":
+                    Heart.setLoggingLevels(Level.INFO);
+                    break;
+
+                default:
+                    logger.log(Level.WARNING,
+                            "Ignored unknown command-line argument {0}",
+                            MyString.quote(arg));
+            }
+        }
+        mainStartup(showDialog, title);
     }
     // *************************************************************************
     // PhysicsDemo methods
@@ -239,7 +267,16 @@ public class RopeDemo extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        dseOverlay = new DsEditOverlay(proposedSettings);
+        dseOverlay.setBackgroundColor(new ColorRGBA(0.05f, 0f, 0f, 1f));
+        boolean success = stateManager.attach(dseOverlay);
+        assert success;
+        super.acorusInit();
+
+        // Hide the render-statistics overlay.
+        stateManager.getState(StatsAppState.class).toggleStats();
+
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -249,10 +286,6 @@ public class RopeDemo extends PhysicsDemo {
         viewPort.setBackgroundColor(skyColor);
 
         addLighting();
-        /*
-         * Hide the render-statistics overlay.
-         */
-        stateManager.getState(StatsAppState.class).toggleStats();
 
         float halfExtent = 650f;
         float topY = 0f;
@@ -271,6 +304,26 @@ public class RopeDemo extends PhysicsDemo {
 
         PhysicsDumper dumper = getDumper();
         dumper.setEnabled(DumpFlags.JointsInSpaces, true);
+    }
+
+    /**
+     * Calculate screen bounds for a detailed help node.
+     *
+     * @param viewPortWidth (in pixels, &gt;0)
+     * @param viewPortHeight (in pixels, &gt;0)
+     * @return a new instance
+     */
+    @Override
+    public Rectangle detailedHelpBounds(int viewPortWidth, int viewPortHeight) {
+        // Position help nodes on the right side of the viewport.
+        float margin = 10f; // in pixels
+        float height = viewPortHeight - (2f * margin);
+        float width = 260f; // in pixels
+        float leftX = viewPortWidth - (width + margin);
+        float topY = margin + height;
+        Rectangle result = new Rectangle(leftX, topY, width, height);
+
+        return result;
     }
 
     /**
@@ -326,6 +379,7 @@ public class RopeDemo extends PhysicsDemo {
         dim.bind(asDumpSpace, KeyInput.KEY_O);
         dim.bind(asDumpViewport, KeyInput.KEY_P);
 
+        dim.bind(asEditDisplaySettings, KeyInput.KEY_TAB);
         dim.bind("go limp", KeyInput.KEY_SPACE);
         dim.bind("pull a pin", KeyInput.KEY_X);
         dim.bind("save", KeyInput.KEY_SEMICOLON);
@@ -342,15 +396,6 @@ public class RopeDemo extends PhysicsDemo {
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind("toggle skeleton", KeyInput.KEY_V);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - 2f * margin;
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -368,6 +413,10 @@ public class RopeDemo extends PhysicsDemo {
                     delete();
                     return;
 
+                case asEditDisplaySettings:
+                    activateInputMode("dsEdit");
+                    return;
+
                 case "go limp":
                     goLimp();
                     return;
@@ -382,6 +431,8 @@ public class RopeDemo extends PhysicsDemo {
                 case "toggle skeleton":
                     toggleSkeleton();
                     return;
+
+                default:
             }
 
             String[] words = actionString.split(" ");
@@ -392,6 +443,20 @@ public class RopeDemo extends PhysicsDemo {
 
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        dseOverlay.onViewPortResize(newWidth, newHeight);
+        proposedSettings.resize(newWidth, newHeight);
+
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -413,7 +478,7 @@ public class RopeDemo extends PhysicsDemo {
     // private methods
 
     /**
-     * Add lighting and shadows to the scene.
+     * Add lighting and shadows to the main scene.
      */
     private void addLighting() {
         ColorRGBA ambientColor = new ColorRGBA(0.2f, 0.2f, 0.2f, 1f);
@@ -429,8 +494,8 @@ public class RopeDemo extends PhysicsDemo {
         int mapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                        numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, mapSize, numSplits);
         dlsr.setLight(sun);
         dlsr.setShadowIntensity(0.5f);
         viewPort.addProcessor(dlsr);
@@ -479,9 +544,7 @@ public class RopeDemo extends PhysicsDemo {
      * Add a rope cross to the scene.
      */
     private void addRopeCross() {
-        /*
-         * Generate a cross-shaped Armature.
-         */
+        // Generate a cross-shaped Armature.
         int[] stepCounts = {5, 5, 5, 5};
         Vector3f[] stepOffsets = {
             new Vector3f(stepLength, 0f, 0f),
@@ -491,16 +554,15 @@ public class RopeDemo extends PhysicsDemo {
         };
         Armature armature = makeArmature(stepCounts, stepOffsets);
 
-        TubeTreeMesh ropeMesh = new TubeTreeMesh(armature, ropeRadius,
-                0f, loopsPerSegment, samplesPerLoop);
+        TubeTreeMesh ropeMesh = new TubeTreeMesh(
+                armature, ropeRadius, 0f, loopsPerSegment, samplesPerLoop);
 
         String geometryName = geometryNamer.unique("rope cross");
         Geometry geometry = new Geometry(geometryName, ropeMesh);
 
         addRopeSpatial(armature, geometry);
-        /*
-         * Curl all branches clockwise to introduce some slack.
-         */
+
+        // Curl all branches clockwise to introduce some slack.
         curlBranch(armature, 0, Vector3f.UNIT_Y, 0.2f);
         curlBranch(armature, 1, Vector3f.UNIT_Y, 0.2f);
         curlBranch(armature, 2, Vector3f.UNIT_Y, 0.2f);
@@ -514,9 +576,7 @@ public class RopeDemo extends PhysicsDemo {
      * to leave it Y-shaped until dynamic mode is set
      */
     private void addRopeNoose(boolean kinematicSplice) {
-        /*
-         * Generate a Y-shaped Armature. Branch0 forms the stem of the Y.
-         */
+        // Generate a Y-shaped Armature. Branch0 forms the stem of the Y.
         int[] stepCounts = {6, 6, 6};
         float dx = stepLength * MyMath.rootHalf;
         Vector3f[] stepOffsets = {
@@ -526,17 +586,15 @@ public class RopeDemo extends PhysicsDemo {
         };
         Armature armature = makeArmature(stepCounts, stepOffsets);
 
-        TubeTreeMesh ropeMesh = new TubeTreeMesh(armature, ropeRadius,
-                0f, loopsPerSegment, samplesPerLoop);
+        TubeTreeMesh ropeMesh = new TubeTreeMesh(
+                armature, ropeRadius, 0f, loopsPerSegment, samplesPerLoop);
         String geometryName = geometryNamer.unique("noose");
         Geometry geometry = new Geometry(geometryName, ropeMesh);
 
         addRopeSpatial(armature, geometry);
 
         if (kinematicSplice) {
-            /*
-             * Curl branch1 and branch2 toward one another, 90 degrees each.
-             */
+            // Curl branch1 and branch2 toward one another, 90 degrees each.
             curlBranch(armature, 1, Vector3f.UNIT_Y, FastMath.HALF_PI);
             curlBranch(armature, 2, Vector3f.UNIT_Y, -FastMath.HALF_PI);
         }
@@ -549,9 +607,7 @@ public class RopeDemo extends PhysicsDemo {
      * to leave it linear until dynamic mode is set
      */
     private void addRopeRing(boolean kinematicSplice) {
-        /*
-         * Generate a double-ended straight-line Armature.
-         */
+        // Generate a double-ended straight-line Armature.
         int[] stepCounts = {8, 8};
         Vector3f[] stepOffsets = {
             new Vector3f(stepLength, 0f, 0f),
@@ -559,8 +615,8 @@ public class RopeDemo extends PhysicsDemo {
         };
         Armature armature = makeArmature(stepCounts, stepOffsets);
 
-        TubeTreeMesh ropeMesh = new TubeTreeMesh(armature, ropeRadius,
-                0f, loopsPerSegment, samplesPerLoop);
+        TubeTreeMesh ropeMesh = new TubeTreeMesh(
+                armature, ropeRadius, 0f, loopsPerSegment, samplesPerLoop);
 
         String geometryName = geometryNamer.unique("rope ring");
         Geometry geometry = new Geometry(geometryName, ropeMesh);
@@ -568,9 +624,7 @@ public class RopeDemo extends PhysicsDemo {
         addRopeSpatial(armature, geometry);
 
         if (kinematicSplice) {
-            /*
-             * Curl branch0 and branch1 toward one another, 180 degrees each.
-             */
+            // Curl branch0 and branch1 toward one another, 180 degrees each.
             curlBranch(armature, 0, Vector3f.UNIT_Y, FastMath.PI);
             curlBranch(armature, 1, Vector3f.UNIT_Y, -FastMath.PI);
         }
@@ -580,9 +634,7 @@ public class RopeDemo extends PhysicsDemo {
      * Add a plain rope to the scene. The rope begins in the X-Z plane.
      */
     private void addRopeSlackline() {
-        /*
-         * Generate a double-ended straight-line Armature.
-         */
+        // Generate a double-ended straight-line Armature.
         int[] stepCounts = {8, 8};
         Vector3f[] stepOffsets = {
             new Vector3f(0f, 0f, stepLength),
@@ -597,9 +649,8 @@ public class RopeDemo extends PhysicsDemo {
         Geometry geometry = new Geometry(geometryName, ropeMesh);
 
         addRopeSpatial(armature, geometry);
-        /*
-         * Curl both branches clockwise to introduce some slack.
-         */
+
+        // Curl both branches clockwise to introduce some slack.
         curlBranch(armature, 0, Vector3f.UNIT_Y, 0.2f);
         curlBranch(armature, 1, Vector3f.UNIT_Y, 0.2f);
     }
@@ -611,10 +662,8 @@ public class RopeDemo extends PhysicsDemo {
      * @param spatial (not null)
      */
     private void addRopeSpatial(Armature armature, Spatial spatial) {
-        /*
-         * Set a random elevation and Y-axis rotation.
-         */
-        ShapeGenerator random = getGenerator();
+        // Set a random elevation and Y-axis rotation.
+        Generator random = getGenerator();
         float elevation = random.nextFloat(12f, 24f);
         float rotationAngle = random.nextFloat(0f, FastMath.TWO_PI);
         spatial.move(0f, elevation, 0f);
@@ -675,7 +724,7 @@ public class RopeDemo extends PhysicsDemo {
      * @param branchIndex which branch (&ge;0)
      * @return a new array of 3 vertex specifiers
      */
-    private String[] capSpecs(int branchIndex) {
+    private static String[] capSpecs(int branchIndex) {
         int capVertex0 = capVertex0(branchIndex);
         String geometryName = dacs.peekLast().getSpatial().getName();
         String[] result = new String[3];
@@ -704,7 +753,7 @@ public class RopeDemo extends PhysicsDemo {
      * @param branchIndex which branch(&ge;0)
      * @return the vertex index (&ge;0)
      */
-    private int capVertex0(int branchIndex) {
+    private static int capVertex0(int branchIndex) {
         assert branchIndex >= 0 : branchIndex;
 
         DynamicAnimControl latestDac = dacs.peekLast();
@@ -760,7 +809,7 @@ public class RopeDemo extends PhysicsDemo {
      * @param branchIndex the index of the branch (&ge;0)
      * @return the count (&ge;0)
      */
-    private int countSteps(Armature armature, int branchIndex) {
+    private static int countSteps(Armature armature, int branchIndex) {
         int numSteps = 0;
 
         while (true) {
@@ -785,22 +834,19 @@ public class RopeDemo extends PhysicsDemo {
      * @param totalAngle the angle between the first and last steps (in radians,
      * may be negative)
      */
-    private void curlBranch(Armature armature, int branchIndex, Vector3f axis,
-            float totalAngle) {
+    private static void curlBranch(Armature armature, int branchIndex,
+            Vector3f axis, float totalAngle) {
         assert !MyVector3f.isZero(axis);
-        /*
-         * Count the steps in this branch.
-         */
+
+        // Count the steps in this branch.
         int numSteps = countSteps(armature, branchIndex);
         assert numSteps > 1 : numSteps;
-        /*
-         * Calculate local rotation.
-         */
+
+        // Calculate local rotation.
         float turnAngle = totalAngle / (numSteps - 1);
         Quaternion turn = new Quaternion().fromAngleAxis(turnAngle, axis);
-        /*
-         * Apply the rotation to each Joint.
-         */
+
+        // Apply the rotation to each Joint.
         for (int stepIndex = 0; stepIndex < numSteps; ++stepIndex) {
             String jointName = jointName(branchIndex, stepIndex);
             Joint joint = armature.getJoint(jointName);
@@ -811,7 +857,7 @@ public class RopeDemo extends PhysicsDemo {
     /**
      * Delete the most recently added rope.
      */
-    private void delete() {
+    private static void delete() {
         DynamicAnimControl latestDac = dacs.peekLast();
         if (latestDac != null) {
             latestDac.setEnabled(false);
@@ -837,7 +883,7 @@ public class RopeDemo extends PhysicsDemo {
     /**
      * Put the most recently added rope into dynamic mode, with gravity.
      */
-    private void goLimp() {
+    private static void goLimp() {
         DynamicAnimControl latestDac = dacs.peekLast();
         if (latestDac != null && latestDac.isReady()) {
             PhysicsLink rootLink = latestDac.getTorsoLink();
@@ -898,12 +944,55 @@ public class RopeDemo extends PhysicsDemo {
      * @param stepIndex the joint's index in the branch (&ge;0)
      * @return the name (not null, not empty)
      */
-    private String jointName(int branchIndex, int stepIndex) {
+    private static String jointName(int branchIndex, int stepIndex) {
         assert branchIndex >= 0 : branchIndex;
         assert stepIndex >= 0 : stepIndex;
 
         String name = String.format("branch%d.bone%d", branchIndex, stepIndex);
         return name;
+    }
+
+    /**
+     * Initialization performed immediately after parsing the command-line
+     * arguments.
+     *
+     * @param showDialog when to show the JME settings dialog (not null)
+     * @param title for the title bar of the app's window
+     */
+    private static void
+            mainStartup(final ShowDialog showDialog, final String title) {
+        RopeDemo application = new RopeDemo();
+
+        RectSizeLimits sizeLimits = new RectSizeLimits(
+                530, 480, // min width, height
+                2_048, 1_080 // max width, height
+        );
+        proposedSettings = new DisplaySettings(
+                application, applicationName, sizeLimits) {
+            @Override
+            protected void applyOverrides(AppSettings settings) {
+                setShowDialog(showDialog);
+                settings.setAudioRenderer(null);
+                settings.setRenderer(AppSettings.LWJGL_OPENGL32);
+                if (settings.getSamples() < 1) {
+                    settings.setSamples(4); // anti-aliasing
+                }
+                settings.setResizable(true);
+                settings.setTitle(title); // Customize the window's title bar.
+            }
+        };
+        AppSettings appSettings = proposedSettings.initialize();
+        if (appSettings == null) {
+            return;
+        }
+
+        application.setSettings(appSettings);
+        /*
+         * If the settings dialog should be shown,
+         * it has already been shown by DisplaySettings.initialize().
+         */
+        application.setShowSettings(false);
+        application.start();
     }
 
     /**
@@ -914,8 +1003,8 @@ public class RopeDemo extends PhysicsDemo {
      * @param branchToStepOffsets the parent-to-child offset in each branch
      * @return a new Armature in bind pose (not null)
      */
-    private Armature makeArmature(int[] branchToNumSteps,
-            Vector3f[] branchToStepOffsets) {
+    private static Armature makeArmature(
+            int[] branchToNumSteps, Vector3f[] branchToStepOffsets) {
         assert branchToNumSteps.length > 0;
         assert branchToNumSteps.length == branchToStepOffsets.length;
         int numJoints = 1;
@@ -979,7 +1068,7 @@ public class RopeDemo extends PhysicsDemo {
     /**
      * Disable one single-ended IK constraint of the most recently added rope.
      */
-    private void pullAPin() {
+    private static void pullAPin() {
         DynamicAnimControl latestDac = dacs.peekLast();
         if (latestDac != null) {
             IKJoint[] ikJoints = latestDac.listIKJoints();
@@ -1000,7 +1089,8 @@ public class RopeDemo extends PhysicsDemo {
      * @param branchIndex2 (&ge;0)
      */
     private void spliceEnds(int branchIndex1, int branchIndex2) {
-        PhysicsLink linkA, linkB;
+        PhysicsLink linkA;
+        PhysicsLink linkB;
         Vector3f pivotA = new Vector3f(); // local coordinates in rigid body
         Vector3f pivotB = new Vector3f();
 
@@ -1024,7 +1114,7 @@ public class RopeDemo extends PhysicsDemo {
     /**
      * Toggle mesh rendering of ropes on/off.
      */
-    private void toggleMeshes() {
+    private static void toggleMeshes() {
         Spatial.CullHint hint = meshesNode.getLocalCullHint();
         if (hint == Spatial.CullHint.Inherit
                 || hint == Spatial.CullHint.Never) {
@@ -1038,7 +1128,7 @@ public class RopeDemo extends PhysicsDemo {
     /**
      * Toggle the skeleton visualizer on/off.
      */
-    private void toggleSkeleton() {
+    private static void toggleSkeleton() {
         boolean enabled = sv.isEnabled();
         sv.setEnabled(!enabled);
     }

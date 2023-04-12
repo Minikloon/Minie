@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@ import com.jme3.input.controls.InputListener;
 import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.DirectionalLight;
 import com.jme3.material.Material;
+import com.jme3.material.Materials;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.queue.RenderQueue;
@@ -51,7 +52,7 @@ import com.jme3.scene.shape.Box;
 
 /**
  * A simple example of a DynamicAnimControl with 3 bone links.
- *
+ * <p>
  * Builds upon HelloDac.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -63,16 +64,16 @@ public class HelloBoneLink extends SimpleApplication {
     /**
      * PhysicsSpace for simulation
      */
-    private PhysicsSpace physicsSpace;
+    private static PhysicsSpace physicsSpace;
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloBoneLink application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloBoneLink application = new HelloBoneLink();
         application.start();
     }
@@ -86,8 +87,8 @@ public class HelloBoneLink extends SimpleApplication {
     public void simpleInitApp() {
         // Set up Bullet physics (with debug enabled).
         BulletAppState bulletAppState = new BulletAppState();
-        bulletAppState.setDebugEnabled(true); // default = false
         stateManager.attach(bulletAppState);
+        bulletAppState.setDebugEnabled(true); // for debug visualization
         physicsSpace = bulletAppState.getPhysicsSpace();
 
         // Add a box to the scene and relocate the camera.
@@ -100,7 +101,8 @@ public class HelloBoneLink extends SimpleApplication {
         rootNode.addLight(sun);
 
         // Add a model to the scene.
-        Spatial ninjaModel = assetManager.loadModel("Models/Ninja/Ninja.mesh.xml");
+        Spatial ninjaModel
+                = assetManager.loadModel("Models/Ninja/Ninja.mesh.xml");
         rootNode.attachChild(ninjaModel);
         ninjaModel.rotate(0f, 3f, 0f);
         ninjaModel.scale(0.02f);
@@ -121,8 +123,8 @@ public class HelloBoneLink extends SimpleApplication {
         inputManager.addMapping("go limp", new KeyTrigger(KeyInput.KEY_SPACE));
         InputListener actionListener = new ActionListener() {
             @Override
-            public void onAction(String actionString, boolean ongoing, float tpf) {
-                if (actionString.equals("go limp") && ongoing) {
+            public void onAction(String action, boolean ongoing, float tpf) {
+                if (action.equals("go limp") && ongoing) {
                     dac.setRagdollMode();
                 }
             }
@@ -143,8 +145,7 @@ public class HelloBoneLink extends SimpleApplication {
 
         geometry.move(0f, -halfExtent, 0f);
         ColorRGBA color = new ColorRGBA(0.1f, 0.4f, 0.1f, 1f);
-        Material material = new Material(assetManager,
-                "Common/MatDefs/Light/Lighting.j3md");
+        Material material = new Material(assetManager, Materials.LIGHTING);
         material.setBoolean("UseMaterialColors", true);
         material.setColor("Diffuse", color);
         geometry.setMaterial(material);

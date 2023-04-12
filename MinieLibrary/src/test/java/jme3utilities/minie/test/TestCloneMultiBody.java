@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,8 @@ import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * Test cloning/saving/loading of multibodies.
+ * Test cloning/saving/loading of multibodies. TODO replace asserts with JUnit
+ * Assert
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -64,27 +65,25 @@ public class TestCloneMultiBody {
     @Test
     public void testCloneMultiBody() {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
-        /*
-         * mb1: MultiBody with a fixed base, no links, no collider
-         */
+
+        // mb1: MultiBody with a fixed base, no links, no collider
         int numLinks = 0;
         float mass = 1f;
         Vector3f inertia = new Vector3f(1f, 1f, 1f);
         boolean fixedBase = true;
         boolean canSleep = true;
-        MultiBody mb1 = new MultiBody(numLinks, mass, inertia,
-                fixedBase, canSleep);
+        MultiBody mb1
+                = new MultiBody(numLinks, mass, inertia, fixedBase, canSleep);
         assert mb1.listColliders().isEmpty();
 
         setParameters(mb1, 0f);
         verifyParameters(mb1, 0f);
         MultiBody mb1Clone = Heart.deepCopy(mb1);
         cloneTest(mb1, mb1Clone);
-        /*
-         * mb2: MultiBody with a fixed base, no links, single collider
-         */
-        MultiBody mb2 = new MultiBody(numLinks, mass, inertia,
-                fixedBase, canSleep);
+
+        // mb2: MultiBody with a fixed base, no links, single collider
+        MultiBody mb2
+                = new MultiBody(numLinks, mass, inertia, fixedBase, canSleep);
         CollisionShape shape = new SphereCollisionShape(0.2f);
         mb2.addBaseCollider(shape);
         assert mb2.listColliders().size() == 1;
@@ -93,9 +92,8 @@ public class TestCloneMultiBody {
         verifyParameters(mb2, 0f);
         MultiBody mb2Clone = Heart.deepCopy(mb2);
         cloneTest(mb2, mb2Clone);
-        /*
-         * mb3: MultiBody with a movable base, one link, 2 colliders
-         */
+
+        // mb3: MultiBody with a movable base, one link, 2 colliders
         numLinks = 1;
         fixedBase = false;
         MultiBody mb3
@@ -113,9 +111,8 @@ public class TestCloneMultiBody {
         verifyParameters(mb3, 0f);
         MultiBody mb3Clone = Heart.deepCopy(mb3);
         cloneTest(mb3, mb3Clone);
-        /*
-         * TODO various links, added to space, etc.
-         */
+
+        // TODO: various links, added to space, etc.
     }
     // *************************************************************************
     // private methods
@@ -143,7 +140,8 @@ public class TestCloneMultiBody {
         verifyParameters(mbCloneCopy, 0.6f);
     }
 
-    private static void setColliderParameters(MultiBodyCollider collider, float b) {
+    private static void setColliderParameters(
+            MultiBodyCollider collider, float b) {
         collider.setCcdMotionThreshold(b + 0.004f);
         collider.setCcdSweptSphereRadius(b + 0.005f);
         collider.setContactDamping(b + 0.006f);
@@ -168,13 +166,13 @@ public class TestCloneMultiBody {
         }
     }
 
-    private static void verifyColliderParameters(MultiBodyCollider collider,
-            float b) {
+    private static void
+            verifyColliderParameters(MultiBodyCollider collider, float b) {
         Assert.assertEquals(b + 0.004f, collider.getCcdMotionThreshold(), 0f);
         Assert.assertEquals(b + 0.005f, collider.getCcdSweptSphereRadius(), 0f);
         Assert.assertEquals(b + 0.006f, collider.getContactDamping(), 0f);
-        Assert.assertEquals(b + 0.007f,
-                collider.getContactProcessingThreshold(), 0f);
+        Assert.assertEquals(
+                b + 0.007f, collider.getContactProcessingThreshold(), 0f);
         Assert.assertEquals(b + 0.008f, collider.getContactStiffness(), 0f);
         Assert.assertEquals(b + 0.01f, collider.getFriction(), 0f);
         Assert.assertEquals(b + 0.018f, collider.getRestitution(), 0f);
@@ -185,8 +183,8 @@ public class TestCloneMultiBody {
     private static void verifyParameters(MultiBody multiBody, float b) {
         Assert.assertEquals(Float.floatToIntBits(b) & 0xFFFF,
                 multiBody.collideWithGroups());
-        Assert.assertEquals(1 << Math.round(b / 0.3f),
-                multiBody.collisionGroup());
+        Assert.assertEquals(
+                1 << Math.round(b / 0.3f), multiBody.collisionGroup());
 
         List<MultiBodyCollider> colliders = multiBody.listColliders();
         int numColliders = colliders.size();

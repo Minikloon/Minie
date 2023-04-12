@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,6 @@ import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.bullet.objects.PhysicsRigidBody;
@@ -45,11 +44,12 @@ import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
 import com.jme3.system.AppSettings;
+import jme3utilities.MeshNormals;
 
 /**
  * A simple example that demonstrates customization of debug materials, debug
  * meshes, and lighting.
- *
+ * <p>
  * Builds upon HelloRbc.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -61,9 +61,9 @@ public class HelloCustomDebug extends SimpleApplication {
     /**
      * Main entry point for the HelloCustomDebug application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloCustomDebug application = new HelloCustomDebug();
 
         // Enable gamma correction for accurate lighting.
@@ -107,11 +107,11 @@ public class HelloCustomDebug extends SimpleApplication {
 
         // Customize the debug visualization of each object.
         dynaBall.setDebugMaterial(ballMaterial);
-        dynaBall.setDebugMeshNormals(DebugMeshNormals.Sphere);
+        dynaBall.setDebugMeshNormals(MeshNormals.Sphere);
         dynaBall.setDebugMeshResolution(DebugShapeFactory.highResolution);
 
         statBall.setDebugMaterial(ballMaterial);
-        statBall.setDebugMeshNormals(DebugMeshNormals.Sphere);
+        statBall.setDebugMeshNormals(MeshNormals.Sphere);
         statBall.setDebugMeshResolution(DebugShapeFactory.highResolution);
 
         // Minie's BulletAppState simulates the dynamics...
@@ -121,8 +121,10 @@ public class HelloCustomDebug extends SimpleApplication {
 
     /**
      * Add lighting to the specified scene.
+     *
+     * @param scene the scene to augment (not null)
      */
-    private void addLighting(Spatial scene) {
+    private static void addLighting(Spatial scene) {
         // Light the scene with ambient and directional lights.
         ColorRGBA ambientColor = new ColorRGBA(0.02f, 0.02f, 0.02f, 1f);
         AmbientLight ambient = new AmbientLight(ambientColor);
@@ -138,11 +140,13 @@ public class HelloCustomDebug extends SimpleApplication {
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
-        bulletAppState.setDebugEnabled(true);
+        bulletAppState.setDebugEnabled(true); // for debug visualization
 
         // Add lighting to the debug scene.
         bulletAppState.setDebugInitListener(new DebugInitListener() {

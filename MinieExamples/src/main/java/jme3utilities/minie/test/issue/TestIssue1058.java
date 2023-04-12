@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2020, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,7 @@ import com.jme3.bullet.objects.PhysicsRigidBody;
 
 /**
  * Test case for JME issue #1058: native Bullet crash while removing a rigid
- * body from a BroadphaseType.SIMPLE PhysicsSpace.
+ * body from a {@code BroadphaseType.SIMPLE} PhysicsSpace.
  * <p>
  * If successful, the app will complete normally.
  *
@@ -49,19 +49,35 @@ public class TestIssue1058
     // *************************************************************************
     // fields
 
-    private volatile boolean hasStepped = false;
-    private PhysicsRigidBody body1;
-    private PhysicsRigidBody body2;
-    private PhysicsSpace physicsSpace;
+    /**
+     * changes from false to true once the physics is stepped
+     */
+    private static volatile boolean hasStepped = false;
+    /**
+     * body to be removed
+     */
+    private static PhysicsRigidBody body1;
+    /**
+     * space for physics simulation
+     */
+    private static PhysicsSpace physicsSpace;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue1058 application.
+     */
+    public TestIssue1058() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestIssue1058 application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         Application application = new TestIssue1058();
         application.start();
     }
@@ -85,7 +101,7 @@ public class TestIssue1058
         body1 = new PhysicsRigidBody(shape, 1f);
         physicsSpace.addCollisionObject(body1);
 
-        body2 = new PhysicsRigidBody(shape, 2f);
+        PhysicsRigidBody body2 = new PhysicsRigidBody(shape, 2f);
         physicsSpace.addCollisionObject(body2);
     }
 
@@ -98,7 +114,7 @@ public class TestIssue1058
     public void simpleUpdate(float tpf) {
         super.simpleUpdate(tpf);
         if (hasStepped) {
-            physicsSpace.removeCollisionObject(body1); // native Bullet crash occurs here
+            physicsSpace.removeCollisionObject(body1); // crash occurs here
             physicsSpace = null;
             stop();
         }
@@ -109,8 +125,8 @@ public class TestIssue1058
     /**
      * Callback from Bullet, invoked just before the physics is stepped.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
@@ -121,7 +137,7 @@ public class TestIssue1058
      * Callback from Bullet, invoked just after the physics has been stepped.
      *
      * @param space the space that was just stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {

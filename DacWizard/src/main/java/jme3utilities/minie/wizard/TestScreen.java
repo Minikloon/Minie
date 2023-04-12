@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -26,15 +26,16 @@
  */
 package jme3utilities.minie.wizard;
 
+import com.jme3.animation.Skeleton;
 import com.jme3.app.Application;
 import com.jme3.app.state.AppStateManager;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.bullet.animation.BoneLink;
 import com.jme3.bullet.animation.DacConfiguration;
-import com.jme3.bullet.animation.DacLinks;
 import com.jme3.bullet.animation.DynamicAnimControl;
 import com.jme3.bullet.animation.PhysicsLink;
+import com.jme3.bullet.animation.RagUtils;
 import com.jme3.bullet.animation.TorsoLink;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.PlaneCollisionShape;
@@ -42,6 +43,7 @@ import com.jme3.bullet.joints.Constraint;
 import com.jme3.bullet.joints.JointEnd;
 import com.jme3.bullet.joints.New6Dof;
 import com.jme3.bullet.joints.SixDofJoint;
+import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
@@ -49,12 +51,13 @@ import com.jme3.math.Plane;
 import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Spatial;
+import com.jme3.scene.control.AbstractControl;
 import java.util.List;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.InitialState;
 import jme3utilities.MyAsset;
-import jme3utilities.MySpatial;
+import jme3utilities.MyString;
 import jme3utilities.debug.AxesVisualizer;
 import jme3utilities.debug.SkeletonVisualizer;
 import jme3utilities.nifty.GuiScreenController;
@@ -77,6 +80,10 @@ class TestScreen extends GuiScreenController {
     // fields
 
     /**
+     * animation time of the pose being viewed (in seconds)
+     */
+    private float viewedAnimationTime;
+    /**
      * debug material for the selected PhysicsLink
      */
     private Material selectMaterial;
@@ -85,9 +92,13 @@ class TestScreen extends GuiScreenController {
      */
     private PhysicsRigidBody groundPlane = null;
     /**
-     * root spatial of the C-G model being previewed
+     * root spatial of the C-G model being viewed, or null for none
      */
     private Spatial viewedSpatial = null;
+    /**
+     * clip/animation name of the pose being viewed
+     */
+    private String viewedAnimationName;
     // *************************************************************************
     // constructors
 
@@ -109,8 +120,8 @@ class TestScreen extends GuiScreenController {
      * @param application (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager,
-            Application application) {
+    public void initialize(
+            AppStateManager stateManager, Application application) {
         super.initialize(stateManager, application);
 
         InputMode inputMode = InputMode.findMode("test");
@@ -119,8 +130,8 @@ class TestScreen extends GuiScreenController {
         inputMode.influence(this);
 
         if (selectMaterial == null) {
-            selectMaterial = MyAsset.createWireframeMaterial(assetManager,
-                    ColorRGBA.White);
+            this.selectMaterial = MyAsset.createWireframeMaterial(
+                    assetManager, ColorRGBA.White);
         }
     }
 
@@ -143,7 +154,9 @@ class TestScreen extends GuiScreenController {
         removeGroundPlane();
         DacWizard wizard = DacWizard.getApplication();
         wizard.clearScene();
-        viewedSpatial = null;
+        this.viewedSpatial = null;
+        this.viewedAnimationName = null;
+        this.viewedAnimationTime = Float.NaN;
 
         BulletAppState bulletAppState
                 = DacWizard.findAppState(BulletAppState.class);
@@ -168,26 +181,30 @@ class TestScreen extends GuiScreenController {
         updateRagdollButton();
         updateViewButtons();
 
+        // Update the 3-D scene.
         Model model = DacWizard.getModel();
         Spatial nextSpatial = model.getRootSpatial();
-        if (nextSpatial != viewedSpatial) {
+        String nextAnimationName = model.animationName();
+        float nextAnimationTime = model.animationTime();
+        if (nextSpatial != viewedSpatial
+                || !nextAnimationName.equals(viewedAnimationName)
+                || nextAnimationTime != viewedAnimationTime) {
             DacWizard wizard = DacWizard.getApplication();
 
             removeGroundPlane();
             wizard.clearScene();
 
-            viewedSpatial = nextSpatial;
+            this.viewedSpatial = nextSpatial;
+            this.viewedAnimationName = nextAnimationName;
+            this.viewedAnimationTime = nextAnimationTime;
+
             if (nextSpatial != null) {
                 Spatial cgModel = Heart.deepCopy(nextSpatial);
-                Transform initTransform = model.copyInitTransform(null);
-                cgModel.setLocalTransform(initTransform);
-                wizard.makeScene(cgModel);
+                wizard.makeScene(cgModel, nextAnimationName, nextAnimationTime);
                 addGroundPlane();
 
-                List<Spatial> list
-                        = MySpatial.listAnimationSpatials(cgModel, null);
-                Spatial controlledSpatial = list.get(0);
-
+                AbstractControl sControl = RagUtils.findSControl(cgModel);
+                Spatial controlledSpatial = sControl.getSpatial();
                 DynamicAnimControl dac = model.copyRagdoll();
                 controlledSpatial.addControl(dac);
 
@@ -199,6 +216,7 @@ class TestScreen extends GuiScreenController {
         }
 
         updateAxes();
+        updatePosingControls();
         updateSelectedLink();
     }
     // *************************************************************************
@@ -211,8 +229,8 @@ class TestScreen extends GuiScreenController {
         if (groundPlane == null) {
             Plane xzPlane = new Plane(Vector3f.UNIT_Y, 0f);
             PlaneCollisionShape shape = new PlaneCollisionShape(xzPlane);
-            groundPlane = new PhysicsRigidBody(shape,
-                    PhysicsRigidBody.massForStatic);
+            this.groundPlane
+                    = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
             BulletAppState bulletAppState
                     = DacWizard.findAppState(BulletAppState.class);
@@ -224,8 +242,11 @@ class TestScreen extends GuiScreenController {
     /**
      * Apply the pivot-to-PhysicsSpace transform of the specified Constraint to
      * the specified Spatial.
+     *
+     * @param constraint the constraint to analyze (not null)
+     * @param spatial where to apply the transform (not null)
      */
-    private void applyTransform(Constraint constraint, Spatial spatial) {
+    private static void applyTransform(Constraint constraint, Spatial spatial) {
         Transform frame = new Transform(); // TODO garbage
         if (constraint instanceof New6Dof) {
             New6Dof new6dof = (New6Dof) constraint;
@@ -252,7 +273,7 @@ class TestScreen extends GuiScreenController {
                     = DacWizard.findAppState(BulletAppState.class);
             PhysicsSpace physicsSpace = bulletAppState.getPhysicsSpace();
             physicsSpace.removeCollisionObject(groundPlane);
-            groundPlane = null;
+            this.groundPlane = null;
         }
     }
 
@@ -269,13 +290,11 @@ class TestScreen extends GuiScreenController {
 
         if (!showingAxes
                 || viewedSpatial == null
-                || btName.equals(DacLinks.torsoName)) {
+                || btName.equals(DacConfiguration.torsoName)) {
             axesVisualizer.setEnabled(false);
 
         } else {
-            /*
-             * Align the visualizer axes with the PhysicsJoint.
-             */
+            // Align the visualizer axes with the PhysicsJoint.
             DynamicAnimControl dac = wizard.findDac();
             PhysicsLink selectedLink = dac.findBoneLink(btName);
             Constraint constraint = (Constraint) selectedLink.getJoint();
@@ -284,6 +303,68 @@ class TestScreen extends GuiScreenController {
 
             axesVisualizer.setEnabled(true);
         }
+    }
+
+    /**
+     * Update the collision-margin button.
+     */
+    private void updateMarginButton() {
+        float margin = CollisionShape.getDefaultMargin();
+        String marginButton = Float.toString(margin);
+        setButtonText("margin", marginButton);
+    }
+
+    /**
+     * Update the posing controls.
+     */
+    private void updatePosingControls() {
+        String anText = "";
+        String atText = "";
+        String naText = "";
+        String paText = "";
+
+        if (viewedSpatial != null) {
+            Model model = DacWizard.getModel();
+            int numAnimations = model.countAnimations();
+            if (numAnimations > 0) {
+                paText = "-";
+                naText = "+";
+            }
+
+            float duration = model.animationDuration();
+            if (duration > 0f) {
+                atText = Float.toString(viewedAnimationTime) + " seconds";
+            }
+
+            anText = viewedAnimationName;
+            if (!anText.equals(DacWizard.bindPoseName)) {
+                anText = MyString.quote(anText);
+            }
+        }
+
+        setStatusText("animationName", anText);
+        setButtonText("animationTime", atText);
+        setButtonText("nextAnimation", naText);
+        setButtonText("previousAnimation", paText);
+    }
+
+    /**
+     * Update the "Go limp" button.
+     */
+    private void updateRagdollButton() {
+        DacWizard wizard = DacWizard.getApplication();
+        DynamicAnimControl dac = wizard.findDac();
+
+        String ragdollButton = "";
+        if (dac != null && dac.isReady()) {
+            TorsoLink torso = dac.getTorsoLink();
+            if (torso.isKinematic()) {
+                ragdollButton = "Go limp";
+            } else {
+                ragdollButton = "Reset model";
+            }
+        }
+        setButtonText("ragdoll", ragdollButton);
     }
 
     /**
@@ -325,34 +406,6 @@ class TestScreen extends GuiScreenController {
     }
 
     /**
-     * Update the collision-margin button.
-     */
-    private void updateMarginButton() {
-        float margin = CollisionShape.getDefaultMargin();
-        String marginButton = Float.toString(margin);
-        setButtonText("margin", marginButton);
-    }
-
-    /**
-     * Update the "Go limp" button.
-     */
-    private void updateRagdollButton() {
-        DacWizard wizard = DacWizard.getApplication();
-        DynamicAnimControl dac = wizard.findDac();
-
-        String ragdollButton = "";
-        if (dac != null && dac.isReady()) {
-            TorsoLink torso = dac.getTorsoLink();
-            if (torso.isKinematic()) {
-                ragdollButton = "Go limp";
-            } else {
-                ragdollButton = "Reset model";
-            }
-        }
-        setButtonText("ragdoll", ragdollButton);
-    }
-
-    /**
      * Update the buttons that toggle view elements.
      */
     private void updateViewButtons() {
@@ -361,33 +414,39 @@ class TestScreen extends GuiScreenController {
 
         String debugButton;
         if (bulletAppState.isDebugEnabled()) {
-            debugButton = "Hide debug";
+            debugButton = "Hide physics";
         } else {
-            debugButton = "Show debug";
+            debugButton = "Show physics";
         }
         setButtonText("debug", debugButton);
 
-        DacWizard app = DacWizard.getApplication();
+        Model model = DacWizard.getModel();
         String meshButton;
-        if (app.areMeshesHidden()) {
-            meshButton = "Show meshes";
-        } else {
+        if (model.isShowingMeshes()) {
             meshButton = "Hide meshes";
+        } else {
+            meshButton = "Show meshes";
         }
         setButtonText("mesh", meshButton);
 
         String skeletonText = "";
+        DacWizard app = DacWizard.getApplication();
         SkeletonVisualizer sv = app.findSkeletonVisualizer();
-        if (sv != null) {
-            if (sv.isEnabled()) {
-                skeletonText = "Hide skeleton";
+        Spatial root = model.getRootSpatial();
+        if (sv != null && root != null) {
+            boolean isShown = model.isShowingSkeleton();
+            sv.setEnabled(isShown);
+
+            Skeleton skeleton = model.findSkeleton();
+            String armature = (skeleton == null) ? "armature" : "skeleton";
+            if (isShown) {
+                skeletonText = "Hide " + armature;
             } else {
-                skeletonText = "Show skeleton";
+                skeletonText = "Show " + armature;
             }
         }
         setButtonText("skeleton", skeletonText);
 
-        Model model = DacWizard.getModel();
         String axesText = model.isShowingAxes() ? "Hide axes" : "Show axes";
         setButtonText("axes", axesText);
     }

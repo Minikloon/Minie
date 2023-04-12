@@ -308,7 +308,7 @@ public class VehicleControl
 
         if (spatial != null) {
             if (getMotionState().applyTransform(spatial)) {
-                spatial.getWorldTransform();
+                spatial.getWorldTransform(); // updates the world transform
                 applyWheelTransforms();
             }
         } else {
@@ -329,23 +329,17 @@ public class VehicleControl
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        super.cloneFields(cloner, original);
-        spatial = cloner.clone(spatial);
-    }
+        assert !hasAssignedNativeObject();
+        VehicleControl old = (VehicleControl) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
 
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new Control (not null)
-     */
-    @Override
-    public VehicleControl jmeClone() {
-        try {
-            VehicleControl clone = (VehicleControl) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
+        super.cloneFields(cloner, original);
+        if (hasAssignedNativeObject()) {
+            return;
         }
+
+        this.spatial = cloner.clone(spatial);
     }
 
     /**
@@ -400,9 +394,9 @@ public class VehicleControl
         } else {
             RigidBodyMotionState ms = getMotionState();
             if (ms.isApplyPhysicsLocal()) {
-                return spatial.getLocalRotation();
+                return spatial.getLocalRotation(); // alias
             } else {
-                return spatial.getWorldRotation();
+                return spatial.getWorldRotation(); // alias
             }
         }
     }
@@ -419,9 +413,9 @@ public class VehicleControl
         } else {
             RigidBodyMotionState ms = getMotionState();
             if (ms.isApplyPhysicsLocal()) {
-                result = spatial.getLocalTranslation();
+                result = spatial.getLocalTranslation(); // alias
             } else {
-                result = spatial.getWorldTranslation();
+                result = spatial.getWorldTranslation(); // alias
             }
         }
 

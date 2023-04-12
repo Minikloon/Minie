@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,9 @@ public class TestPhysicsSoftBody {
     // *************************************************************************
     // new methods exposed
 
+    /**
+     * Test the {@code applyTransform()} method.
+     */
     @Test
     public void testPhysicsSoftBody() {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
@@ -61,8 +64,6 @@ public class TestPhysicsSoftBody {
         psb.applyTransform(trs1);
 
         Vector3f location = psb.nodeLocation(0, null);
-        assert FastMath.approximateEquals(location.x, 9.5f);
-        assert FastMath.approximateEquals(location.y, 1.4f);
-        assert FastMath.approximateEquals(location.z, -1.7f);
+        Utils.assertEquals(9.5f, 1.4f, -1.7f, location, 1e-5f);
     }
 }

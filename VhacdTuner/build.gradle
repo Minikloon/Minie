@@ -1,0 +1,39 @@
+// Note: "common.gradle" in the root project contains additional initialization
+//   for this project. This initialization is applied in the "build.gradle"
+//   of the root project.
+
+plugins {
+    id 'application'
+}
+
+tasks.withType(JavaExec) { // Java runtime options:
+    args '--openGL3'
+}
+
+application {
+    mainClass = 'jme3utilities.minie.tuner.VhacdTuner'
+}
+
+dependencies {
+    runtimeOnly    desktopCoordinates
+    implementation heartCoordinates
+    runtimeOnly    lwjglCoordinates
+    implementation niftyCoordinates
+    runtimeOnly    pluginsCoordinates
+    runtimeOnly    styleCoordinates
+
+    // VhacdTuner doesn't use jme3-jogg
+    //  -- it is included solely to avoid warnings from AssetConfig.
+    runtimeOnly joggCoordinates
+
+    //implementation 'com.github.stephengold:Minie:' + minieVersion // for published library
+    implementation project(':MinieLibrary') // for latest sourcecode
+}
+startScripts.dependsOn(':MinieLibrary:assemble')
+distTar.dependsOn(':MinieLibrary:assemble')
+distZip.dependsOn(':MinieLibrary:assemble')
+
+tasks.register('runForceDialog', JavaExec) {
+    args '--forceDialog'
+    mainClass = mainClassName
+}

@@ -62,11 +62,10 @@ abstract public class AbstractPhysicsDebugControl extends AbstractControl {
 
     /**
      * Instantiate an enabled Control to serve the specified debug app state.
-     * TODO protect
      *
      * @param debugAppState which app state (not null, alias created)
      */
-    public AbstractPhysicsDebugControl(BulletDebugAppState debugAppState) {
+    protected AbstractPhysicsDebugControl(BulletDebugAppState debugAppState) {
         this.debugAppState = debugAppState;
     }
     // *************************************************************************
@@ -80,8 +79,8 @@ abstract public class AbstractPhysicsDebugControl extends AbstractControl {
      * @param worldRotation orientation (in physics-space coordinates, not null,
      * unaffected)
      */
-    protected void applyPhysicsTransform(Vector3f worldLocation,
-            Quaternion worldRotation) {
+    protected void applyPhysicsTransform(
+            Vector3f worldLocation, Quaternion worldRotation) {
         applyPhysicsTransform(worldLocation, worldRotation, spatial);
     }
     // *************************************************************************
@@ -123,7 +122,8 @@ abstract public class AbstractPhysicsDebugControl extends AbstractControl {
      */
     @Override
     public Object jmeClone() {
-        throw new UnsupportedOperationException("jmeClone() isn't implemented.");
+        throw new UnsupportedOperationException(
+                "jmeClone() isn't implemented.");
     }
 
     /**
@@ -163,8 +163,8 @@ abstract public class AbstractPhysicsDebugControl extends AbstractControl {
      * unaffected)
      * @param spatial where to apply (may be null)
      */
-    private void applyPhysicsTransform(Vector3f location,
-            Quaternion rotation, Spatial spatial) {
+    private static void applyPhysicsTransform(
+            Vector3f location, Quaternion rotation, Spatial spatial) {
         if (spatial != null) {
             spatial.setLocalTranslation(location);
             spatial.setLocalRotation(rotation);

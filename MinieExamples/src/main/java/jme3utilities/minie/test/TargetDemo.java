@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -27,6 +27,7 @@
 package jme3utilities.minie.test;
 
 import com.jme3.app.Application;
+import com.jme3.app.StatsAppState;
 import com.jme3.app.state.AppState;
 import com.jme3.bounding.BoundingBox;
 import com.jme3.bullet.BulletAppState;
@@ -40,7 +41,6 @@ import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
 import com.jme3.bullet.collision.shapes.CylinderCollisionShape;
 import com.jme3.bullet.collision.shapes.MultiSphere;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.BulletDebugAppState;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.objects.PhysicsRigidBody;
@@ -67,15 +67,17 @@ import com.jme3.system.AppSettings;
 import com.jme3.util.BufferUtils;
 import java.util.Collection;
 import java.util.List;
+import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
+import jme3utilities.MeshNormals;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
 import jme3utilities.MyString;
 import jme3utilities.math.MyMath;
+import jme3utilities.math.noise.Generator;
 import jme3utilities.minie.test.common.PhysicsDemo;
-import jme3utilities.minie.test.shape.ShapeGenerator;
 import jme3utilities.ui.CameraOrbitAppState;
 import jme3utilities.ui.InputMode;
 
@@ -118,24 +120,33 @@ public class TargetDemo
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * selected rigid body, or null if none
      */
-    private PhysicsRigidBody selectedBody = null;
+    private static PhysicsRigidBody selectedBody = null;
     /**
      * AppState to manage the status overlay
      */
-    private TargetDemoStatus status;
+    private static TargetDemoStatus status;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TargetDemo application.
+     */
+    public TargetDemo() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Count how many rigid bodies are active.
+     *
+     * @return the count (&ge;0)
      */
     int countActive() {
         int result = 0;
-
         Collection<PhysicsRigidBody> rigidBodies
                 = getPhysicsSpace().getRigidBodyList();
         for (PhysicsRigidBody rigidBody : rigidBodies) {
@@ -150,32 +161,26 @@ public class TargetDemo
     /**
      * Main entry point for the TargetDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Enable direct-memory tracking.
-         */
+
+        // Enable direct-memory tracking.
         BufferUtils.setTrackDirectMemoryEnabled(true);
 
-        Application application = new TargetDemo();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new TargetDemo();
+        application.setSettings(settings);
         application.start();
     }
 
@@ -209,7 +214,7 @@ public class TargetDemo
     /**
      * Update the ShadowMode of the debug scene.
      */
-    void setDebugShadowMode() {
+    static void setDebugShadowMode() {
         RenderQueue.ShadowMode mode;
         if (status.isWireframe()) {
             mode = RenderQueue.ShadowMode.Off;
@@ -225,10 +230,12 @@ public class TargetDemo
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
         status = new TargetDemoStatus();
         boolean success = stateManager.attach(status);
         assert success;
+
+        super.acorusInit();
 
         configureCamera();
         configureDumper();
@@ -236,17 +243,40 @@ public class TargetDemo
         configurePhysics();
         generateShapes();
 
+        // Hide the render-statistics overlay.
+        stateManager.getState(StatsAppState.class).toggleStats();
+
         ColorRGBA skyColor = new ColorRGBA(0.1f, 0.2f, 0.4f, 1f);
         viewPort.setBackgroundColor(skyColor);
 
         String platformName = status.platformType();
         addPlatform(platformName, platformTopY);
 
-        int maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
-        int degree = Math.min(8, maxDegree);
+        Integer maxDegree = renderer.getLimits().get(Limits.TextureAnisotropy);
+        int degree = (maxDegree == null) ? 1 : Math.min(8, maxDegree);
         renderer.setDefaultAnisotropicFilter(degree);
 
         setUpScenario();
+    }
+
+    /**
+     * Calculate screen bounds for the detailed help node.
+     *
+     * @param viewPortWidth (in pixels, &gt;0)
+     * @param viewPortHeight (in pixels, &gt;0)
+     * @return a new instance
+     */
+    @Override
+    public Rectangle detailedHelpBounds(int viewPortWidth, int viewPortHeight) {
+        // Position help nodes below the status.
+        float margin = 10f; // in pixels
+        float leftX = margin;
+        float topY = viewPortHeight - 220f - margin;
+        float width = viewPortWidth - leftX - margin;
+        float height = topY - margin;
+        Rectangle result = new Rectangle(leftX, topY, width, height);
+
+        return result;
     }
 
     /**
@@ -262,12 +292,12 @@ public class TargetDemo
         registerMaterial("missile", missile);
 
         ColorRGBA lightGray = new ColorRGBA(0.6f, 0.6f, 0.6f, 1f);
-        Material selected = MyAsset.createShinyMaterial(assetManager, lightGray);
+        Material selected
+                = MyAsset.createShinyMaterial(assetManager, lightGray);
         selected.setFloat("Shininess", 15f);
         registerMaterial("selected", selected);
-        /*
-         * shiny, lit materials for targets
-         */
+
+        // shiny, lit materials for targets
         ColorRGBA[] targetColors = new ColorRGBA[numTargetColors];
         targetColors[0] = new ColorRGBA(0.2f, 0f, 0f, 1f); // ruby
         targetColors[1] = new ColorRGBA(0f, 0.07f, 0f, 1f); // emerald
@@ -296,7 +326,7 @@ public class TargetDemo
     }
 
     /**
-     * Determine the length of debug axis arrows (when they're visible).
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -306,7 +336,8 @@ public class TargetDemo
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -348,15 +379,12 @@ public class TargetDemo
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind(asToggleVArrows, KeyInput.KEY_K);
+        dim.bind(asToggleWArrows, KeyInput.KEY_N);
         dim.bind("toggle wireframe", KeyInput.KEY_SLASH);
-        /*
-         * The help node can't be created until all hotkeys are bound.
-         */
-        addHelp();
     }
 
     /**
-     * Process an action that wasn't handled by the active input mode.
+     * Process an action that wasn't handled by the active InputMode.
      *
      * @param actionString textual description of the action (not null)
      * @param ongoing true if the action is ongoing, otherwise false
@@ -407,9 +435,25 @@ public class TargetDemo
                 case "toggle wireframe":
                     status.toggleWireframe();
                     return;
+
+                default:
             }
         }
+
+        // The action is not handled: forward it to the superclass.
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        status.resize(newWidth, newHeight);
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -456,21 +500,9 @@ public class TargetDemo
     // private methods
 
     /**
-     * Attach a Node to display hotkey help/hints.
-     */
-    private void addHelp() {
-        float margin = 10f; // in pixels
-        float width = 360f; // in pixels
-        float height = cam.getHeight() - (2f * margin + 20f);
-        float leftX = cam.getWidth() - (width + margin);
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
-    }
-
-    /**
      * Add lighting and shadows to the specified scene.
+     *
+     * @param rootSpatial which scene (not null)
      */
     private void addLighting(Spatial rootSpatial) {
         ColorRGBA ambientColor = new ColorRGBA(0.5f, 0.5f, 0.5f, 1f);
@@ -488,8 +520,8 @@ public class TargetDemo
         int mapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                        numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, mapSize, numSplits);
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
         dlsr.setEdgesThickness(5);
         dlsr.setLight(sun);
@@ -510,7 +542,7 @@ public class TargetDemo
         flyCam.setZoomSpeed(10f);
 
         cam.setLocation(new Vector3f(0f, platformTopY + 20f, 40f));
-        cam.setRotation(new Quaternion(0f, 0.9649f, -0.263f, 0f));
+        cam.setRotation(new Quaternion(-0.002f, 0.991408f, -0.1295f, 0.0184f));
 
         AppState orbitState
                 = new CameraOrbitAppState(cam, "orbitLeft", "orbitRight");
@@ -518,7 +550,7 @@ public class TargetDemo
     }
 
     /**
-     * Create and configure a new PhysicsSpace.
+     * Configure physics during startup.
      */
     private void configurePhysics() {
         DebugShapeFactory.setIndexBuffers(200);
@@ -581,7 +613,7 @@ public class TargetDemo
         body.setCcdMotionThreshold(radius);
         body.setCcdSweptSphereRadius(radius);
         body.setDebugMaterial(debugMaterial);
-        body.setDebugMeshNormals(DebugMeshNormals.Sphere);
+        body.setDebugMeshNormals(MeshNormals.Sphere);
         body.setDebugMeshResolution(DebugShapeFactory.highResolution);
         body.setLinearVelocity(initialVelocity);
         body.setPhysicsLocation(nearLocation);
@@ -614,7 +646,7 @@ public class TargetDemo
             float deltaV = FastMath.sqrt(30f * gravity);
             float impulse = selectedBody.getMass() * deltaV;
             Vector3f impulseVector = new Vector3f(0f, impulse, 0f);
-            ShapeGenerator random = getGenerator();
+            Generator random = getGenerator();
             Vector3f offset = random.nextVector3f().multLocal(0.2f);
             PhysicsRigidBody rigidBody = selectedBody;
             rigidBody.applyImpulse(impulseVector, offset);
@@ -662,9 +694,10 @@ public class TargetDemo
      * @param shapeName (Z axis, not null)
      * @param height the total height (Y axis, in physics-space units, &gt;0)
      * @param length the total length (X axis, in physics-space units, &gt;0)
+     * @param depth the total depth (Z axis, in physics-space units, &gt;0)
      */
-    private void registerBrickShape(String shapeName, float height,
-            float length, float depth) {
+    private void registerBrickShape(
+            String shapeName, float height, float length, float depth) {
         unregisterShape(shapeName);
 
         float halfHeight = height / 2f;
@@ -684,8 +717,8 @@ public class TargetDemo
      */
     private void registerCanShape(float radius, float height) {
         unregisterShape("can");
-        CollisionShape shape = new CylinderCollisionShape(radius, height,
-                PhysicsSpace.AXIS_Y);
+        CollisionShape shape = new CylinderCollisionShape(
+                radius, height, PhysicsSpace.AXIS_Y);
         registerShape("can", shape);
     }
 
@@ -720,6 +753,8 @@ public class TargetDemo
 
     /**
      * Update the debug materials of the specified collision object.
+     *
+     * @param pco the collision object to modify (not null)
      */
     private void setDebugMaterial(PhysicsCollisionObject pco) {
         CollisionShape shape = pco.getCollisionShape();
@@ -753,7 +788,7 @@ public class TargetDemo
         CollisionShape shape = findShape("ball");
         float mass = 0.2f;
         PhysicsRigidBody body = new PhysicsRigidBody(shape, mass);
-        body.setDebugMeshNormals(DebugMeshNormals.Sphere);
+        body.setDebugMeshNormals(MeshNormals.Sphere);
         body.setPhysicsLocation(location);
 
         setUpTarget(body);
@@ -769,7 +804,7 @@ public class TargetDemo
         CollisionShape shape = findShape("bowlingPin");
         float mass = 0.2f;
         PhysicsRigidBody body = new PhysicsRigidBody(shape, mass);
-        body.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        body.setDebugMeshNormals(MeshNormals.Smooth);
         body.setPhysicsLocation(location);
 
         Quaternion rotation = new Quaternion();
@@ -786,13 +821,13 @@ public class TargetDemo
      * @param location the desired world location (not null, unaffected)
      * @param orientation the desired world orientation (not null, unaffected)
      */
-    private void setUpBrick(String shapeName, Vector3f location,
-            Quaternion orientation) {
+    private void setUpBrick(
+            String shapeName, Vector3f location, Quaternion orientation) {
         CollisionShape shape = findShape(shapeName);
 
         float mass = 3f;
         PhysicsRigidBody body = new PhysicsRigidBody(shape, mass);
-        body.setDebugMeshNormals(DebugMeshNormals.Facet);
+        body.setDebugMeshNormals(MeshNormals.Facet);
         body.setPhysicsLocation(location);
         body.setPhysicsRotation(orientation);
 
@@ -801,9 +836,13 @@ public class TargetDemo
 
     /**
      * Set up a round tower of bricks.
+     *
+     * @param numRings the desired number of rings/layers of bricks (&ge;0)
+     * @param numBricksPerRing the desired number of bricks per ring (&gt;0)
+     * @param thickness the thickness of the tower wall (&gt;0)
      */
-    private void setUpBrickTower(int numRings, int numBricksPerRing,
-            float thickness) {
+    private void setUpBrickTower(
+            int numRings, int numBricksPerRing, float thickness) {
         float innerDiameter = 32f - 2f * thickness;
         float innerCircumference = FastMath.PI * innerDiameter;
         float insideSpacing = innerCircumference / numBricksPerRing;
@@ -837,6 +876,9 @@ public class TargetDemo
 
     /**
      * Erect a brick wall along the X axis.
+     *
+     * @param numRows the desired number of rows of bricks (&ge;0)
+     * @param numBricksPerRow the desired number of bricks per row (&ge;1)
      */
     private void setUpBrickWall(int numRows, int numBricksPerRow) {
         float xSpacing = 32f / numBricksPerRow; // center-to-center
@@ -889,7 +931,7 @@ public class TargetDemo
         CollisionShape shape = findShape("can");
         float mass = 10f;
         PhysicsRigidBody body = new PhysicsRigidBody(shape, mass);
-        body.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        body.setDebugMeshNormals(MeshNormals.Smooth);
         body.setPhysicsLocation(location);
 
         setUpTarget(body);
@@ -897,6 +939,8 @@ public class TargetDemo
 
     /**
      * Erect a pyramid of cans along the X axis.
+     *
+     * @param numRows the desired number of rows in the pyramid (&ge;1)
      */
     private void setUpCanPyramid(int numRows) {
         float xSpacing = 32f / numRows; // center-to-center
@@ -932,7 +976,7 @@ public class TargetDemo
 
         float mass = 10f;
         PhysicsRigidBody body = new PhysicsRigidBody(shape, mass);
-        body.setDebugMeshNormals(DebugMeshNormals.Facet);
+        body.setDebugMeshNormals(MeshNormals.Facet);
         body.setPhysicsLocation(location);
         body.setPhysicsRotation(orientation);
 
@@ -941,6 +985,8 @@ public class TargetDemo
 
     /**
      * Set up a row of dominoes, evenly-spaced along the X axis.
+     *
+     * @param numDominoes the desired number of dominoes (&ge;1)
      */
     private void setUpDominoRow(int numDominoes) {
         float xSpacing = 32f / numDominoes; // center-to-center
@@ -1039,7 +1085,7 @@ public class TargetDemo
         assert body != null;
         assert !body.isInWorld();
 
-        ShapeGenerator random = getGenerator();
+        Random random = getGenerator();
         String materialName = "target" + random.nextInt(numTargetColors);
         Material debugMaterial = findMaterial(materialName);
         body.setApplicationData(debugMaterial);

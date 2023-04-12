@@ -35,7 +35,6 @@ import com.jme3.bounding.BoundingBox;
 import com.jme3.bullet.SoftBodyWorldInfo;
 import com.jme3.bullet.collision.PcoType;
 import com.jme3.bullet.collision.shapes.CollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.objects.infos.Cluster;
 import com.jme3.bullet.objects.infos.SoftBodyConfig;
 import com.jme3.bullet.objects.infos.SoftBodyMaterial;
@@ -50,6 +49,9 @@ import com.jme3.math.Vector3f;
 import com.jme3.scene.mesh.IndexBuffer;
 import com.jme3.util.BufferUtils;
 import com.jme3.util.clone.Cloner;
+import com.simsilica.mathd.Matrix3d;
+import com.simsilica.mathd.Quatd;
+import com.simsilica.mathd.Vec3d;
 import java.io.IOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
@@ -58,6 +60,7 @@ import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jme3utilities.MeshNormals;
 import jme3utilities.Validate;
 import jme3utilities.math.MyBuffer;
 
@@ -113,22 +116,22 @@ public class PhysicsSoftBody extends PhysicsBody {
 
     /**
      * false&rarr; world info should be replaced when this body gets added to a
-     * PhysicsSoftSpace, true&rarr;world info should be preserved
+     * space, true&rarr;world info should be preserved
      */
     private boolean isWorldInfoProtected = false;
     /**
      * configuration properties of this soft body
      */
-    private SoftBodyConfig config = null;
+    private SoftBodyConfig config;
     /**
      * material properties of this soft body, allocated lazily
      */
     private SoftBodyMaterial material = null;
     /**
      * properties (including gravity) that may be replaced when this body gets
-     * added to a PhysicsSoftSpace
+     * added to a space
      */
-    private SoftBodyWorldInfo worldInfo = null;
+    private SoftBodyWorldInfo worldInfo;
     // *************************************************************************
     // constructors
 
@@ -137,7 +140,7 @@ public class PhysicsSoftBody extends PhysicsBody {
      * space.
      */
     public PhysicsSoftBody() {
-        worldInfo = new SoftBodyWorldInfo();
+        this.worldInfo = new SoftBodyWorldInfo();
         long infoId = worldInfo.nativeId();
         long bodyId = createEmpty(infoId);
         super.setNativeId(bodyId);
@@ -145,7 +148,7 @@ public class PhysicsSoftBody extends PhysicsBody {
                 getInternalType(bodyId);
         logger2.log(Level.FINE, "Created {0}.", this);
 
-        config = new SoftBodyConfig(this);
+        this.config = new SoftBodyConfig(this);
         super.initUserPointer();
 
         float defaultMargin = CollisionShape.getDefaultMargin();
@@ -830,7 +833,7 @@ public class PhysicsSoftBody extends PhysicsBody {
      */
     public SoftBodyMaterial getSoftMaterial() {
         if (material == null) {
-            material = new SoftBodyMaterial(this);
+            this.material = new SoftBodyMaterial(this);
         }
 
         return material;
@@ -879,8 +882,8 @@ public class PhysicsSoftBody extends PhysicsBody {
     }
 
     /**
-     * Test whether this body's world info should be replaced by
-     * PhysicsSoftSpace.
+     * Test whether this body's world info should be replaced when added to a
+     * space.
      *
      * @return false if the info should be replaced, true if it should be
      * preserved
@@ -1047,7 +1050,9 @@ public class PhysicsSoftBody extends PhysicsBody {
      */
     public float restingLengthsScale() {
         long objectId = nativeId();
-        return getRestLengthScale(objectId);
+        float result = getRestLengthScale(objectId);
+
+        return result;
     }
 
     /**
@@ -1199,7 +1204,20 @@ public class PhysicsSoftBody extends PhysicsBody {
     }
 
     /**
-     * Set the "default pose" or "lowest energy state" of this body to its
+     * Directly relocate the center of this body's bounding box.
+     *
+     * @param location the desired location (in physics-space coordinates, not
+     * null, unaffected)
+     */
+    public void setPhysicsLocationDp(Vec3d location) {
+        Validate.nonNull(location, "location");
+
+        long objectId = nativeId();
+        setPhysicsLocationDp(objectId, location);
+    }
+
+    /**
+     * Set the "default pose" (lowest energy state) of this body based on its
      * current pose.
      *
      * @param setVolumePose true&rarr;alter the volume pose, false&rarr; don't
@@ -1214,13 +1232,13 @@ public class PhysicsSoftBody extends PhysicsBody {
 
     /**
      * Alter whether this body's world info should be replaced when the body
-     * gets added to a PhysicsSoftSpace.
+     * gets added to a space.
      *
      * @param newState true to preserve the world info, false to allow it to be
      * replaced (default=false)
      */
     public void setProtectWorldInfo(boolean newState) {
-        isWorldInfoProtected = newState;
+        this.isWorldInfoProtected = newState;
     }
 
     /**
@@ -1298,14 +1316,14 @@ public class PhysicsSoftBody extends PhysicsBody {
     /**
      * Replace the world info of this body.
      * <p>
-     * Invoke this method <em>after</em> adding the body to a PhysicsSoftSpace.
-     * Adding a body to a PhysicsSoftSpace may replace its world info.
+     * Invoke this method <em>after</em> adding the body to a space. Adding a
+     * body to a space may replace its world info.
      *
      * @param worldInfo the desired SoftBodyWorldInfo (not null, alias created)
      */
     public void setWorldInfo(SoftBodyWorldInfo worldInfo) {
         if (!isInWorld()) {
-            logger2.warning("The body is not in any PhysicsSoftSpace.");
+            logger2.warning("The body is not in any space.");
         }
 
         long objectId = nativeId();
@@ -1322,7 +1340,9 @@ public class PhysicsSoftBody extends PhysicsBody {
      */
     public float volume() {
         long objectId = nativeId();
-        return getVolume(objectId);
+        float result = getVolume(objectId);
+
+        return result;
     }
 
     /**
@@ -1352,8 +1372,8 @@ public class PhysicsSoftBody extends PhysicsBody {
             unassignNativeObject();
         }
 
-        material = null;
-        config = null;
+        this.material = null;
+        this.config = null;
     }
 
     /**
@@ -1365,7 +1385,7 @@ public class PhysicsSoftBody extends PhysicsBody {
     }
 
     /**
-     * Create a new, empty btSoftBody for this PhysicsSoftBody, using the
+     * Create an empty {@code btSoftBody} for this PhysicsSoftBody, using the
      * pre-existing worldInfo. The pre-existing btSoftBody (if any) will be
      * destroyed.
      */
@@ -1379,7 +1399,7 @@ public class PhysicsSoftBody extends PhysicsBody {
                 getInternalType(objectId);
         logger2.log(Level.FINE, "Created {0}.", this);
 
-        config = new SoftBodyConfig(this);
+        this.config = new SoftBodyConfig(this);
         initUserPointer();
 
         assert !isInWorld();
@@ -1424,15 +1444,31 @@ public class PhysicsSoftBody extends PhysicsBody {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        worldInfo = cloner.clone(worldInfo);
-        newEmptySoftBody(); // needs worldInfo!
+        assert !hasAssignedNativeObject();
+        PhysicsSoftBody old = (PhysicsSoftBody) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
 
         super.cloneFields(cloner, original);
-        PhysicsSoftBody old = (PhysicsSoftBody) original;
+        if (hasAssignedNativeObject()) {
+            return;
+        }
+
+        this.worldInfo = cloner.clone(old.worldInfo);
+        long infoId = worldInfo.nativeId();
+        long objectId = createEmpty(infoId);
+        setNativeId(objectId);
+        assert getInternalType(objectId) == PcoType.soft :
+                getInternalType(objectId);
+        logger2.log(Level.FINE, "Created {0}.", this);
+
+        this.config = new SoftBodyConfig(this);
+        initUserPointer();
+
         cloneIgnoreList(cloner, old);
         copyPcoProperties(old);
         config.copyAll(old.config);
-        material = cloner.clone(old.material);
+        this.material = cloner.clone(old.material);
 
         FloatBuffer floats = old.copyLocations(null);
         appendNodes(floats);
@@ -1458,7 +1494,6 @@ public class PhysicsSoftBody extends PhysicsBody {
 
         assert countClusters() == 0 : countClusters();
         int numClusters = old.countClusters();
-        long objectId = nativeId();
         for (int clusterIndex = 0; clusterIndex < numClusters; ++clusterIndex) {
             IntBuffer nodeIndices = old.listNodesInCluster(clusterIndex, null);
             int numNodesInCluster = nodeIndices.capacity();
@@ -1471,10 +1506,9 @@ public class PhysicsSoftBody extends PhysicsBody {
         }
         finishClusters(objectId);
         assert countClusters() == numClusters : countClusters();
-        /*
-         * Soft joints require clusters; clone them after appending clusters.
-         */
-        cloneJoints(cloner);
+
+        // Soft joints require clusters; clone them after appending clusters.
+        cloneJoints(cloner, old);
     }
 
     /**
@@ -1525,11 +1559,29 @@ public class PhysicsSoftBody extends PhysicsBody {
     }
 
     /**
+     * Locate the center of this body's axis-aligned bounding box.
+     *
+     * @param storeResult storage for the result (modified if not null)
+     * @return a location vector (in physics-space coordinates, either
+     * storeResult or a new instance, not null, finite)
+     */
+    @Override
+    public Vec3d getPhysicsLocationDp(Vec3d storeResult) {
+        Vec3d result = (storeResult == null) ? new Vec3d() : storeResult;
+
+        long objectId = nativeId();
+        getPhysicsLocationDp(objectId, result);
+
+        assert result.isFinite() : result;
+        return result;
+    }
+
+    /**
      * Copy the orientation (rotation) of this body to a Quaternion.
      *
      * @param storeResult storage for the result (modified if not null)
-     * @return a rotation quaternion (in physics-space coordinates, either
-     * storeResult or a new instance, not null)
+     * @return an identity quaternion (either storeResult or a new instance, not
+     * null)
      */
     @Override
     public Quaternion getPhysicsRotation(Quaternion storeResult) {
@@ -1540,12 +1592,30 @@ public class PhysicsSoftBody extends PhysicsBody {
     }
 
     /**
-     * Copy the orientation of this body (the basis of its local coordinate
-     * system) to a 3x3 matrix.
+     * Copy the orientation (rotation) of this body to a Quatd.
      *
      * @param storeResult storage for the result (modified if not null)
-     * @return a rotation matrix (in physics-space coordinates, either
-     * storeResult or a new matrix, not null)
+     * @return an identity quaternion (either storeResult or a new instance, not
+     * null)
+     */
+    @Override
+    public Quatd getPhysicsRotationDp(Quatd storeResult) {
+        Quatd result;
+        if (storeResult == null) {
+            result = new Quatd();
+        } else {
+            result = storeResult.set(0., 0., 0., 1.);
+        }
+        return result;
+    }
+
+    /**
+     * Copy the orientation of this body (the basis of its local coordinate
+     * system) to a Matrix3f.
+     *
+     * @param storeResult storage for the result (modified if not null)
+     * @return an identity matrix (either storeResult or a new instance, not
+     * null)
      */
     @Override
     public Matrix3f getPhysicsRotationMatrix(Matrix3f storeResult) {
@@ -1555,32 +1625,35 @@ public class PhysicsSoftBody extends PhysicsBody {
     }
 
     /**
+     * Copy the orientation of this body (the basis of its local coordinate
+     * system) to a Matrix3d.
+     *
+     * @param storeResult storage for the result (modified if not null)
+     * @return an identity matrix (either storeResult or a new instance, not
+     * null)
+     */
+    @Override
+    public Matrix3d getPhysicsRotationMatrixDp(Matrix3d storeResult) {
+        Matrix3d result;
+        if (storeResult == null) {
+            result = new Matrix3d();
+        } else {
+            result = storeResult.makeIdentity();
+        }
+        return result;
+    }
+
+    /**
      * Copy the scale factors of this object.
      *
      * @param storeResult storage for the result (modified if not null)
-     * @return the scale factor for each local axis (either storeResult or a new
-     * vector, not null, no negative component)
+     * @return the value (1,1,1) (either storeResult or a new vector)
      */
     @Override
     public Vector3f getScale(Vector3f storeResult) {
         Vector3f result = (storeResult == null) ? new Vector3f() : storeResult;
         result.set(1f, 1f, 1f);
         return result;
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public PhysicsSoftBody jmeClone() {
-        try {
-            PhysicsSoftBody clone = (PhysicsSoftBody) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -1594,18 +1667,20 @@ public class PhysicsSoftBody extends PhysicsBody {
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        worldInfo = (SoftBodyWorldInfo) capsule.readSavable(tagWorldInfo, null);
+        this.worldInfo
+                = (SoftBodyWorldInfo) capsule.readSavable(tagWorldInfo, null);
         newEmptySoftBody(); // needs worldInfo!
 
         super.read(importer);
         readPcoProperties(capsule);
-        isWorldInfoProtected
+        this.isWorldInfoProtected
                 = capsule.readBoolean(tagIsWorldInfoProtected, false);
 
-        config = (SoftBodyConfig) capsule.readSavable(tagConfig, null);
+        this.config = (SoftBodyConfig) capsule.readSavable(tagConfig, null);
         assert config != null;
 
-        material = (SoftBodyMaterial) capsule.readSavable(tagMaterial, null);
+        this.material
+                = (SoftBodyMaterial) capsule.readSavable(tagMaterial, null);
 
         float[] fArray = capsule.readFloatArray(tagNodeLocations, new float[0]);
         appendNodes(BufferUtils.createFloatBuffer(fArray));
@@ -1667,7 +1742,7 @@ public class PhysicsSoftBody extends PhysicsBody {
      * @param newSetting an enum value (either None or Smooth)
      */
     @Override
-    public void setDebugMeshNormals(DebugMeshNormals newSetting) {
+    public void setDebugMeshNormals(MeshNormals newSetting) {
         Validate.nonNull(newSetting, "new setting");
 
         switch (newSetting) {
@@ -1684,8 +1759,8 @@ public class PhysicsSoftBody extends PhysicsBody {
     /**
      * Alter this body's gravitational acceleration.
      * <p>
-     * Invoke this method <em>after</em> adding the body to a PhysicsSoftSpace.
-     * Adding a body to a PhysicsSoftSpace may override its gravity.
+     * Invoke this method <em>after</em> adding the body to a space. Adding a
+     * body to a space may override its gravity.
      *
      * @param acceleration the desired acceleration vector (in physics-space
      * coordinates, not null, unaffected)
@@ -1702,8 +1777,8 @@ public class PhysicsSoftBody extends PhysicsBody {
     }
 
     /**
-     * Alter the total mass for this body, distributing it based on the current
-     * mass of each node.
+     * Alter the total mass for this body, distributing it in proportion to the
+     * current mass of each node.
      *
      * @param totalMass the desired total mass (&gt;0, default=numNodes)
      */
@@ -1717,7 +1792,7 @@ public class PhysicsSoftBody extends PhysicsBody {
      * Directly relocate the center of this body's bounding box.
      *
      * @param location the desired location (in physics-space coordinates, not
-     * null, unaffected)
+     * null, finite, unaffected)
      */
     @Override
     public void setPhysicsLocation(Vector3f location) {
@@ -1808,115 +1883,115 @@ public class PhysicsSoftBody extends PhysicsBody {
 
     native private static void addForce(long bodyId, Vector3f forceVector);
 
-    native private static void addForce(long bodyId, Vector3f forceVector,
-            int nodeIndex);
+    native private static void
+            addForce(long bodyId, Vector3f forceVector, int nodeIndex);
 
-    native private static void addVelocity(long bodyId, Vector3f velocityVector);
+    native private static void
+            addVelocity(long bodyId, Vector3f velocityVector);
 
-    native private static void addVelocity(long bodyId, Vector3f velocityVector,
-            int nodeIndex);
+    native private static void
+            addVelocity(long bodyId, Vector3f velocityVector, int nodeIndex);
 
-    native private static void appendCluster(long softBodyId,
-            int numNodesInCluster, IntBuffer intBuffer);
+    native private static void appendCluster(
+            long softBodyId, int numNodesInCluster, IntBuffer intBuffer);
 
-    native private static void appendFaces(long bodyId, int numFaces,
-            ByteBuffer byteBuffer);
+    native private static void
+            appendFaces(long bodyId, int numFaces, ByteBuffer byteBuffer);
 
-    native private static void appendFaces(long bodyId, int numFaces,
-            IntBuffer intBuffer);
+    native private static void
+            appendFaces(long bodyId, int numFaces, IntBuffer intBuffer);
 
-    native private static void appendFaces(long bodyId, int numFaces,
-            ShortBuffer shortBuffer);
+    native private static void
+            appendFaces(long bodyId, int numFaces, ShortBuffer shortBuffer);
 
-    native private static void appendLinks(long bodyId, int numLinks,
-            ByteBuffer byteBuffer);
+    native private static void
+            appendLinks(long bodyId, int numLinks, ByteBuffer byteBuffer);
 
-    native private static void appendLinks(long bodyId, int numLinks,
-            IntBuffer intBuffer);
+    native private static void
+            appendLinks(long bodyId, int numLinks, IntBuffer intBuffer);
 
-    native private static void appendLinks(long bodyId, int numLinks,
-            ShortBuffer shortBuffer);
+    native private static void
+            appendLinks(long bodyId, int numLinks, ShortBuffer shortBuffer);
 
-    native private static void appendNodes(long bodyId, int numNodes,
-            FloatBuffer locationBuffer);
+    native private static void
+            appendNodes(long bodyId, int numNodes, FloatBuffer locationBuffer);
 
-    native private static void appendTetras(long bodyId, int numNodes,
-            ByteBuffer byteBuffer);
+    native private static void
+            appendTetras(long bodyId, int numNodes, ByteBuffer byteBuffer);
 
-    native private static void appendTetras(long bodyId, int numNodes,
-            IntBuffer intBuffer);
+    native private static void
+            appendTetras(long bodyId, int numNodes, IntBuffer intBuffer);
 
-    native private static void appendTetras(long bodyId, int numNodes,
-            ShortBuffer shortBuffer);
+    native private static void
+            appendTetras(long bodyId, int numNodes, ShortBuffer shortBuffer);
 
-    native private static void applyPhysicsRotation(long bodyId,
-            Quaternion quaternion);
+    native private static void
+            applyPhysicsRotation(long bodyId, Quaternion quaternion);
 
     native private static void applyPhysicsScale(long bodyId, Vector3f vector);
 
-    native private static void applyPhysicsTransform(long bodyId,
-            Transform transform);
+    native private static void
+            applyPhysicsTransform(long bodyId, Transform transform);
 
-    native private static void applyPhysicsTranslate(long bodyId,
-            Vector3f offsetVector);
+    native private static void
+            applyPhysicsTranslate(long bodyId, Vector3f offsetVector);
 
-    native private static int countNodesInCluster(long objectId,
-            int clusterIndex);
+    native private static int
+            countNodesInCluster(long objectId, int clusterIndex);
 
     native private static long createEmpty(long infoId);
 
-    native private static boolean cutLink(long bodyId, int nodeIndex0,
-            int nodeIndex1,
-            float cutLocation);
+    native private static boolean cutLink(
+            long bodyId, int nodeIndex0, int nodeIndex1, float cutLocation);
 
     native private static void finishClusters(long softBodyId);
 
-    native private static void generateBendingConstraints(long bodyId,
-            int distance, long materialId);
+    native private static void generateBendingConstraints(
+            long bodyId, int distance, long materialId);
 
-    native private static void generateClusters(long bodyId, int k,
-            int maxIterations);
+    native private static void
+            generateClusters(long bodyId, int k, int maxIterations);
 
-    native private static void getBounds(long objectId, Vector3f storeMinima,
-            Vector3f storeMaxima);
+    native private static void getBounds(
+            long objectId, Vector3f storeMinima, Vector3f storeMaxima);
 
-    native private static float getClusterAngularDamping(long bodyId,
-            int clusterIndex);
+    native private static float
+            getClusterAngularDamping(long bodyId, int clusterIndex);
 
-    native private static void getClusterCenter(long bodyId, int clusterIndex,
-            Vector3f storeVector);
+    native private static void getClusterCenter(
+            long bodyId, int clusterIndex, Vector3f storeVector);
 
     native private static int getClusterCount(long bodyId);
 
-    native private static float getClusterLinearDamping(long bodyId,
-            int clusterIndex);
+    native private static float
+            getClusterLinearDamping(long bodyId, int clusterIndex);
 
-    native private static float getClusterMatching(long bodyId,
-            int clusterIndex);
+    native private static float
+            getClusterMatching(long bodyId, int clusterIndex);
 
-    native private static float getClusterMaxSelfImpulse(long bodyId,
-            int clusterIndex);
+    native private static float
+            getClusterMaxSelfImpulse(long bodyId, int clusterIndex);
 
-    native private static float getClusterNodeDamping(long bodyId,
-            int clusterIndex);
+    native private static float
+            getClusterNodeDamping(long bodyId, int clusterIndex);
 
-    native private static float getClusterSelfImpulse(long bodyId,
-            int clusterIndex);
+    native private static float
+            getClusterSelfImpulse(long bodyId, int clusterIndex);
 
-    native private static void getClustersLinearVelocities(long bodyId,
-            FloatBuffer storeBuffer);
+    native private static void
+            getClustersLinearVelocities(long bodyId, FloatBuffer storeBuffer);
 
-    native private static void getClustersMasses(long bodyId,
-            FloatBuffer storeBuffer);
+    native private static void
+            getClustersMasses(long bodyId, FloatBuffer storeBuffer);
 
-    native private static void getClustersPositions(long bodyId,
-            FloatBuffer storeBuffer);
+    native private static void
+            getClustersPositions(long bodyId, FloatBuffer storeBuffer);
 
-    native private static void getFacesIndexes(long bodyId,
-            IntBuffer storeBuffer);
+    native private static void
+            getFacesIndexes(long bodyId, IntBuffer storeBuffer);
 
-    native private static void getLinksIndexes(long bodyId,
-            IntBuffer storeBuffer);
+    native private static void
+            getLinksIndexes(long bodyId, IntBuffer storeBuffer);
 
     native private static float getMargin(long bodyId);
 
@@ -1934,48 +2009,51 @@ public class PhysicsSoftBody extends PhysicsBody {
 
     native private static int getNbTetras(long bodyId);
 
-    native private static void getNodeLocation(long bodyId, int nodeIndex,
-            Vector3f storeVector);
+    native private static void
+            getNodeLocation(long bodyId, int nodeIndex, Vector3f storeVector);
 
-    native private static void getNodeNormal(long bodyId, int nodeIndex,
-            Vector3f storeVector);
+    native private static void
+            getNodeNormal(long bodyId, int nodeIndex, Vector3f storeVector);
 
-    native private static void getNodesNormals(long bodyId,
-            FloatBuffer storeBuffer);
+    native private static void
+            getNodesNormals(long bodyId, FloatBuffer storeBuffer);
 
-    native private static void getNodesPositions(long bodyId,
-            FloatBuffer storeBuffer);
+    native private static void
+            getNodesPositions(long bodyId, FloatBuffer storeBuffer);
 
-    native private static void getNodesVelocities(long bodyId,
-            FloatBuffer storeBuffer);
+    native private static void
+            getNodesVelocities(long bodyId, FloatBuffer storeBuffer);
 
-    native private static void getNodeVelocity(long bodyId, int nodeIndex,
-            Vector3f storeVector);
+    native private static void
+            getNodeVelocity(long bodyId, int nodeIndex, Vector3f storeVector);
 
-    native private static void getPhysicsLocation(long bodyId,
-            Vector3f storeVector);
+    native private static void
+            getPhysicsLocation(long bodyId, Vector3f storeVector);
+
+    native private static void
+            getPhysicsLocationDp(long bodyId, Vec3d storeVector);
 
     native private static float getRestLengthScale(long bodyId);
 
     native private static long getSoftBodyWorldInfo(long bodyId);
 
-    native private static void getTetrasIndexes(long bodyId,
-            IntBuffer indexBuffer);
+    native private static void
+            getTetrasIndexes(long bodyId, IntBuffer indexBuffer);
 
     native private static float getTotalMass(long bodyId);
 
     native private static float getVolume(long bodyId);
 
-    native private static void getWindVelocity(long bodyId,
-            Vector3f storeVector);
+    native private static void
+            getWindVelocity(long bodyId, Vector3f storeVector);
 
     native private static void initDefault(long bodyId);
 
-    native private static boolean isCollisionAllowed(long softBodyId,
-            long pcoId);
+    native private static boolean
+            isCollisionAllowed(long softBodyId, long pcoId);
 
-    native private static void listNodesInCluster(long bodyId, int clusterIndex,
-            IntBuffer indexBuffer);
+    native private static void listNodesInCluster(
+            long bodyId, int clusterIndex, IntBuffer indexBuffer);
 
     native private static void randomizeConstraints(long bodyId);
 
@@ -1985,23 +2063,23 @@ public class PhysicsSoftBody extends PhysicsBody {
 
     native private static void resetLinkRestLengths(long bodyId);
 
-    native private static void setClusterAngularDamping(long bodyId,
-            int clusterIndex, float damping);
+    native private static void setClusterAngularDamping(
+            long bodyId, int clusterIndex, float damping);
 
-    native private static void setClusterLinearDamping(long bodyId,
-            int clusterIndex, float damping);
+    native private static void setClusterLinearDamping(
+            long bodyId, int clusterIndex, float damping);
 
-    native private static void setClusterMatching(long bodyId, int clusterIndex,
-            float coefficient);
+    native private static void setClusterMatching(
+            long bodyId, int clusterIndex, float coefficient);
 
-    native private static void setClusterMaxSelfImpulse(long bodyId,
-            int clusterIndex, float impulse);
+    native private static void setClusterMaxSelfImpulse(
+            long bodyId, int clusterIndex, float impulse);
 
-    native private static void setClusterNodeDamping(long bodyId,
-            int clusterIndex, float damping);
+    native private static void setClusterNodeDamping(
+            long bodyId, int clusterIndex, float damping);
 
-    native private static void setClusterSelfImpulse(long bodyId,
-            int clusterIndex, float factor);
+    native private static void
+            setClusterSelfImpulse(long bodyId, int clusterIndex, float factor);
 
     native private static void setMargin(long bodyId, float margin);
 
@@ -2009,38 +2087,41 @@ public class PhysicsSoftBody extends PhysicsBody {
 
     native private static void setMasses(long bodyId, FloatBuffer massBuffer);
 
-    native private static void setNodeVelocity(long bodyId, int nodeIndex,
-            Vector3f velocityVector);
+    native private static void setNodeVelocity(
+            long bodyId, int nodeIndex, Vector3f velocityVector);
 
-    native private static void setNormals(long bodyId,
-            FloatBuffer normalBuffer);
+    native private static void
+            setNormals(long bodyId, FloatBuffer normalBuffer);
 
-    native private static void setPhysicsLocation(long bodyId,
-            Vector3f locationVector);
+    native private static void
+            setPhysicsLocation(long bodyId, Vector3f locationVector);
 
-    native private static void setPose(long bodyId, boolean setVolumePose,
-            boolean setFramePose);
+    native private static void
+            setPhysicsLocationDp(long bodyId, Vec3d locationVector);
+
+    native private static void
+            setPose(long bodyId, boolean setVolumePose, boolean setFramePose);
 
     native private static void setRestLengthScale(long bodyId, float scale);
 
-    native private static void setSoftBodyWorldInfo(long bodyId,
-            long worldInfoId);
+    native private static void
+            setSoftBodyWorldInfo(long bodyId, long worldInfoId);
 
     native private static void setTotalDensity(long bodyId, float density);
 
-    native private static void setTotalMass(long bodyId, float mass,
-            boolean fromFaces);
+    native private static void
+            setTotalMass(long bodyId, float mass, boolean fromFaces);
 
-    native private static void setVelocities(long bodyId,
-            FloatBuffer velocityBuffer);
+    native private static void
+            setVelocities(long bodyId, FloatBuffer velocityBuffer);
 
-    native private static void setVelocity(long bodyId,
-            Vector3f velocityVector);
+    native private static void
+            setVelocity(long bodyId, Vector3f velocityVector);
 
     native private static void setVolumeDensity(long bodyId, float density);
 
     native private static void setVolumeMass(long bodyId, float mass);
 
-    native private static void setWindVelocity(long bodyId,
-            Vector3f velocityVector);
+    native private static void
+            setWindVelocity(long bodyId, Vector3f velocityVector);
 }

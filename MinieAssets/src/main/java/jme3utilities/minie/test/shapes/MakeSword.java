@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,6 @@ import com.jme3.asset.AssetManager;
 import com.jme3.asset.DesktopAssetManager;
 import com.jme3.asset.plugins.ClasspathLocator;
 import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
-import com.jme3.bullet.util.CollisionShapeFactory;
 import com.jme3.material.plugins.J3MLoader;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
@@ -46,16 +45,14 @@ import jme3utilities.MySpatial;
 import jme3utilities.MyString;
 import jme3utilities.math.MyMath;
 import jme3utilities.math.MyVector3f;
-import vhacd.VHACD;
-import vhacd.VHACDParameters;
-import vhacd.VHACDProgressListener;
+import vhacd4.Vhacd4Parameters;
 
 /**
  * A console application to generate the collision-shape asset "sword.j3o".
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MakeSword {
+final public class MakeSword {
     // *************************************************************************
     // constants and loggers
 
@@ -70,6 +67,15 @@ public class MakeSword {
     final private static String assetDirPath
             = "../MinieExamples/src/main/resources";
     // *************************************************************************
+    // constructors
+
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private MakeSword() {
+        // do nothing
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
@@ -79,28 +85,17 @@ public class MakeSword {
      */
     public static void main(String[] arguments) {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
-        /*
-         * Mute the chatty loggers found in some imported packages.
-         */
+
+        // Mute the chatty loggers found in some imported packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Set the logging level for this class.
-         */
-        //logger.setLevel(Level.INFO);
-        /*
-         * Instantiate the application.
-         */
-        MakeSword application = new MakeSword();
-        /*
-         * Log the working directory.
-         */
+
+        // Log the working directory.
         String userDir = System.getProperty("user.dir");
         logger.log(Level.INFO, "working directory is {0}",
                 MyString.quote(userDir));
-        /*
-         * Generate the collision shape.
-         */
-        application.makeSword();
+
+        // Generate the collision shape.
+        makeSword();
     }
     // *************************************************************************
     // private methods
@@ -108,7 +103,7 @@ public class MakeSword {
     /**
      * Generate a collision shape for Sinbad's scimitar.
      */
-    private void makeSword() {
+    private static void makeSword() {
         AssetManager assetManager = new DesktopAssetManager();
         assetManager.registerLoader(AWTLoader.class, "jpg");
         assetManager.registerLoader(J3MLoader.class, "j3md");
@@ -123,9 +118,8 @@ public class MakeSword {
                 = assetManager.loadModel("Models/Sinbad/Sword.mesh.xml");
         Node cgmRoot = new Node();
         cgmRoot.attachChild(parent);
-        /*
-         * Translate and uniformly scale the model to fit inside a 2x2x2 cube.
-         */
+
+        // Translate and uniformly scale the model to fit inside a 2x2x2 cube.
         Vector3f[] minMax = MySpatial.findMinMaxCoords(parent);
         Vector3f center = MyVector3f.midpoint(minMax[0], minMax[1], null);
         Vector3f offset = center.negate();
@@ -136,38 +130,14 @@ public class MakeSword {
         Vector3f extents = minMax[1].subtract(minMax[0]);
         float radius = MyMath.max(extents.x, extents.y, extents.z) / 2f;
         parent.setLocalScale(1f / radius);
-        /*
-         * Generate a CollisionShape to approximate the Mesh.
-         */
-        VHACD.addProgressListener(new VHACDProgressListener() {
-            private double lastOP = -1.0;
 
-            @Override
-            public void update(double overallPercent, double stagePercent,
-                    double operationPercent, String stageName,
-                    String operationName) {
-                if (overallPercent != lastOP) {
-                    System.out.printf("MakeSword %.0f%% complete%n",
-                            overallPercent);
-                    lastOP = overallPercent;
-                }
-            }
-        });
-        VHACDParameters parms = new VHACDParameters();
-        parms.setMaxConcavity(0.02);
-        //parms.setMaxConcavity(0.025);
-        long startTime = System.nanoTime();
+        // Generate a CollisionShape to approximate the Mesh.
+        Vhacd4Parameters parameters = new Vhacd4Parameters();
+        parameters.setMaxHulls(8);
         CompoundCollisionShape shape
-                = CollisionShapeFactory.createVhacdShape(cgmRoot, parms, null);
-        long elapsedNsec = System.nanoTime() - startTime;
-        if (shape.countChildren() == 0) {
-            throw new RuntimeException("V-HACD failed!");
-        }
-        System.out.printf("MakeSword number of hulls = %d (%.3f sec)%n",
-                shape.countChildren(), elapsedNsec * 1e-9f);
-        /*
-         * Write the shape to the asset file.
-         */
+                = ShapeUtils.createVhacdShape(cgmRoot, parameters, "MakeSword");
+
+        // Write the shape to the asset file.
         String assetPath = "CollisionShapes/sword.j3o";
         String writeFilePath = String.format("%s/%s", assetDirPath, assetPath);
         Heart.writeJ3O(writeFilePath, shape);

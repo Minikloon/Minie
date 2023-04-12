@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2021, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,6 @@ import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.objects.PhysicsSoftBody;
 import com.jme3.bullet.objects.infos.Sbcp;
 import com.jme3.bullet.objects.infos.SoftBodyConfig;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.light.AmbientLight;
@@ -54,6 +53,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.MyCamera;
+import jme3utilities.MyString;
 import jme3utilities.minie.DumpFlags;
 import jme3utilities.minie.FilterAll;
 import jme3utilities.minie.PhysicsDumper;
@@ -88,39 +88,43 @@ public class TestSoftBodyControl
     /**
      * physics objects that are not to be visualized
      */
-    final private FilterAll hiddenObjects = new FilterAll(true);
+    final private static FilterAll hiddenObjects = new FilterAll(true);
     /**
      * AppState to manage the PhysicsSpace
      */
-    private SoftPhysicsAppState bulletAppState;
+    private static SoftPhysicsAppState bulletAppState;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestSoftBodyControl application.
+     */
+    public TestSoftBodyControl() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestSoftBodyControl application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new TestSoftBodyControl();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
+        settings.setTitle(title); // Customize the window's title bar.
         settings.setVSync(false);
-        application.setSettings(settings);
 
+        Application application = new TestSoftBodyControl();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -130,7 +134,8 @@ public class TestSoftBodyControl
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        super.acorusInit();
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -153,7 +158,6 @@ public class TestSoftBodyControl
     @Override
     public void configureDumper() {
         PhysicsDumper dumper = getDumper();
-
         dumper.setEnabled(DumpFlags.MatParams, true);
         dumper.setEnabled(DumpFlags.ShadowModes, true);
         dumper.setEnabled(DumpFlags.Transforms, true);
@@ -171,7 +175,7 @@ public class TestSoftBodyControl
     }
 
     /**
-     * Determine the length of debug axis arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -181,7 +185,8 @@ public class TestSoftBodyControl
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -195,18 +200,10 @@ public class TestSoftBodyControl
         dim.bindSignal("orbitLeft", KeyInput.KEY_LEFT);
         dim.bindSignal("orbitRight", KeyInput.KEY_RIGHT);
 
-        dim.bind("test rubberDuck", KeyInput.KEY_F1);
+        dim.bind("test monkeyHead", KeyInput.KEY_F1);
+        dim.bind("test rubberDuck", KeyInput.KEY_F2);
         dim.bind(asToggleHelp, KeyInput.KEY_H);
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - 2f * margin;
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -218,17 +215,23 @@ public class TestSoftBodyControl
      */
     @Override
     public void onAction(String actionString, boolean ongoing, float tpf) {
+        float halfExtent = 4f;
+        float topY = 0f;
         if (ongoing) {
             switch (actionString) {
+                case "test monkeyHead":
+                    cleanupAfterTest();
+                    attachCubePlatform(halfExtent, topY);
+                    addMonkeyHead();
+                    return;
+
                 case "test rubberDuck":
                     cleanupAfterTest();
-
-                    float halfExtent = 4f;
-                    float topY = 0f;
                     attachCubePlatform(halfExtent, topY);
-
                     addRubberDuck();
                     return;
+
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
@@ -250,7 +253,7 @@ public class TestSoftBodyControl
     // private methods
 
     /**
-     * Add lighting to the specified scene.
+     * Add lighting and shadows to the specified scene.
      *
      * @param rootSpatial which scene (not null)
      * @param shadowFlag if true, add a shadow renderer to the default viewport
@@ -272,12 +275,44 @@ public class TestSoftBodyControl
             int mapSize = 2_048; // in pixels
             int numSplits = 3;
             DirectionalLightShadowRenderer dlsr
-                    = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                            numSplits);
+                    = new DirectionalLightShadowRenderer(
+                            assetManager, mapSize, numSplits);
             dlsr.setLight(sun);
             dlsr.setShadowIntensity(0.5f);
             viewPort.addProcessor(dlsr);
         }
+    }
+
+    /**
+     * Add a monkey head to the scene.
+     */
+    private void addMonkeyHead() {
+        Spatial cgModel
+                = assetManager.loadModel("Models/MonkeyHead/MonkeyHead.j3o");
+        cgModel = Heart.deepCopy(cgModel); // clone vertex buffers
+        rootNode.attachChild(cgModel);
+
+        SoftBodyControl sbc = new SoftBodyControl();
+        cgModel.addControl(sbc);
+        PhysicsSoftBody psb = sbc.getBody();
+
+        psb.applyScale(new Vector3f(0.6f, 0.6f, 0.6f));
+        psb.applyTranslation(new Vector3f(0f, 1.4f, 0f));
+
+        float totalMass = 1f;
+        psb.setMassByArea(totalMass);
+
+        SoftBodyConfig config = psb.getSoftConfig();
+        config.set(Sbcp.KineticHardness, 1f);
+        config.set(Sbcp.PoseMatching, 0.03f);
+
+        boolean setVolumePose = false;
+        boolean setFramePose = true;
+        psb.setPose(setVolumePose, setFramePose);
+
+        PhysicsSpace space = getPhysicsSpace();
+        sbc.setPhysicsSpace(space);
+        hiddenObjects.addException(sbc);
     }
 
     /**
@@ -315,19 +350,15 @@ public class TestSoftBodyControl
      * Clean up after a test.
      */
     private void cleanupAfterTest() {
-        /*
-         * Remove any scenery. Debug meshes are under a different root node.
-         */
+        // Remove any scenery. Debug meshes are under a different root node.
         rootNode.detachAllChildren();
-        /*
-         * Remove physics objects, which also removes their debug meshes.
-         */
+
+        // Remove physics objects, which also removes their debug meshes.
         PhysicsSpace physicsSpace = getPhysicsSpace();
         physicsSpace.destroy();
         assert physicsSpace.isEmpty();
-        /*
-         * Clear the hidden-object list.
-         */
+
+        // Clear the hidden-object list.
         hiddenObjects.clearExceptions();
     }
 
@@ -345,8 +376,8 @@ public class TestSoftBodyControl
         flyCam.setMoveSpeed(2f);
         flyCam.setZoomSpeed(2f);
 
-        cam.setLocation(new Vector3f(0f, 2.6f, 4.6f));
-        cam.setRotation(new Quaternion(-0.014f, 0.9642f, -0.26f, -0.05f));
+        cam.setLocation(new Vector3f(-1.7f, 0.5f, 4.4f));
+        cam.setRotation(new Quaternion(-0.0065f, 0.977669f, 0.0283f, 0.20814f));
 
         AppState orbitState
                 = new CameraOrbitAppState(cam, "orbitLeft", "orbitRight");
@@ -357,7 +388,7 @@ public class TestSoftBodyControl
      * Configure physics during startup.
      */
     private void configurePhysics() {
-        CollisionShape.setDefaultMargin(0.005f);
+        CollisionShape.setDefaultMargin(0.005f); // 5-mm margin
 
         bulletAppState = new SoftPhysicsAppState();
         bulletAppState.setDebugEnabled(true);

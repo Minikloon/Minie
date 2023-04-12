@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021 jMonkeyEngine
+ * Copyright (c) 2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,32 +29,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.jme3.bullet.collision.shapes.infos;
-
 /**
- * Enumerate options for including normals in a Bullet debug mesh. TODO use
- * MeshNormals from the Heart library
- *
- * @author Stephen Gold sgold@sonic.net
+ * Automated tests for soft-body physics.
  */
-public enum DebugMeshNormals {
-    // *************************************************************************
-    // values
-
-    /**
-     * face normals (for shaded materials, similar to Blender's "flat" shading)
-     */
-    Facet,
-    /**
-     * no normals (the default, best for unshaded materials)
-     */
-    None,
-    /**
-     * smoothed normals (for shaded materials)
-     */
-    Smooth,
-    /**
-     * sphere normals (for shaded materials)
-     */
-    Sphere
-}
+package com.jme3.bullet.util;

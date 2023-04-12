@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 jMonkeyEngine
+ * Copyright (c) 2019-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,10 +62,17 @@ abstract public class PhysicsBody extends PhysicsCollisionObject {
     // fields
 
     /**
-     * list of joints that connect to this body: The list isn't populated until
-     * the body is added to a PhysicsSpace.
+     * list of joints that connect to this body
      */
     private ArrayList<PhysicsJoint> joints = new ArrayList<>(4);
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate a PhysicsBody.
+     */
+    protected PhysicsBody() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
@@ -86,9 +93,34 @@ abstract public class PhysicsBody extends PhysicsCollisionObject {
      * Clone this body's joints.
      *
      * @param cloner the Cloner that's cloning this body (not null, modified)
+     * @param old the instance from which this body was shallow-cloned (not
+     * null, unaffected)
      */
-    protected void cloneJoints(Cloner cloner) {
-        joints = cloner.clone(joints);
+    protected void cloneJoints(Cloner cloner, PhysicsBody old) {
+        int size = joints.size();
+        this.joints = new ArrayList<>(size);
+        for (PhysicsJoint oldJoint : old.joints) {
+            if (oldJoint.countEnds() == 1) {
+                PhysicsJoint newJoint = cloner.clone(oldJoint);
+                addJoint(newJoint);
+            } else {
+                PhysicsBody otherBodyOld = oldJoint.findOtherBody(old);
+                PhysicsBody otherBodyNew = cloner.clone(otherBodyOld);
+                /*
+                 * We want to join new bodies, not old ones,
+                 * so if the other body hasn't assigned a native object yet,
+                 * wait and let *that* body clone the joint.
+                 */
+                if (otherBodyNew.hasAssignedNativeObject()) {
+                    PhysicsJoint newJoint = cloner.clone(oldJoint);
+                    if (!newJoint.hasAssignedNativeObject()) {
+                        newJoint.cloneFields(cloner, oldJoint);
+                    }
+                    otherBodyNew.addJoint(newJoint);
+                    addJoint(newJoint);
+                }
+            }
+        }
     }
 
     /**
@@ -101,6 +133,13 @@ abstract public class PhysicsBody extends PhysicsCollisionObject {
         int result = joints.size();
         return result;
     }
+
+    /**
+     * Return the global deactivation deadline.
+     *
+     * @return the deadline (in simulated seconds, &gt;0)
+     */
+    native public static float getDeactivationDeadline();
 
     /**
      * Copy this body's gravitational acceleration.
@@ -117,6 +156,13 @@ abstract public class PhysicsBody extends PhysicsCollisionObject {
      * @return the total mass (&ge;0)
      */
     abstract public float getMass();
+
+    /**
+     * Test the global deactivation enabled flag.
+     *
+     * @return true if deactivation is enabled, otherwise false
+     */
+    native public static boolean isDeactivationEnabled();
 
     /**
      * Enumerate the joints connected to this body. (The semantics have changed
@@ -158,7 +204,23 @@ abstract public class PhysicsBody extends PhysicsCollisionObject {
     }
 
     /**
-     * Alter this body's gravitational acceleration. TODO scalar alternative
+     * Alter the global deactivation deadline.
+     *
+     * @param newDeadline the desired deadline (in simulated seconds, &gt;0,
+     * default=2)
+     */
+    native public static void setDeactivationDeadline(float newDeadline);
+
+    /**
+     * Alter the global deactivation enabled flag.
+     *
+     * @param newSetting true to enable deactivation, false to disable it
+     * (default=true)
+     */
+    native public static void setDeactivationEnabled(boolean newSetting);
+
+    /**
+     * Alter this body's gravitational acceleration.
      * <p>
      * Invoke this method <em>after</em> adding the body to a PhysicsSpace.
      * Adding a body to a PhysicsSpace overrides its gravity.
@@ -192,5 +254,20 @@ abstract public class PhysicsBody extends PhysicsCollisionObject {
      */
     protected void writeJoints(OutputCapsule capsule) throws IOException {
         capsule.writeSavableArrayList(joints, tagJoints, null);
+    }
+    // *************************************************************************
+    // PhysicsCollisionObject methods
+
+    /**
+     * Create a shallow clone for the JME cloner.
+     *
+     * @return a new body
+     */
+    @Override
+    public PhysicsBody jmeClone() {
+        PhysicsBody clone = (PhysicsBody) super.jmeClone();
+        clone.unassignNativeObject();
+
+        return clone;
     }
 }

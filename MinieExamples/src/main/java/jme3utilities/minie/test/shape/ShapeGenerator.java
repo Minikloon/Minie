@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -76,6 +76,14 @@ public class ShapeGenerator extends Generator {
     final public static Logger logger
             = Logger.getLogger(ShapeGenerator.class.getName());
     // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate a generator.
+     */
+    public ShapeGenerator() { // explicit to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
@@ -101,35 +109,39 @@ public class ShapeGenerator extends Generator {
     public CapsuleCollisionShape nextCapsule() {
         float radius = nextFloat(0.2f, 1.2f);
         float height = nextFloat(0.5f, 1.5f);
+        int axis = nextInt(3);
         CapsuleCollisionShape result
-                = new CapsuleCollisionShape(radius, height);
+                = new CapsuleCollisionShape(radius, height, axis);
 
         return result;
     }
 
     /**
-     * Generate a Y-axis cone shape.
+     * Generate a cone shape.
      *
      * @return a new shape (not null)
      */
     public ConeCollisionShape nextCone() {
         float baseRadius = nextFloat(0.5f, 1.5f);
         float height = nextFloat(0.5f, 2.5f);
-        ConeCollisionShape result = new ConeCollisionShape(baseRadius, height);
+        int axisIndex = nextInt(3);
+        ConeCollisionShape result
+                = new ConeCollisionShape(baseRadius, height, axisIndex);
 
         return result;
     }
 
     /**
-     * Generate a Z-axis cylinder shape.
+     * Generate a cylinder shape.
      *
      * @return a new shape (not null)
      */
     public CylinderCollisionShape nextCylinder() {
         float baseRadius = nextFloat(0.5f, 1.5f);
-        float halfHeight = nextFloat(0.5f, 2f);
-        Vector3f halfExtents = new Vector3f(baseRadius, baseRadius, halfHeight);
-        CylinderCollisionShape result = new CylinderCollisionShape(halfExtents);
+        float height = nextFloat(1f, 4f);
+        int axisIndex = nextInt(3);
+        CylinderCollisionShape result
+                = new CylinderCollisionShape(baseRadius, height, axisIndex);
 
         return result;
     }
@@ -187,8 +199,8 @@ public class ShapeGenerator extends Generator {
         float ihHeight = nextFloat(0.7f, 2f);
         float ihWidth = 1.6f * ihHeight;
         float halfThickness = ihHeight * nextFloat(0.1f, 0.2f);
-        CompoundCollisionShape result = CompoundTestShapes.makeFrame(ihHeight,
-                ihWidth, halfDepth, halfThickness);
+        CompoundCollisionShape result = CompoundTestShapes
+                .makeFrame(ihHeight, ihWidth, halfDepth, halfThickness);
 
         return result;
     }
@@ -205,14 +217,14 @@ public class ShapeGenerator extends Generator {
         float arc = FastMath.PI;
         int numChildren = 20;
 
-        CompoundCollisionShape result = CompoundTestShapes.makePipe(innerRadius,
-                thickness, length, arc, numChildren);
+        CompoundCollisionShape result = CompoundTestShapes
+                .makePipe(innerRadius, thickness, length, arc, numChildren);
 
         return result;
     }
 
     /**
-     * Generate a centered HullCollisionShape, using the origin plus 4-19
+     * Generate a centered HullCollisionShape, using the origin plus 4-to-19
      * pseudo-random vertices.
      *
      * @return a new shape
@@ -220,17 +232,17 @@ public class ShapeGenerator extends Generator {
     public HullCollisionShape nextHull() {
         int numVertices = nextInt(5, 20);
 
-        FloatBuffer buffer = BufferUtils.createFloatBuffer(
-                MyVector3f.numAxes * numVertices);
+        FloatBuffer buffer = BufferUtils
+                .createFloatBuffer(MyVector3f.numAxes * numVertices);
         buffer.put(0f).put(0f).put(0f);
+        Vector3f tmpLocation = new Vector3f();
         for (int vertexI = 1; vertexI < numVertices; ++vertexI) {
-            Vector3f location = nextUnitVector3f();
-            location.multLocal(1.5f);
-            buffer.put(location.x).put(location.y).put(location.z);
+            nextUnitVector3f(tmpLocation);
+            tmpLocation.multLocal(1.5f);
+            buffer.put(tmpLocation.x).put(tmpLocation.y).put(tmpLocation.z);
         }
-        /*
-         * Use arithmetic mean to center the vertices.
-         */
+
+        // Use arithmetic mean to center the vertices.
         int start = 0;
         int end = buffer.limit();
         Vector3f offset = MyBuffer.mean(buffer, start, end, null);
@@ -252,8 +264,8 @@ public class ShapeGenerator extends Generator {
         float flangeWidth = nextFloat(1f, 2f);
         float beamHeight = nextFloat(1f, 2f);
         float thickness = nextFloat(0.1f, 0.3f);
-        CompoundCollisionShape result = CompoundTestShapes.makeIBeam(length,
-                flangeWidth, beamHeight, thickness);
+        CompoundCollisionShape result = CompoundTestShapes
+                .makeIBeam(length, flangeWidth, beamHeight, thickness);
 
         return result;
     }
@@ -268,8 +280,8 @@ public class ShapeGenerator extends Generator {
         float iWidth = nextFloat(2f, 4f);
         float iDepth = nextFloat(1f, 2f);
         float wallThickness = nextFloat(0.1f, 0.3f);
-        CompoundCollisionShape result = CompoundTestShapes.makeLidlessBox(
-                iHeight, iWidth, iDepth, wallThickness);
+        CompoundCollisionShape result = CompoundTestShapes
+                .makeLidlessBox(iHeight, iWidth, iDepth, wallThickness);
 
         return result;
     }
@@ -288,18 +300,15 @@ public class ShapeGenerator extends Generator {
 
         List<Vector3f> centers = new ArrayList<>(numSpheres);
         List<Float> radii = new ArrayList<>(numSpheres);
-        /*
-         * The first sphere is always centered.
-         */
+
+        // The first sphere is always centered.
         centers.add(Vector3f.ZERO);
         float mainRadius = nextFloat(0.8f, 1.4f);
         radii.add(mainRadius);
 
         for (int sphereIndex = 1; sphereIndex < numSpheres; ++sphereIndex) {
-            /*
-             * Add a smaller sphere, offset from the main one.
-             */
-            Vector3f offset = nextUnitVector3f();
+            // Add a smaller sphere, offset from the main one.
+            Vector3f offset = nextUnitVector3f(null);
             offset.multLocal(mainRadius);
             centers.add(offset);
 
@@ -310,9 +319,7 @@ public class ShapeGenerator extends Generator {
         MultiSphere result = new MultiSphere(centers, radii);
 
         if (numSpheres == 1) {
-            /*
-             * Scale the sphere to make an ellipsoid.
-             */
+            // Scale the sphere to make an ellipsoid.
             float xScale = nextFloat(1f, 2f);
             float yScale = nextFloat(0.6f, 1.6f);
             float zScale = nextFloat(0.4f, 1.4f);
@@ -526,7 +533,8 @@ public class ShapeGenerator extends Generator {
      */
     public CompoundCollisionShape nextSnowman() {
         float baseRadius = nextFloat(0.7f, 1.5f);
-        CompoundCollisionShape result = CompoundTestShapes.makeSnowman(baseRadius);
+        CompoundCollisionShape result
+                = CompoundTestShapes.makeSnowman(baseRadius);
 
         return result;
     }
@@ -554,8 +562,8 @@ public class ShapeGenerator extends Generator {
         int numPoints = nextInt(4, 9);
         float radiusRatio = nextFloat(0.2f, 0.7f);
         int numTriangles = 4 + 2 * nextInt(0, 1);
-        CompoundCollisionShape result = CompoundTestShapes.makeStar(numPoints,
-                outerRadius, centerY, radiusRatio, numTriangles);
+        CompoundCollisionShape result = CompoundTestShapes.makeStar(
+                numPoints, outerRadius, centerY, radiusRatio, numTriangles);
 
         return result;
     }
@@ -607,8 +615,8 @@ public class ShapeGenerator extends Generator {
         float thickness = internalLength * nextFloat(0.1f, 0.2f);
         float arc = FastMath.TWO_PI;
         int numSegments = 3;
-        CompoundCollisionShape result = CompoundTestShapes.makePipe(innerR,
-                thickness, depth, arc, numSegments);
+        CompoundCollisionShape result = CompoundTestShapes
+                .makePipe(innerR, thickness, depth, arc, numSegments);
 
         return result;
     }
@@ -621,8 +629,8 @@ public class ShapeGenerator extends Generator {
     public CompoundCollisionShape nextTrident() {
         float shaftLength = nextFloat(4f, 12f);
         float shaftRadius = nextFloat(0.1f, 0.2f);
-        CompoundCollisionShape result = CompoundTestShapes.makeTrident(
-                shaftLength, shaftRadius);
+        CompoundCollisionShape result
+                = CompoundTestShapes.makeTrident(shaftLength, shaftRadius);
 
         return result;
     }

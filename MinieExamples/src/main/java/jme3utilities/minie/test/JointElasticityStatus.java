@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -37,8 +37,7 @@ import java.util.logging.Logger;
 import jme3utilities.SimpleAppState;
 import jme3utilities.math.MyArray;
 import jme3utilities.math.MyMath;
-import jme3utilities.minie.test.common.PhysicsDemo;
-import jme3utilities.ui.AbstractDemo;
+import jme3utilities.ui.AcorusDemo;
 
 /**
  * AppState to display the status of the JointElasticity application in an
@@ -47,7 +46,7 @@ import jme3utilities.ui.AbstractDemo;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class JointElasticityStatus extends SimpleAppState {
+final class JointElasticityStatus extends SimpleAppState {
     // *************************************************************************
     // constants and loggers
 
@@ -151,7 +150,7 @@ public class JointElasticityStatus extends SimpleAppState {
         int selectedField = selectedLine - firstField;
         int sum = selectedField + amount;
         selectedField = MyMath.modulo(sum, numFields);
-        selectedLine = selectedField + firstField;
+        this.selectedLine = selectedField + firstField;
     }
 
     /**
@@ -198,6 +197,21 @@ public class JointElasticityStatus extends SimpleAppState {
         return numIterations;
     }
 
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    void resize(int newWidth, int newHeight) {
+        if (isInitialized()) {
+            for (int lineIndex = 0; lineIndex < numStatusLines; ++lineIndex) {
+                float y = newHeight - 20f * lineIndex;
+                statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
+            }
+        }
+    }
+
     float timeStep() {
         assert timestep > 0f : timestep;
         return timestep;
@@ -212,9 +226,8 @@ public class JointElasticityStatus extends SimpleAppState {
     @Override
     public void cleanup() {
         super.cleanup();
-        /*
-         * Remove the status lines from the guiNode.
-         */
+
+        // Remove the status lines from the guiNode.
         for (int i = 0; i < numStatusLines; ++i) {
             statusLines[i].removeFromParent();
         }
@@ -230,12 +243,11 @@ public class JointElasticityStatus extends SimpleAppState {
     public void initialize(AppStateManager sm, Application app) {
         super.initialize(sm, app);
 
-        appInstance = (JointElasticity) app;
+        this.appInstance = (JointElasticity) app;
         BitmapFont guiFont
                 = assetManager.loadFont("Interface/Fonts/Default.fnt");
-        /*
-         * Add the status lines to the guiNode.
-         */
+
+        // Add status lines to the guiNode.
         for (int lineIndex = 0; lineIndex < numStatusLines; ++lineIndex) {
             statusLines[lineIndex] = new BitmapText(guiFont);
             float y = cam.getHeight() - 20f * lineIndex;
@@ -257,8 +269,6 @@ public class JointElasticityStatus extends SimpleAppState {
     @Override
     public void update(float tpf) {
         super.update(tpf);
-
-        PhysicsSpace space = appInstance.getPhysicsSpace();
 
         int index = 1 + Arrays.binarySearch(erpValues, jointErp);
         String message = String.format("Joint ERP (#%d of %d):   %.2f",
@@ -289,8 +299,8 @@ public class JointElasticityStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceIterations(int amount) {
-        numIterations = AbstractDemo.advanceInt(iterationsValues,
-                numIterations, amount);
+        numIterations = AcorusDemo.advanceInt(
+                iterationsValues, numIterations, amount);
         PhysicsSpace physicsSpace = appInstance.getPhysicsSpace();
         physicsSpace.getSolverInfo().setNumIterations(numIterations);
     }
@@ -301,7 +311,7 @@ public class JointElasticityStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceJointErp(int amount) {
-        jointErp = PhysicsDemo.advanceFloat(erpValues, jointErp, amount);
+        jointErp = AcorusDemo.advanceFloat(erpValues, jointErp, amount);
         PhysicsSpace physicsSpace = appInstance.getPhysicsSpace();
         physicsSpace.getSolverInfo().setJointErp(jointErp);
     }
@@ -312,8 +322,9 @@ public class JointElasticityStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceRatio(int amount) {
-        massRatio = PhysicsDemo.advanceFloat(ratioValues, massRatio, amount);
-        appInstance.setMassRatio(massRatio);
+        this.massRatio = AcorusDemo
+                .advanceFloat(ratioValues, massRatio, amount);
+        JointElasticity.setMassRatio(massRatio);
     }
 
     /**
@@ -322,13 +333,17 @@ public class JointElasticityStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceTimestep(int amount) {
-        timestep = PhysicsDemo.advanceFloat(timestepValues, timestep, amount);
+        this.timestep = AcorusDemo
+                .advanceFloat(timestepValues, timestep, amount);
         PhysicsSpace physicsSpace = appInstance.getPhysicsSpace();
         physicsSpace.setAccuracy(timestep);
     }
 
     /**
      * Update the indexed status line.
+     *
+     * @param lineIndex which status line (&ge;0)
+     * @param text the text to display, not including the arrow, if any
      */
     private void updateStatusLine(int lineIndex, String text) {
         BitmapText spatial = statusLines[lineIndex];

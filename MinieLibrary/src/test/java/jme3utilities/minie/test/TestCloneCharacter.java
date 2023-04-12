@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,8 @@ import jme3utilities.Heart;
 import org.junit.Test;
 
 /**
- * Test cloning/saving/loading a PhysicsCharacter.
+ * Test cloning/saving/loading a PhysicsCharacter. TODO replace asserts with
+ * JUnit Assert
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -49,7 +50,7 @@ public class TestCloneCharacter {
     /**
      * AssetManager required by the BinaryImporter
      */
-    final private AssetManager assetManager = new DesktopAssetManager();
+    final private static AssetManager assetManager = new DesktopAssetManager();
     // *************************************************************************
     // new methods exposed
 
@@ -70,7 +71,8 @@ public class TestCloneCharacter {
     // *************************************************************************
     // private methods
 
-    private void cloneTest(PhysicsCharacter ch, PhysicsCharacter chClone) {
+    private static void cloneTest(
+            PhysicsCharacter ch, PhysicsCharacter chClone) {
         assert chClone.nativeId() != ch.nativeId();
         assert chClone.getControllerId() != ch.getControllerId();
 
@@ -92,7 +94,7 @@ public class TestCloneCharacter {
                 = BinaryExporter.saveAndLoad(assetManager, chClone);
         verifyParameters(chCloneCopy, 0.6f);
 
-        PhysicsCharacter xmlCopy = MinieTest.saveAndLoadXml(assetManager, ch);
+        PhysicsCharacter xmlCopy = Utils.saveAndLoadXml(assetManager, ch);
         verifyParameters(xmlCopy, 0.3f);
     }
 
@@ -102,17 +104,15 @@ public class TestCloneCharacter {
      * @param ch the character to modify (not null)
      * @param b the key value
      */
-    private void setParameters(PhysicsCharacter ch, float b) {
+    private static void setParameters(PhysicsCharacter ch, float b) {
         boolean flag = (b > 0.15f && b < 0.45f);
         int index = Math.round(b / 0.3f);
         Vector3f gravity = new Vector3f(b - 0.2f, b + 0.8f, b - 0.3f);
-        /*
-         * "up" direction must oppose gravity vector
-         */
+
+        // "up" direction must oppose gravity vector
         Vector3f up = gravity.normalize().negateLocal();
-        /*
-         * walk offset must be perpendicular to "up" direction
-         */
+
+        // walk offset must be perpendicular to "up" direction
         Vector3f walkOffset
                 = new Vector3f(b + 0.6f, b + 0.2f, b + 0.4f).cross(up);
 
@@ -151,29 +151,27 @@ public class TestCloneCharacter {
      * @param ch the character to verify (not null, unaffected)
      * @param b the key value
      */
-    private void verifyParameters(PhysicsCharacter ch, float b) {
+    private static void verifyParameters(PhysicsCharacter ch, float b) {
         boolean flag = (b > 0.15f && b < 0.45f);
         int index = Math.round(b / 0.3f);
         Vector3f gravity = new Vector3f(b - 0.2f, b + 0.8f, b - 0.3f);
-        /*
-         * "up" direction must oppose gravity vector
-         */
+
+        // "up" direction must oppose gravity vector
         Vector3f up = gravity.normalize().negateLocal();
-        /*
-         * walk offset must be perpendicular to "up" direction
-         */
+
+        // walk offset must be perpendicular to "up" direction
         Vector3f walkOffset
                 = new Vector3f(b + 0.6f, b + 0.2f, b + 0.4f).cross(up);
 
         assert ch.getAngularDamping() == b + 0.01f;
-        MinieTest.assertEquals(b + 0.04f, b + 0.05f, b + 0.06f,
+        Utils.assertEquals(b + 0.04f, b + 0.05f, b + 0.06f,
                 ch.getAngularVelocity(null), 0f);
 
         if (index == 0) {
             assert !ch.hasAnisotropicFriction(AfMode.either);
         } else {
             assert ch.hasAnisotropicFriction(index);
-            MinieTest.assertEquals(b + 0.004f, b + 0.005f, b + 0.006f,
+            Utils.assertEquals(b + 0.004f, b + 0.005f, b + 0.006f,
                     ch.getAnisotropicFriction(null), 0f);
         }
 
@@ -186,19 +184,19 @@ public class TestCloneCharacter {
         assert ch.getDeactivationTime() == b + 0.087f;
         assert ch.getFallSpeed() == b + 0.09f;
         assert ch.getFriction() == b + 0.095f;
-        MinieTest.assertEquals(gravity, ch.getGravity(null), 1e-5f);
+        Utils.assertEquals(gravity, ch.getGravity(null), 1e-5f);
         assert ch.getJumpSpeed() == b + 0.125f;
         assert ch.getLinearDamping() == b + 0.13f;
         assert ch.getMaxPenetrationDepth() == b + 0.281f;
         assert ch.getMaxSlope() == b + 0.282f;
-        MinieTest.assertEquals(b + 0.18f, b + 0.19f, b + 0.20f,
+        Utils.assertEquals(b + 0.18f, b + 0.19f, b + 0.20f,
                 ch.getPhysicsLocation(null), 0f);
         assert ch.getRestitution() == b + 0.25f;
         assert ch.getRollingFriction() == b + 0.26f;
         assert ch.getSpinningFriction() == b + 0.27f;
         assert ch.getStepHeight() == b + 0.29f;
         assert ch.isUsingGhostSweepTest() == !flag;
-        MinieTest.assertEquals(up, ch.getUpDirection(null), 1e-5f);
-        MinieTest.assertEquals(walkOffset, ch.getWalkDirection(null), 1e-5f);
+        Utils.assertEquals(up, ch.getUpDirection(null), 1e-5f);
+        Utils.assertEquals(walkOffset, ch.getWalkDirection(null), 1e-5f);
     }
 }

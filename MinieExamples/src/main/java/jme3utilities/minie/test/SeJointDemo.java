@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,6 @@ import com.jme3.bullet.joints.SliderJoint;
 import com.jme3.bullet.joints.motors.MotorParam;
 import com.jme3.bullet.joints.motors.RotationMotor;
 import com.jme3.font.BitmapText;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.light.AmbientLight;
@@ -70,11 +69,12 @@ import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
+import jme3utilities.MyString;
+import jme3utilities.math.noise.Generator;
 import jme3utilities.mesh.Icosphere;
 import jme3utilities.minie.DumpFlags;
 import jme3utilities.minie.PhysicsDumper;
 import jme3utilities.minie.test.common.PhysicsDemo;
-import jme3utilities.minie.test.shape.ShapeGenerator;
 import jme3utilities.ui.CameraOrbitAppState;
 import jme3utilities.ui.InputMode;
 import jme3utilities.ui.Signals;
@@ -123,79 +123,82 @@ public class SeJointDemo extends PhysicsDemo {
     /**
      * status displayed in the upper-left corner of the GUI node
      */
-    private BitmapText statusText;
+    private static BitmapText statusText;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
-    private CollisionShape seedShape;
+    private static BulletAppState bulletAppState;
+    private static CollisionShape seedShape;
     /**
      * material for each type of seed
      */
-    final private Material[] materials = new Material[maxGroups];
+    final private static Material[] materials = new Material[maxGroups];
 
-    final private Matrix3f rotInSeed = new Matrix3f();
-    final private Matrix3f rotInWorld = new Matrix3f();
+    final private static Matrix3f rotInSeed = new Matrix3f();
+    final private static Matrix3f rotInWorld = new Matrix3f();
     /**
      * mesh for visualizing seeds
      */
-    private Mesh seedMesh;
+    private static Mesh seedMesh;
     /**
      * scene-graph node for visualizing seeds
      */
-    final private Node meshesNode = new Node("meshes node");
+    final private static Node meshesNode = new Node("meshes node");
     /**
      * name of the test that's currently running
      */
-    private String testName = "p2p";
+    private static String testName = "p2p";
     /**
      * joint axis in each seed's local coordinates (unit vector)
      */
-    final private Vector3f axisInSeed = new Vector3f();
+    final private static Vector3f axisInSeed = new Vector3f();
     /**
      * gravity vector (in physics-space coordinates)
      */
-    final private Vector3f gravity = new Vector3f();
+    final private static Vector3f gravity = new Vector3f();
     /**
      * offset of pivot relative to each seed (in scaled shape coordinates)
      */
-    final private Vector3f pivotInSeed = new Vector3f();
+    final private static Vector3f pivotInSeed = new Vector3f();
     /**
      * pivot location for each group (in physics-space coordinates)
      */
-    final private Vector3f[] pivotLocations = new Vector3f[maxGroups];
+    final private static Vector3f[] pivotLocations = new Vector3f[maxGroups];
     /**
      * scale factors that determine the seed's shape
      */
-    final private Vector3f seedScale = new Vector3f();
+    final private static Vector3f seedScale = new Vector3f();
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the SeJointDemo application.
+     */
+    public SeJointDemo() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the SeJointDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new SeJointDemo();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new SeJointDemo();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -205,7 +208,13 @@ public class SeJointDemo extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        // Add the status text to the GUI.
+        statusText = new BitmapText(guiFont);
+        guiNode.attachChild(statusText);
+
+        super.acorusInit();
+
         configureCamera();
         configureDumper();
         configurePhysics();
@@ -223,14 +232,8 @@ public class SeJointDemo extends PhysicsDemo {
         seedMesh = new Icosphere(numRefineSteps, seedRadius);
         seedShape = new MultiSphere(seedRadius);
 
-        meshesNode.setCullHint(Spatial.CullHint.Never);// meshes initially visible
+        meshesNode.setCullHint(Spatial.CullHint.Never); // with meshes visible
         rootNode.attachChild(meshesNode);
-        /*
-         * Add the status text to the GUI.
-         */
-        statusText = new BitmapText(guiFont);
-        statusText.setLocalTranslation(0f, cam.getHeight(), 0f);
-        guiNode.attachChild(statusText);
     }
 
     /**
@@ -256,7 +259,7 @@ public class SeJointDemo extends PhysicsDemo {
     }
 
     /**
-     * Determine the length of physics-debug arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -266,7 +269,8 @@ public class SeJointDemo extends PhysicsDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -298,19 +302,10 @@ public class SeJointDemo extends PhysicsDemo {
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind("toggle view", KeyInput.KEY_SLASH);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + 20f);
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
-     * Process an action that wasn't handled by the active input mode.
+     * Process an action that wasn't handled by the active InputMode.
      *
      * @param actionString textual description of the action (not null)
      * @param ongoing true if the action is ongoing, otherwise false
@@ -357,9 +352,23 @@ public class SeJointDemo extends PhysicsDemo {
                     toggleMeshes();
                     togglePhysicsDebug();
                     return;
+
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        statusText.setLocalTranslation(0f, newHeight, 0f);
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -382,7 +391,7 @@ public class SeJointDemo extends PhysicsDemo {
     // private methods
 
     /**
-     * Add lighting to the scene.
+     * Add lighting to the main scene.
      */
     private void addLighting() {
         ColorRGBA ambientColor = new ColorRGBA(2f, 2f, 2f, 1f);
@@ -439,16 +448,14 @@ public class SeJointDemo extends PhysicsDemo {
                 throw new IllegalStateException("testName = " + testName);
         }
         seedShape.setScale(seedScale);
-        /*
-         * Randomize which group the new seed is in.
-         */
-        ShapeGenerator random = getGenerator();
+
+        // Randomize which group the new seed is in.
+        Generator random = getGenerator();
         int groupIndex = random.nextInt(0, numGroups - 1);
         Material material = materials[groupIndex];
         Vector3f pivotInWorld = pivotLocations[groupIndex];
-        /*
-         * Randomize the new seed's initial location and velocity.
-         */
+
+        // Randomize the new seed's initial location and velocity.
         Vector3f velocity = random.nextVector3f();
         Vector3f location = random.nextVector3f();
         location.multLocal(20f, 40f, 20f);
@@ -491,8 +498,8 @@ public class SeJointDemo extends PhysicsDemo {
                 angle = (groupIndex - 1) * FastMath.HALF_PI;
                 rotInWorld.fromAngleAxis(angle, Vector3f.UNIT_Z);
                 referenceFrame = JointEnd.B;
-                SixDofSpringJoint springJoint = new SixDofSpringJoint(rbc,
-                        pivotInSeed, pivotInWorld, rotInSeed, rotInWorld,
+                SixDofSpringJoint springJoint = new SixDofSpringJoint(
+                        rbc, pivotInSeed, pivotInWorld, rotInSeed, rotInWorld,
                         referenceFrame);
                 springJoint.setAngularLowerLimit(new Vector3f(0f, -1f, -1f));
                 springJoint.setAngularUpperLimit(new Vector3f(0f, 1f, 1f));
@@ -524,9 +531,8 @@ public class SeJointDemo extends PhysicsDemo {
                 rotInSeed.loadIdentity();
                 angle = (groupIndex - 1) * FastMath.HALF_PI;
                 rotInWorld.fromAngleAxis(angle, Vector3f.UNIT_Z);
-                New6Dof nJoint = new New6Dof(rbc,
-                        pivotInSeed, pivotInWorld, rotInSeed, rotInWorld,
-                        RotationOrder.XYZ);
+                New6Dof nJoint = new New6Dof(rbc, pivotInSeed, pivotInWorld,
+                        rotInSeed, rotInWorld, RotationOrder.XYZ);
                 RotationMotor x = nJoint.getRotationMotor(PhysicsSpace.AXIS_X);
                 x.set(MotorParam.LowerLimit, 0f);
                 x.set(MotorParam.UpperLimit, 0f);
@@ -549,8 +555,8 @@ public class SeJointDemo extends PhysicsDemo {
                 gravity.set(0f, 0f, 0f); // TODO
                 pivotInSeed.set(40f, 0f, 0f);
                 referenceFrame = JointEnd.B;
-                joint = new SliderJoint(rbc, pivotInSeed, pivotInWorld,
-                        referenceFrame);
+                joint = new SliderJoint(
+                        rbc, pivotInSeed, pivotInWorld, referenceFrame);
                 break;
 
             default:
@@ -621,9 +627,8 @@ public class SeJointDemo extends PhysicsDemo {
             materials[i] = MyAsset.createShinyMaterial(assetManager, color);
             materials[i].setFloat("Shininess", 15f);
         }
-        /*
-         * The 4 pivot locations are arranged in a square in the X-Y plane.
-         */
+
+        // The 4 pivot locations are arranged in a square in the X-Y plane.
         pivotLocations[0] = new Vector3f(0f, 60f, 0f);
         pivotLocations[1] = new Vector3f(-60f, 0f, 0f);
         pivotLocations[2] = new Vector3f(0f, -60f, 0f);
@@ -644,7 +649,7 @@ public class SeJointDemo extends PhysicsDemo {
     /**
      * Toggle seed rendering on/off.
      */
-    private void toggleMeshes() {
+    private static void toggleMeshes() {
         Spatial.CullHint hint = meshesNode.getLocalCullHint();
         if (hint == Spatial.CullHint.Inherit
                 || hint == Spatial.CullHint.Never) {

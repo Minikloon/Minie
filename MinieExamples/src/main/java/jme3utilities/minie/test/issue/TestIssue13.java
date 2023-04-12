@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021-2022, Stephen Gold
+ Copyright (c) 2021-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -43,6 +43,8 @@ import com.jme3.scene.Geometry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Random;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import jme3utilities.MyAsset;
 import jme3utilities.debug.AxesVisualizer;
 import jme3utilities.mesh.PointMesh;
@@ -52,34 +54,57 @@ import jme3utilities.mesh.PointMesh;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class TestIssue13 extends SimpleApplication {
+final public class TestIssue13 extends SimpleApplication {
+    // *************************************************************************
+    // constants and loggers
 
-    final private Random random = new Random();
+    /**
+     * message logger for this class
+     */
+    final public static Logger logger
+            = Logger.getLogger(TestIssue13.class.getName());
+    // *************************************************************************
+    // fields
+
+    final static private Random random = new Random();
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue13 application.
+     */
+    public TestIssue13() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestIssue13 application.
      *
-     * @param ignored unused
+     * @param arguments unused
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         TestIssue13 application = new TestIssue13();
         application.start();
     }
     // *************************************************************************
     // SimpleApplication methods
 
+    /**
+     * Initialize this application.
+     */
     @Override
     public void simpleInitApp() {
+        PhysicsRigidBody.logger2.setLevel(Level.WARNING);
+
         cam.setLocation(new Vector3f(39f, 64f, 172f));
         cam.setRotation(new Quaternion(-0.013f, 0.98608f, -0.1254f, -0.1084f));
         flyCam.setMoveSpeed(100f);
 
-        Material hiMat = MyAsset.createWireframeMaterial(assetManager,
-                ColorRGBA.Red, 3f);
-        Material loMat = MyAsset.createWireframeMaterial(assetManager,
-                ColorRGBA.Green, 3f);
+        Material hiMat = MyAsset
+                .createWireframeMaterial(assetManager, ColorRGBA.Red, 3f);
+        Material loMat = MyAsset
+                .createWireframeMaterial(assetManager, ColorRGBA.Green, 3f);
 
         // Add axes
         float axisLength = 30f;
@@ -107,7 +132,7 @@ public class TestIssue13 extends SimpleApplication {
     // *************************************************************************
     // private methods
 
-    private float test(float startX, float startZ) {
+    private static float test(float startX, float startZ) {
         PhysicsSpace physicsSpace
                 = new PhysicsSpace(PhysicsSpace.BroadphaseType.DBVT);
 

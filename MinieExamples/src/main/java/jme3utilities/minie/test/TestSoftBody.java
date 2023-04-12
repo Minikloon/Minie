@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,6 @@ import com.jme3.bullet.animation.PhysicsLink;
 import com.jme3.bullet.animation.RagUtils;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.CylinderCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.debug.DebugMeshInitListener;
 import com.jme3.bullet.joints.Anchor;
@@ -82,9 +81,11 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
+import jme3utilities.MeshNormals;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
 import jme3utilities.MySpatial;
+import jme3utilities.MyString;
 import jme3utilities.math.MyArray;
 import jme3utilities.math.MyVector3f;
 import jme3utilities.mesh.ClothGrid;
@@ -98,7 +99,7 @@ import jme3utilities.ui.CameraOrbitAppState;
 import jme3utilities.ui.InputMode;
 
 /**
- * Demo/testbed for soft-body physics.
+ * Test/demonstrate soft-body physics.
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -168,8 +169,8 @@ public class TestSoftBody
      * indices of the waistline vertices in the Puppet model, arranged clockwise
      * as seen from above, starting at her right hip
      */
-    final private static int[] waistlineVertices = {2396, 2394, 569,
-        545, 553, 554, 562, 2401};
+    final private static int[] waistlineVertices = {
+        2396, 2394, 569, 545, 553, 554, 562, 2401};
     /**
      * message logger for this class
      */
@@ -187,55 +188,59 @@ public class TestSoftBody
      * lines of text displayed in the upper-left corner of the GUI node ([0] is
      * the top line)
      */
-    final private BitmapText[] statusLines = new BitmapText[numStatusLines];
+    final private static BitmapText[] statusLines
+            = new BitmapText[numStatusLines];
     /**
      * invisible physics objects
      */
-    final private FilterAll hiddenObjects = new FilterAll(true);
+    final private static FilterAll hiddenObjects = new FilterAll(true);
     /**
      * space for physics simulation
      */
-    private PhysicsSoftSpace physicsSpace;
+    private static PhysicsSoftSpace physicsSpace;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private SoftPhysicsAppState bulletAppState;
+    private static SoftPhysicsAppState bulletAppState;
     /**
      * name of the test being run
      */
-    private String testName = "puppetInSkirt";
+    private static String testName = "puppetInSkirt";
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestSoftBody application.
+     */
+    public TestSoftBody() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestSoftBody application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Enable direct-memory tracking.
-         */
+
+        // Enable direct-memory tracking.
         BufferUtils.setTrackDirectMemoryEnabled(true);
 
-        Application application = new TestSoftBody();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
+        settings.setTitle(title); // Customize the window's title bar.
         settings.setVSync(false);
-        application.setSettings(settings);
 
+        Application application = new TestSoftBody();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -245,7 +250,10 @@ public class TestSoftBody
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        addStatusLines();
+        super.acorusInit();
+
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -254,7 +262,6 @@ public class TestSoftBody
         ColorRGBA skyColor = new ColorRGBA(0.1f, 0.2f, 0.4f, 1f);
         viewPort.setBackgroundColor(skyColor);
 
-        addStatusLines();
         addLighting(rootNode, false);
 
         float halfExtent = 4f;
@@ -279,7 +286,27 @@ public class TestSoftBody
     }
 
     /**
-     * Configure materials during startup.
+     * Calculate screen bounds for a detailed help node.
+     *
+     * @param viewPortWidth (in pixels, &gt;0)
+     * @param viewPortHeight (in pixels, &gt;0)
+     * @return a new instance
+     */
+    @Override
+    public Rectangle detailedHelpBounds(int viewPortWidth, int viewPortHeight) {
+        // Position help nodes just below the status lines.
+        float margin = 10f; // in pixels
+        float width = viewPortWidth - 2f * margin;
+        float height = viewPortHeight - (2f * margin + numStatusLines * 20f);
+        float leftX = margin;
+        float topY = margin + height;
+        Rectangle result = new Rectangle(leftX, topY, width, height);
+
+        return result;
+    }
+
+    /**
+     * Initialize the library of named materials during startup.
      */
     @Override
     public void generateMaterials() {
@@ -289,14 +316,16 @@ public class TestSoftBody
                 = MyAsset.loadTexture(assetManager, "Textures/plaid.png", true);
         plaid.setAnisotropicFilter(8);
         plaid.setWrap(Texture.WrapMode.Repeat);
-        Material plaidMaterial = MyAsset.createShadedMaterial(assetManager, plaid);
+        Material plaidMaterial
+                = MyAsset.createShadedMaterial(assetManager, plaid);
         RenderState renderState = plaidMaterial.getAdditionalRenderState();
         renderState.setFaceCullMode(RenderState.FaceCullMode.Off);
         registerMaterial("plaid", plaidMaterial);
 
-        Texture texture = MyAsset.loadTexture(assetManager,
-                "Interface/Logo/Monkey.png", true);
-        Material logoMaterial = MyAsset.createShadedMaterial(assetManager, texture);
+        Texture texture = MyAsset.loadTexture(
+                assetManager, "Interface/Logo/Monkey.png", true);
+        Material logoMaterial
+                = MyAsset.createShadedMaterial(assetManager, texture);
         renderState = logoMaterial.getAdditionalRenderState();
         renderState.setFaceCullMode(RenderState.FaceCullMode.Off);
         registerMaterial("logo", logoMaterial);
@@ -310,7 +339,8 @@ public class TestSoftBody
 
         ColorRGBA red = new ColorRGBA(0.7f, 0.01f, 0.01f, 1f);
         Material redMaterial = MyAsset.createShadedMaterial(assetManager, red);
-        redMaterial.setColor("Specular", new ColorRGBA(0.05f, 0.05f, 0.05f, 1f));
+        redMaterial.setColor(
+                "Specular", new ColorRGBA(0.05f, 0.05f, 0.05f, 1f));
         redMaterial.setFloat("Shininess", 4f);
         renderState = redMaterial.getAdditionalRenderState();
         renderState.setFaceCullMode(RenderState.FaceCullMode.Off);
@@ -329,7 +359,7 @@ public class TestSoftBody
     }
 
     /**
-     * Determine the length of debug axis arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -339,7 +369,8 @@ public class TestSoftBody
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -366,8 +397,6 @@ public class TestSoftBody
         dim.bind(asToggleHelp, KeyInput.KEY_H);
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
-
-        addHelp();
     }
 
     /**
@@ -440,9 +469,27 @@ public class TestSoftBody
                     float startY = 2f;
                     addTablecloth(startY);
                     return;
+
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        for (int lineIndex = 0; lineIndex < statusLines.length; ++lineIndex) {
+            float y = newHeight - 20f * lineIndex;
+            statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
+        }
+
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -478,11 +525,11 @@ public class TestSoftBody
      * @param topY the Y coordinate of the top surface (in physics-space
      * coordinates)
      */
-    private void addCylinder(float topY) {
+    private static void addCylinder(float topY) {
         float radius = 1f;
         float height = 0.4f;
-        CollisionShape shape = new CylinderCollisionShape(radius, height,
-                PhysicsSpace.AXIS_Y);
+        CollisionShape shape = new CylinderCollisionShape(
+                radius, height, PhysicsSpace.AXIS_Y);
         PhysicsRigidBody cylinderBody
                 = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
@@ -491,20 +538,6 @@ public class TestSoftBody
 
         physicsSpace.addCollisionObject(cylinderBody);
         hiddenObjects.addException(cylinderBody);
-    }
-
-    /**
-     * Attach a Node to display hotkey help/hints.
-     */
-    private void addHelp() {
-        float margin = 10f; // pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + numStatusLines * 20f);
-        float leftX = margin;
-        float topY = height + margin;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -530,8 +563,8 @@ public class TestSoftBody
             int mapSize = 2_048; // in pixels
             int numSplits = 3;
             DirectionalLightShadowRenderer dlsr
-                    = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                            numSplits);
+                    = new DirectionalLightShadowRenderer(
+                            assetManager, mapSize, numSplits);
             dlsr.setLight(sun);
             dlsr.setShadowIntensity(0.5f);
             viewPort.addProcessor(dlsr);
@@ -544,15 +577,15 @@ public class TestSoftBody
     private void addPoleAndFlag() {
         float radius = 0.06f;
         float height = 4f;
-        CollisionShape shape = new CylinderCollisionShape(radius, height,
-                PhysicsSpace.AXIS_Y);
+        CollisionShape shape = new CylinderCollisionShape(
+                radius, height, PhysicsSpace.AXIS_Y);
         PhysicsRigidBody polePrb
                 = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
         ColorRGBA color = new ColorRGBA(0.7f, 0.7f, 1f, 1f);
         Material material = MyAsset.createShadedMaterial(assetManager, color);
         polePrb.setDebugMaterial(material);
-        polePrb.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        polePrb.setDebugMeshNormals(MeshNormals.Smooth);
 
         physicsSpace.addCollisionObject(polePrb);
 
@@ -573,7 +606,7 @@ public class TestSoftBody
         SoftBodyConfig config = flagPsb.getSoftConfig();
         config.set(Sbcp.Damping, 0.01f);
         config.set(Sbcp.Drag, 0.5f);
-        config.set(Sbcp.Lift, 1);
+        config.set(Sbcp.Lift, 1f);
         config.setAerodynamics(Aero.F_TwoSidedLiftDrag);
         config.setPositionIterations(3);
 
@@ -583,7 +616,7 @@ public class TestSoftBody
         Material logoMaterial = findMaterial("logo");
         flagPsb.setDebugMaterial(logoMaterial);
         flagPsb.setDebugMeshInitListener(flagDmiListener);
-        flagPsb.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        flagPsb.setDebugMeshNormals(MeshNormals.Smooth);
 
         Quaternion rotation = new Quaternion();
         rotation.fromAngles(FastMath.HALF_PI, 0f, 0f);
@@ -591,44 +624,41 @@ public class TestSoftBody
         flagPsb.setPhysicsLocation(new Vector3f(1f, 1.5f, 0f));
 
         physicsSpace.addCollisionObject(flagPsb);
-        /*
-         * Add 2 anchors that join the flag to the pole.
-         */
+
+        // Add 2 anchors that join the flag to the pole.
         boolean allowCollisions = true;
         int nodeIndex = 0; // upper left corner of flag
         Vector3f initialLocation = flagPsb.nodeLocation(nodeIndex, null);
-        Anchor anchor0 = new Anchor(flagPsb, nodeIndex, polePrb,
-                initialLocation, allowCollisions);
+        Anchor anchor0 = new Anchor(
+                flagPsb, nodeIndex, polePrb, initialLocation, allowCollisions);
         physicsSpace.addJoint(anchor0);
 
         nodeIndex = xLines - 1; // lower left corner of flag
         flagPsb.nodeLocation(nodeIndex, initialLocation);
-        Anchor anchor1 = new Anchor(flagPsb, nodeIndex, polePrb,
-                initialLocation, allowCollisions);
+        Anchor anchor1 = new Anchor(
+                flagPsb, nodeIndex, polePrb, initialLocation, allowCollisions);
         physicsSpace.addJoint(anchor1);
     }
 
     /**
      * Add a Puppet model.
+     *
+     * @return the new instance (not null)
      */
     private DynamicAnimControl addPuppet() {
-        /*
-         * Load the model in "T" pose.
-         */
+        // Load the model in "T" pose.
         Spatial cgModel = assetManager.loadModel("Models/Puppet/Puppet.j3o");
         AnimMigrationUtils.migrate(cgModel);
         rootNode.attachChild(cgModel);
         SkinningControl sc = (SkinningControl) RagUtils.findSControl(cgModel);
         Spatial controlledSpatial = sc.getSpatial();
-        /*
-         * Configure and add her physics control.
-         */
+
+        // Configure and add her physics control.
         DynamicAnimControl dac = new PuppetControl();
         controlledSpatial.addControl(dac);
         dac.setPhysicsSpace(physicsSpace);
-        /*
-         * Don't visualize her rigid bodies.
-         */
+
+        // Don't visualize her rigid bodies.
         PhysicsRigidBody[] rigids = dac.listRigidBodies();
         for (PhysicsRigidBody rigid : rigids) {
             hiddenObjects.addException(rigid);
@@ -643,17 +673,17 @@ public class TestSoftBody
      * @param puppetDac the model's physics control (not null)
      */
     private void addSkirt(DynamicAnimControl puppetDac) {
-        int numSubdiv = 5;
+        int numDivisions = 5;
         int numAnchors = 51;
         float length = 0.57f;
         Vector3f[] anchorLocs = new Vector3f[numAnchors];
         for (int zIndex = 0; zIndex < numAnchors; ++zIndex) {
             anchorLocs[zIndex] = new Vector3f();
         }
-        Mesh mesh = createSkirtMesh(puppetDac, numSubdiv, length, anchorLocs);
-        /*
-         * Create and configure the soft body.
-         */
+        Mesh mesh
+                = createSkirtMesh(puppetDac, numDivisions, length, anchorLocs);
+
+        // Create and configure the soft body.
         PhysicsSoftBody skirtPsb = new PhysicsSoftBody();
         NativeSoftBodyUtil.appendFromTriMesh(mesh, skirtPsb);
         skirtPsb.setMargin(0.1f);
@@ -670,7 +700,7 @@ public class TestSoftBody
 
         Material redMaterial = findMaterial("red");
         skirtPsb.setDebugMaterial(redMaterial);
-        skirtPsb.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        skirtPsb.setDebugMeshNormals(MeshNormals.Smooth);
 
         String vSpec0 = puppetVSpec(0);
         PhysicsLink link = puppetDac.findManagerForVertex(vSpec0, null, null);
@@ -679,21 +709,22 @@ public class TestSoftBody
 
         physicsSpace.addCollisionObject(skirtPsb);
         skirtPsb.setGravity(new Vector3f(0f, -10f, 0f));
-        /*
-         * Add anchors that join Puppet to her skirt.
-         */
+
+        // Add anchors that join Puppet to her skirt.
         PhysicsRigidBody rigid = link.getRigidBody();
         boolean allowCollisions = true;
         for (int anchorIndex = 0; anchorIndex < numAnchors; ++anchorIndex) {
             Vector3f location = anchorLocs[anchorIndex];
-            Anchor anchor = new Anchor(skirtPsb, anchorIndex, rigid, location,
-                    allowCollisions);
+            Anchor anchor = new Anchor(
+                    skirtPsb, anchorIndex, rigid, location, allowCollisions);
             physicsSpace.addJoint(anchor);
         }
     }
 
     /**
      * Add a squishy ball to the scene.
+     *
+     * @param startY the desired initial Y coordinate of the center
      */
     private void addSquishyBall(float startY) {
         int numRefinementIterations = 3;
@@ -713,7 +744,7 @@ public class TestSoftBody
 
         Material pinkMaterial = findMaterial("pink");
         ballPsb.setDebugMaterial(pinkMaterial);
-        ballPsb.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        ballPsb.setDebugMeshNormals(MeshNormals.Smooth);
 
         Vector3f translation = new Vector3f(0f, startY, 0f);
         ballPsb.applyTranslation(translation);
@@ -727,14 +758,14 @@ public class TestSoftBody
     private void addStatusLines() {
         for (int lineIndex = 0; lineIndex < statusLines.length; ++lineIndex) {
             statusLines[lineIndex] = new BitmapText(guiFont);
-            float y = cam.getHeight() - 20f * lineIndex;
-            statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
             guiNode.attachChild(statusLines[lineIndex]);
         }
     }
 
     /**
      * Add a square tablecloth to the scene.
+     *
+     * @param startY the desired initial Y coordinate of the cloth
      */
     private void addTablecloth(float startY) {
         int numLines = 40;
@@ -754,7 +785,7 @@ public class TestSoftBody
         Material plaidMaterial = findMaterial("plaid");
         softBody.setDebugMaterial(plaidMaterial);
         softBody.setDebugMeshInitListener(tableclothDmiListener);
-        softBody.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        softBody.setDebugMeshNormals(MeshNormals.Smooth);
 
         Vector3f translation = new Vector3f(0f, startY, 0f);
         softBody.applyTranslation(translation);
@@ -766,18 +797,14 @@ public class TestSoftBody
      * Clean up after a test.
      */
     private void cleanupAfterTest() {
-        /*
-         * Remove any scenery. Debug meshes are under a different root node.
-         */
+        // Remove any scenery. Debug meshes are under a different root node.
         rootNode.detachAllChildren();
-        /*
-         * Remove physics objects, which also removes their debug meshes.
-         */
+
+        // Remove physics objects, which also removes their debug meshes.
         physicsSpace.destroy();
         assert physicsSpace.isEmpty();
-        /*
-         * Clear the hidden-object list.
-         */
+
+        // Clear the hidden-object list.
         hiddenObjects.clearExceptions();
     }
 
@@ -829,8 +856,8 @@ public class TestSoftBody
      * modified)
      * @return a new Mesh, fitted to the model in her bone's local coordinates
      */
-    private Mesh createSkirtMesh(DynamicAnimControl puppetDac, int numSubdiv,
-            float skirtLength, Vector3f[] local) {
+    private static Mesh createSkirtMesh(DynamicAnimControl puppetDac,
+            int numSubdiv, float skirtLength, Vector3f[] local) {
         int numWaistVerts = waistlineVertices.length;
         int numXLines = local.length;
 
@@ -859,7 +886,7 @@ public class TestSoftBody
          */
         float margin = 0.02f;
         BoundingBox aabb = MyArray.aabb(local, null);
-        Vector3f apex = aabb.getCenter();
+        Vector3f apex = aabb.getCenter(); // alias
         float raiseApex = 0.5f; // 0 = full-circle skirt, 0.5 = not very full
         apex.z -= raiseApex;
         float maxRadius = 0f;
@@ -886,9 +913,8 @@ public class TestSoftBody
                 MyVector3f.lerp(t, local[prevZi], local[zIndex], local[zi]);
             }
         }
-        /*
-         * Generate the mesh topology.
-         */
+
+        // Generate the mesh topology.
         float averageSpacing = circumference / (numXLines - 1);
         int numZLines = Math.round(0.3f * skirtLength / averageSpacing);
         ClothGrid mesh = new ClothGrid(numXLines, numZLines, averageSpacing);
@@ -922,8 +948,8 @@ public class TestSoftBody
      * go dynamic, put it into ragdoll mode.
      */
     private void goLimp() {
-        List<DynamicAnimControl> dacs = MySpatial.listControls(rootNode,
-                DynamicAnimControl.class, null);
+        List<DynamicAnimControl> dacs = MySpatial
+                .listControls(rootNode, DynamicAnimControl.class, null);
         if (dacs.size() == 1) {
             DynamicAnimControl dac = dacs.get(0);
             if (dac.isReady()) {
@@ -937,6 +963,10 @@ public class TestSoftBody
      */
     private void nextPuppetAnimation() {
         SkinningControl sc = (SkinningControl) RagUtils.findSControl(rootNode);
+        if (sc == null) {
+            return;
+        }
+
         Spatial controlledSpatial = sc.getSpatial();
         AnimComposer composer
                 = controlledSpatial.getControl(AnimComposer.class);
@@ -957,7 +987,7 @@ public class TestSoftBody
     /**
      * Cycle through wind velocities.
      */
-    private void nextWindVelocity() {
+    private static void nextWindVelocity() {
         Collection<PhysicsSoftBody> softBodies = physicsSpace.getSoftBodyList();
         for (PhysicsSoftBody softBody : softBodies) {
             Vector3f windVelocity = softBody.windVelocity(null);
@@ -975,6 +1005,7 @@ public class TestSoftBody
      * Generate a specifier for the indexed vertex on Puppet's waistline.
      *
      * @param waistIndex (&ge;0, &lt;numWaistVertices)
+     * @return the specifier string
      */
     private static String puppetVSpec(int waistIndex) {
         int puppetVertex = waistlineVertices[waistIndex];

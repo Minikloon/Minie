@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,7 @@ import java.util.logging.Logger;
 import jme3utilities.SimpleAppState;
 import jme3utilities.math.MyArray;
 import jme3utilities.math.MyMath;
-import jme3utilities.minie.test.common.PhysicsDemo;
+import jme3utilities.ui.AcorusDemo;
 
 /**
  * AppState to display the status of the TargetDemo application in an overlay.
@@ -46,7 +46,7 @@ import jme3utilities.minie.test.common.PhysicsDemo;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class TargetDemoStatus extends SimpleAppState {
+class TargetDemoStatus extends SimpleAppState {
     // *************************************************************************
     // constants and loggers
 
@@ -162,10 +162,6 @@ public class TargetDemoStatus extends SimpleAppState {
      */
     private boolean isWireframe = false;
     /**
-     * reference to the application instance
-     */
-    private TargetDemo appInstance;
-    /**
      * damping fraction for all dynamic bodies (&ge;0, &le;1)
      */
     private float damping = 0.6f;
@@ -207,6 +203,10 @@ public class TargetDemoStatus extends SimpleAppState {
      * name of the selected scenario
      */
     private String scenarioName = "brick wall";
+    /**
+     * reference to the application instance
+     */
+    private TargetDemo appInstance;
     // *************************************************************************
     // constructors
 
@@ -231,7 +231,7 @@ public class TargetDemoStatus extends SimpleAppState {
         int selectedField = selectedLine - firstField;
         int sum = selectedField + amount;
         selectedField = MyMath.modulo(sum, numFields);
-        selectedLine = selectedField + firstField;
+        this.selectedLine = selectedField + firstField;
     }
 
     /**
@@ -373,6 +373,21 @@ public class TargetDemoStatus extends SimpleAppState {
     }
 
     /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    void resize(int newWidth, int newHeight) {
+        if (isInitialized()) {
+            for (int lineIndex = 0; lineIndex < numStatusLines; ++lineIndex) {
+                float y = newHeight - 20f * lineIndex;
+                statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
+            }
+        }
+    }
+
+    /**
      * Determine the selected restitution fraction for all rigid bodies.
      *
      * @return the fraction (&ge;0, &le;1)
@@ -398,7 +413,7 @@ public class TargetDemoStatus extends SimpleAppState {
      * Toggle child coloring disabled/enabled.
      */
     void toggleChildColor() {
-        isChildColoring = !isChildColoring;
+        this.isChildColoring = !isChildColoring;
         appInstance.setDebugMaterialsAll();
     }
 
@@ -406,9 +421,9 @@ public class TargetDemoStatus extends SimpleAppState {
      * Toggle wireframe disabled/enabled.
      */
     void toggleWireframe() {
-        isWireframe = !isWireframe;
+        this.isWireframe = !isWireframe;
         appInstance.setDebugMaterialsAll();
-        appInstance.setDebugShadowMode();
+        TargetDemo.setDebugShadowMode();
     }
     // *************************************************************************
     // ActionAppState methods
@@ -420,9 +435,8 @@ public class TargetDemoStatus extends SimpleAppState {
     @Override
     public void cleanup() {
         super.cleanup();
-        /*
-         * Remove the status lines from the guiNode.
-         */
+
+        // Remove the status lines from the guiNode.
         for (int i = 0; i < numStatusLines; ++i) {
             statusLines[i].removeFromParent();
         }
@@ -438,12 +452,11 @@ public class TargetDemoStatus extends SimpleAppState {
     public void initialize(AppStateManager sm, Application app) {
         super.initialize(sm, app);
 
-        appInstance = (TargetDemo) app;
+        this.appInstance = (TargetDemo) app;
         BitmapFont guiFont
                 = assetManager.loadFont("Interface/Fonts/Default.fnt");
-        /*
-         * Add the status lines to the guiNode.
-         */
+
+        // Add status lines to the guiNode.
         for (int lineIndex = 0; lineIndex < numStatusLines; ++lineIndex) {
             statusLines[lineIndex] = new BitmapText(guiFont);
             float y = cam.getHeight() - 20f * lineIndex;
@@ -477,57 +490,57 @@ public class TargetDemoStatus extends SimpleAppState {
 
         int index = 1 + Arrays.binarySearch(dampingValues, damping);
         int count = dampingValues.length;
-        String message = String.format("Damping #%d of %d:  %.2f", index,
-                count, damping);
+        String message = String.format(
+                "Damping #%d of %d:  %.2f", index, count, damping);
         updateStatusLine(dampingStatusLine, message);
 
         index = 1 + Arrays.binarySearch(frictionValues, friction);
         count = frictionValues.length;
-        message = String.format("Friction #%d of %d:  %.1f", index,
-                count, friction);
+        message = String.format(
+                "Friction #%d of %d:  %.1f", index, count, friction);
         updateStatusLine(frictionStatusLine, message);
 
         index = 1 + Arrays.binarySearch(gravityValues, gravity);
         count = gravityValues.length;
-        message = String.format("Gravity #%d of %d:  %.1f", index,
-                count, gravity);
+        message = String.format(
+                "Gravity #%d of %d:  %.1f", index, count, gravity);
         updateStatusLine(gravityStatusLine, message);
 
         index = 1 + Arrays.binarySearch(scenarioNames, scenarioName);
         count = scenarioNames.length;
-        message = String.format("Scenario #%d of %d:  %s", index, count,
-                scenarioName);
+        message = String.format(
+                "Scenario #%d of %d:  %s", index, count, scenarioName);
         updateStatusLine(scenarioStatusLine, message);
 
         index = 1 + Arrays.binarySearch(platformNames, platformName);
         count = platformNames.length;
-        message = String.format("Platform #%d of %d:  %s", index, count,
-                platformName);
+        message = String.format(
+                "Platform #%d of %d:  %s", index, count, platformName);
         updateStatusLine(platformStatusLine, message);
 
         index = 1 + Arrays.binarySearch(restitutionValues, restitution);
         count = restitutionValues.length;
-        message = String.format("Restitution #%d of %d:  %.2f", index,
-                count, restitution);
+        message = String.format(
+                "Restitution #%d of %d:  %.2f", index, count, restitution);
         updateStatusLine(restitutionStatusLine, message);
 
-        index = 1 + Arrays.binarySearch(missileInitialSpeedValues,
-                missileInitialSpeed);
+        index = 1 + Arrays.binarySearch(
+                missileInitialSpeedValues, missileInitialSpeed);
         count = missileInitialSpeedValues.length;
-        message = String.format("Missile speed #%d of %d:  %.0f", index,
-                count, missileInitialSpeed);
+        message = String.format("Missile speed #%d of %d:  %.0f", index, count,
+                missileInitialSpeed);
         updateStatusLine(missileInitialSpeedStatusLine, message);
 
         index = 1 + Arrays.binarySearch(missileMassValues, missileMass);
         count = missileMassValues.length;
-        message = String.format("Missile mass #%d of %d:  %.2f", index,
-                count, missileMass);
+        message = String.format(
+                "Missile mass #%d of %d:  %.2f", index, count, missileMass);
         updateStatusLine(missileMassStatusLine, message);
 
         index = 1 + Arrays.binarySearch(missileRadiusValues, missileRadius);
         count = missileRadiusValues.length;
-        message = String.format("Missile radius #%d of %d:  %.2f", index,
-                count, missileRadius);
+        message = String.format(
+                "Missile radius #%d of %d:  %.2f", index, count, missileRadius);
         updateStatusLine(missileRadiusStatusLine, message);
     }
     // *************************************************************************
@@ -539,7 +552,7 @@ public class TargetDemoStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceDamping(int amount) {
-        damping = PhysicsDemo.advanceFloat(dampingValues, damping, amount);
+        this.damping = AcorusDemo.advanceFloat(dampingValues, damping, amount);
         appInstance.setDampingAll(damping);
     }
 
@@ -549,7 +562,8 @@ public class TargetDemoStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceFriction(int amount) {
-        friction = PhysicsDemo.advanceFloat(frictionValues, friction, amount);
+        this.friction
+                = AcorusDemo.advanceFloat(frictionValues, friction, amount);
         appInstance.setFrictionAll(friction);
     }
 
@@ -559,7 +573,7 @@ public class TargetDemoStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceGravity(int amount) {
-        gravity = PhysicsDemo.advanceFloat(gravityValues, gravity, amount);
+        this.gravity = AcorusDemo.advanceFloat(gravityValues, gravity, amount);
         appInstance.setGravityAll(gravity);
     }
 
@@ -569,7 +583,7 @@ public class TargetDemoStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceMissileInitialSpeed(int amount) {
-        missileInitialSpeed = PhysicsDemo.advanceFloat(
+        this.missileInitialSpeed = AcorusDemo.advanceFloat(
                 missileInitialSpeedValues, missileInitialSpeed, amount);
     }
 
@@ -579,8 +593,8 @@ public class TargetDemoStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceMissileMass(int amount) {
-        missileMass = PhysicsDemo.advanceFloat(missileMassValues, missileMass,
-                amount);
+        this.missileMass = AcorusDemo
+                .advanceFloat(missileMassValues, missileMass, amount);
     }
 
     /**
@@ -589,8 +603,8 @@ public class TargetDemoStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceMissileRadius(int amount) {
-        missileRadius = PhysicsDemo.advanceFloat(missileRadiusValues,
-                missileRadius, amount);
+        this.missileRadius = AcorusDemo
+                .advanceFloat(missileRadiusValues, missileRadius, amount);
     }
 
     /**
@@ -599,8 +613,8 @@ public class TargetDemoStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advancePlatform(int amount) {
-        platformName = PhysicsDemo.advanceString(platformNames, platformName,
-                amount);
+        this.platformName
+                = AcorusDemo.advanceString(platformNames, platformName, amount);
         appInstance.restartScenario();
     }
 
@@ -610,8 +624,8 @@ public class TargetDemoStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceRestitution(int amount) {
-        restitution = PhysicsDemo.advanceFloat(restitutionValues, restitution,
-                amount);
+        this.restitution = AcorusDemo
+                .advanceFloat(restitutionValues, restitution, amount);
         appInstance.setRestitutionAll(restitution);
     }
 
@@ -621,12 +635,15 @@ public class TargetDemoStatus extends SimpleAppState {
      * @param amount the number of values to advance (may be negative)
      */
     private void advanceScenario(int amount) {
-        scenarioName = PhysicsDemo.advanceString(scenarioNames, scenarioName,
-                amount);
+        this.scenarioName
+                = AcorusDemo.advanceString(scenarioNames, scenarioName, amount);
     }
 
     /**
      * Update the indexed status line.
+     *
+     * @param lineIndex which status line (&ge;0)
+     * @param text the text to display, not including the arrow, if any
      */
     private void updateStatusLine(int lineIndex, String text) {
         BitmapText spatial = statusLines[lineIndex];
@@ -659,7 +676,7 @@ public class TargetDemoStatus extends SimpleAppState {
         int numActiveBodies = appInstance.countActive();
         int numCachedMeshes = DebugShapeFactory.countCachedMeshes();
         boolean isPaused = appInstance.isPaused();
-        message = String.format("numActive=%d  numCached=%d%s",
+        message = String.format("activeBodies=%d  cachedMeshes=%d%s",
                 numActiveBodies, numCachedMeshes, isPaused ? "  PAUSED" : "");
         statusLines[1].setText(message);
     }

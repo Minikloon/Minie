@@ -34,6 +34,8 @@ package com.jme3.bullet.collision.shapes.infos;
 import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
+import com.jme3.bullet.collision.shapes.EmptyShape;
+import com.jme3.bullet.collision.shapes.HullCollisionShape;
 import com.jme3.export.InputCapsule;
 import com.jme3.export.JmeExporter;
 import com.jme3.export.JmeImporter;
@@ -42,16 +44,20 @@ import com.jme3.export.Savable;
 import com.jme3.math.Matrix3f;
 import com.jme3.math.Quaternion;
 import com.jme3.math.Transform;
+import com.jme3.math.Triangle;
 import com.jme3.math.Vector3f;
 import com.jme3.util.clone.Cloner;
 import com.jme3.util.clone.JmeCloneable;
 import java.io.IOException;
 import java.util.logging.Logger;
 import jme3utilities.Validate;
+import jme3utilities.math.MyMath;
 
 /**
- * An element of a CompoundCollisionShape, consisting of a (non-compound) child
+ * An element in a CompoundCollisionShape, consisting of a (non-compound) base
  * shape, offset and rotated with respect to its parent.
+ * <p>
+ * Despite its name, it is not a subtype of CollisionShape!
  *
  * @author normenhansen
  */
@@ -95,7 +101,7 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
     }
 
     /**
-     * Instantiate a child shape for use in a compound shape.
+     * Instantiate a child for use in a compound shape.
      *
      * @param offset the desired translation in the parent's coordinate system
      * (not null, unaffected)
@@ -104,8 +110,8 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
      * @param shape the base shape (not null, not a compound shape, alias
      * created)
      */
-    public ChildCollisionShape(Vector3f offset, Matrix3f rotation,
-            CollisionShape shape) {
+    public ChildCollisionShape(
+            Vector3f offset, Matrix3f rotation, CollisionShape shape) {
         Validate.nonNull(shape, "shape");
         if (shape instanceof CompoundCollisionShape) {
             throw new IllegalArgumentException(
@@ -114,6 +120,26 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
 
         this.offset = offset.clone();
         this.rotation = rotation.clone();
+        this.shape = shape;
+    }
+
+    /**
+     * Instantiate a child without any rotation.
+     *
+     * @param offset the desired translation in the parent's coordinate system
+     * (not null, unaffected)
+     * @param shape the base shape (not null, not a compound shape, alias
+     * created)
+     */
+    public ChildCollisionShape(Vector3f offset, CollisionShape shape) {
+        Validate.nonNull(shape, "shape");
+        if (shape instanceof CompoundCollisionShape) {
+            throw new IllegalArgumentException(
+                    "CompoundCollisionShapes cannot be child shapes!");
+        }
+
+        this.offset = offset.clone();
+        this.rotation = new Matrix3f();
         this.shape = shape;
     }
     // *************************************************************************
@@ -127,11 +153,14 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
      * null)
      */
     public Vector3f copyOffset(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return offset.clone();
+            result = offset.clone();
         } else {
-            return storeResult.set(offset);
+            result = storeResult.set(offset);
         }
+
+        return result;
     }
 
     /**
@@ -154,11 +183,14 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
      * @return a rotation matrix (either storeResult or a new matrix, not null)
      */
     public Matrix3f copyRotationMatrix(Matrix3f storeResult) {
+        Matrix3f result;
         if (storeResult == null) {
-            return rotation.clone();
+            result = rotation.clone();
         } else {
-            return storeResult.set(rotation);
+            result = storeResult.set(rotation);
         }
+
+        return result;
     }
 
     /**
@@ -196,13 +228,52 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
      * unaffected)
      * @param rotation the desired rotation relative to the parent (not null,
      * unaffected)
-     * @see
-     * com.jme3.bullet.collision.shapes.CompoundCollisionShape#setChildTransform(com.jme3.bullet.collision.shapes.CollisionShape,
+     * @see com.jme3.bullet.collision.shapes.CompoundCollisionShape
+     * #setChildTransform(com.jme3.bullet.collision.shapes.CollisionShape,
      * com.jme3.math.Transform)
      */
     public void setTransform(Vector3f offset, Matrix3f rotation) {
         this.offset.set(offset);
         this.rotation.set(rotation);
+    }
+
+    /**
+     * Attempt to divide this child into 2 children. The base shape must be
+     * splittable.
+     *
+     * @param parentTriangle a triangle that defines the splitting plane (in
+     * parent's shape coordinates, not null, unaffected)
+     * @return a pair of children, the first element on the triangle's minus
+     * side and the 2nd element on its plus side; either element may be null,
+     * indicating an empty child
+     */
+    public ChildCollisionShape[] split(Triangle parentTriangle) {
+        Validate.nonNull(parentTriangle, "parent triangle");
+
+        ChildCollisionShape[] result = new ChildCollisionShape[2];
+        if (shape instanceof EmptyShape) {
+            return result;
+        }
+        HullCollisionShape hull = (HullCollisionShape) shape; // TODO more cases
+
+        Transform c2pTransform = copyTransform(null);
+        shape.getScale(c2pTransform.getScale()); // Copy the scale factors.
+        Triangle childTriangle
+                = MyMath.transformInverse(c2pTransform, parentTriangle, null);
+        ChildCollisionShape[] mp = hull.split(childTriangle);
+
+        Transform tmpTransform = new Transform();
+        for (int i = 0; i < 2; ++i) {
+            if (mp[i] != null) {
+                mp[i].copyTransform(tmpTransform);
+                tmpTransform.combineWithParent(c2pTransform);
+                Vector3f newOffset = tmpTransform.getTranslation(); // alias
+                CollisionShape base = mp[i].getShape();
+                result[i] = new ChildCollisionShape(newOffset, rotation, base);
+            }
+        }
+
+        return result;
     }
     // *************************************************************************
     // JmeCloneable methods
@@ -218,9 +289,9 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        offset = cloner.clone(offset);
-        rotation = cloner.clone(rotation);
-        shape = cloner.clone(shape);
+        this.offset = cloner.clone(offset);
+        this.rotation = cloner.clone(rotation);
+        this.shape = cloner.clone(shape);
     }
 
     /**
@@ -231,7 +302,7 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
     @Override
     public ChildCollisionShape jmeClone() {
         try {
-            ChildCollisionShape clone = (ChildCollisionShape) super.clone();
+            ChildCollisionShape clone = (ChildCollisionShape) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -241,7 +312,7 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
     // Savable methods
 
     /**
-     * De-serialize this shape from the specified importer, for example when
+     * De-serialize this child from the specified importer, for example when
      * loading from a J3O file.
      *
      * @param importer (not null)
@@ -251,14 +322,16 @@ public class ChildCollisionShape implements JmeCloneable, Savable {
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        offset = (Vector3f) capsule.readSavable(tagOffset, new Vector3f());
-        rotation = (Matrix3f) capsule.readSavable(tagRotation, new Matrix3f());
-        shape = (CollisionShape) capsule.readSavable(tagShape,
-                new BoxCollisionShape(1f));
+        this.offset
+                = (Vector3f) capsule.readSavable(tagOffset, new Vector3f());
+        this.rotation
+                = (Matrix3f) capsule.readSavable(tagRotation, new Matrix3f());
+        this.shape = (CollisionShape) capsule
+                .readSavable(tagShape, new BoxCollisionShape(1f));
     }
 
     /**
-     * Serialize this shape to the specified exporter, for example when saving
+     * Serialize this child to the specified exporter, for example when saving
      * to a J3O file.
      *
      * @param exporter (not null)

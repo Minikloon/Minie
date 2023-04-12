@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -48,9 +48,9 @@ public class HelloDac extends SimpleApplication {
     /**
      * Main entry point for the HelloDac application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloDac application = new HelloDac();
         application.start();
     }
@@ -64,8 +64,8 @@ public class HelloDac extends SimpleApplication {
     public void simpleInitApp() {
         // Set up Bullet physics (with debug enabled).
         BulletAppState bulletAppState = new BulletAppState();
-        bulletAppState.setDebugEnabled(true);
         stateManager.attach(bulletAppState);
+        bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSpace physicsSpace = bulletAppState.getPhysicsSpace();
 
         // Add a light to the scene.
@@ -74,7 +74,8 @@ public class HelloDac extends SimpleApplication {
         rootNode.addLight(sun);
 
         // Add a model to the scene.
-        Spatial ninjaModel = assetManager.loadModel("Models/Ninja/Ninja.mesh.xml");
+        Spatial ninjaModel
+                = assetManager.loadModel("Models/Ninja/Ninja.mesh.xml");
         rootNode.attachChild(ninjaModel);
         ninjaModel.rotate(0f, 3f, 0f);
         ninjaModel.scale(0.02f);

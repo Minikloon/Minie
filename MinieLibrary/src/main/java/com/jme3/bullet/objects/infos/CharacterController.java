@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2020 jMonkeyEngine
+ * Copyright (c) 2009-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,6 +43,7 @@ import com.jme3.math.FastMath;
 import com.jme3.math.Vector3f;
 import com.jme3.util.clone.Cloner;
 import com.jme3.util.clone.JmeCloneable;
+import com.simsilica.mathd.Vec3d;
 import java.io.IOException;
 import java.util.logging.Logger;
 import jme3utilities.Validate;
@@ -108,7 +109,7 @@ public class CharacterController
     public CharacterController(PhysicsCharacter character) {
         Validate.nonNull(character, "collision object");
 
-        pco = character;
+        this.pco = character;
         createController();
     }
     // *************************************************************************
@@ -126,9 +127,8 @@ public class CharacterController
         setGravity(source.getGravity(null));
         setJumpSpeed(source.getJumpSpeed());
         setLinearDamping(source.getLinearDamping());
-        /*
-         * Walk direction affects linear velocity, so set it first!
-         */
+
+        // Walk direction affects linear velocity, so set it first!
         setWalkDirection(source.getWalkDirection(null));
         setLinearVelocity(source.getLinearVelocity(null));
 
@@ -389,9 +389,11 @@ public class CharacterController
      * "up" vector.
      *
      * @param gravity the desired acceleration vector (in physics-space units
-     * per second squared, not null, unaffected, default=(0,-29.4,0))
+     * per second squared, not null, finite, unaffected, default=(0,-29.4,0))
      */
     public void setGravity(Vector3f gravity) {
+        Validate.finite(gravity, "gravity");
+
         long controllerId = nativeId();
         setGravity(controllerId, gravity);
     }
@@ -421,9 +423,11 @@ public class CharacterController
     /**
      * Alter the linear velocity of the character's center.
      *
-     * @param velocity the desired velocity vector (not null)
+     * @param velocity the desired velocity vector (not null, finite)
      */
     public void setLinearVelocity(Vector3f velocity) {
+        Validate.finite(velocity, "velocity");
+
         long controllerId = nativeId();
         setLinearVelocity(controllerId, velocity);
     }
@@ -489,10 +493,12 @@ public class CharacterController
      * Alter the character's walk offset. The offset must be perpendicular to
      * the "up" direction. It will continue to be applied until altered again.
      *
-     * @param offset the desired location increment for each physics tick (in
-     * physics-space coordinates, not null, unaffected, default=(0,0,0))
+     * @param offset the desired location increment for each simulation step (in
+     * physics-space coordinates, not null, finite, unaffected, default=(0,0,0))
      */
     public void setWalkDirection(Vector3f offset) {
+        Validate.finite(offset, "offset");
+
         long controllerId = nativeId();
         setWalkDirection(controllerId, offset);
     }
@@ -500,11 +506,26 @@ public class CharacterController
     /**
      * Directly alter the location of the character's center.
      *
-     * @param location the desired physics location (not null, unaffected)
+     * @param location the desired physics location (not null, finite,
+     * unaffected)
      */
     public void warp(Vector3f location) {
+        Validate.finite(location, "location");
+
         long controllerId = nativeId();
         warp(controllerId, location);
+    }
+
+    /**
+     * Directly alter the location of the character's center.
+     *
+     * @param location the desired physics location (not null, unaffected)
+     */
+    public void warpDp(Vec3d location) {
+        Validate.nonNull(location, "location");
+
+        long controllerId = nativeId();
+        warpDp(controllerId, location);
     }
     // *************************************************************************
     // JmeCloneable methods
@@ -530,9 +551,9 @@ public class CharacterController
      * @return a new instance
      */
     @Override
-    public PhysicsCharacter jmeClone() {
+    public CharacterController jmeClone() {
         try {
-            PhysicsCharacter clone = (PhysicsCharacter) super.clone();
+            CharacterController clone = (CharacterController) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -552,7 +573,7 @@ public class CharacterController
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        pco = (PhysicsCharacter) capsule.readSavable(tagPco, null);
+        this.pco = (PhysicsCharacter) capsule.readSavable(tagPco, null);
         createController();
 
         setAngularDamping(capsule.readFloat(tagAngularDamping, 0f));
@@ -565,9 +586,8 @@ public class CharacterController
         setGravity(g);
         setJumpSpeed(capsule.readFloat(tagJumpSpeed, 10f));
         setLinearDamping(capsule.readFloat(tagLinearDamping, 0f));
-        /*
-         * Walk direction affects linear velocity, so set it first!
-         */
+
+        // Walk direction affects linear velocity, so set it first!
         setWalkDirection((Vector3f) capsule.readSavable(tagWalkDirection,
                 new Vector3f()));
         setLinearVelocity((Vector3f) capsule.readSavable(tagLinearVelocity,
@@ -645,20 +665,20 @@ public class CharacterController
 
     native private static float getAngularDamping(long controllerId);
 
-    native private static void getAngularVelocity(long controllerId,
-            Vector3f storeVector);
+    native private static void
+            getAngularVelocity(long controllerId, Vector3f storeVector);
 
     native private static float getFallSpeed(long controllerId);
 
-    native private static void getGravity(long controllerId,
-            Vector3f storeVector);
+    native private static void
+            getGravity(long controllerId, Vector3f storeVector);
 
     native private static float getJumpSpeed(long controllerId);
 
     native private static float getLinearDamping(long controllerId);
 
-    native private static void getLinearVelocity(long controllerId,
-            Vector3f storeVector);
+    native private static void
+            getLinearVelocity(long controllerId, Vector3f storeVector);
 
     native private static float getMaxPenetrationDepth(long controllerId);
 
@@ -666,11 +686,11 @@ public class CharacterController
 
     native private static float getStepHeight(long controllerId);
 
-    native private static void getUpDirection(long controllerId,
-            Vector3f storeVector);
+    native private static void
+            getUpDirection(long controllerId, Vector3f storeVector);
 
-    native private static void getWalkOffset(long controllerId,
-            Vector3f storeVector);
+    native private static void
+            getWalkOffset(long controllerId, Vector3f storeVector);
 
     native private static boolean isUsingGhostSweepTest(long controllerId);
 
@@ -680,11 +700,11 @@ public class CharacterController
 
     native private static void reset(long controllerId, long spaceId);
 
-    native private static void setAngularDamping(long controllerId,
-            float damping);
+    native private static void
+            setAngularDamping(long controllerId, float damping);
 
-    native private static void setAngularVelocity(long controllerId,
-            Vector3f angularVelocity);
+    native private static void
+            setAngularVelocity(long controllerId, Vector3f angularVelocity);
 
     native private static void setFallSpeed(long controllerId, float fallSpeed);
 
@@ -692,27 +712,29 @@ public class CharacterController
 
     native private static void setJumpSpeed(long controllerId, float jumpSpeed);
 
-    native private static void setLinearDamping(long controllerId,
-            float damping);
+    native private static void
+            setLinearDamping(long controllerId, float damping);
 
-    native private static void setLinearVelocity(long controllerId,
-            Vector3f velocity);
+    native private static void
+            setLinearVelocity(long controllerId, Vector3f velocity);
 
-    native private static void setMaxPenetrationDepth(long controllerId,
-            float depth);
+    native private static void
+            setMaxPenetrationDepth(long controllerId, float depth);
 
-    native private static void setMaxSlope(long controllerId,
-            float slopeRadians);
+    native private static void
+            setMaxSlope(long controllerId, float slopeRadians);
 
     native private static void setStepHeight(long controllerId, float height);
 
     native private static void setUp(long controllerId, Vector3f direction);
 
-    native private static void setUseGhostSweepTest(long controllerId,
-            boolean useGhostSweepTest);
+    native private static void
+            setUseGhostSweepTest(long controllerId, boolean useGhostSweepTest);
 
-    native private static void setWalkDirection(long controllerId,
-            Vector3f direction);
+    native private static void
+            setWalkDirection(long controllerId, Vector3f direction);
 
     native private static void warp(long controllerId, Vector3f location);
+
+    native private static void warpDp(long controllerId, Vec3d location);
 }

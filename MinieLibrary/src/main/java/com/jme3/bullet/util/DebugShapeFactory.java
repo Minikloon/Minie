@@ -37,10 +37,8 @@ import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
 import com.jme3.bullet.collision.shapes.ConvexShape;
 import com.jme3.bullet.collision.shapes.PlaneCollisionShape;
 import com.jme3.bullet.collision.shapes.infos.ChildCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.DebugMeshInitListener;
 import com.jme3.bullet.debug.MeshCustomizer;
-import com.jme3.math.FastMath;
 import com.jme3.math.Matrix3f;
 import com.jme3.math.Plane;
 import com.jme3.math.Transform;
@@ -57,9 +55,11 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.logging.Logger;
+import jme3utilities.MeshNormals;
 import jme3utilities.MyMesh;
 import jme3utilities.Validate;
 import jme3utilities.math.MyBuffer;
+import jme3utilities.math.MyMath;
 import jme3utilities.math.MyVector3f;
 
 /**
@@ -67,7 +67,7 @@ import jme3utilities.math.MyVector3f;
  *
  * @author CJ Hare, normenhansen
  */
-public class DebugShapeFactory {
+final public class DebugShapeFactory {
     // *************************************************************************
     // constants and loggers
 
@@ -76,10 +76,6 @@ public class DebugShapeFactory {
      * units)
      */
     final private static float planeDebugMeshSideLength = 1_500f;
-    /**
-     * square root of 2
-     */
-    final private static float root2 = FastMath.sqrt(2f);
     /**
      * specify high-res debug meshes for convex shapes (up to 256 vertices)
      */
@@ -158,8 +154,8 @@ public class DebugShapeFactory {
      * @return a new, unflipped, direct buffer full of scaled shape coordinates
      * (capacity a multiple of 3)
      */
-    public static FloatBuffer debugVertices(CollisionShape shape,
-            int meshResolution) {
+    public static FloatBuffer debugVertices(
+            CollisionShape shape, int meshResolution) {
         Validate.nonNull(shape, "shape");
         Validate.inRange(meshResolution, "mesh resolution", lowResolution,
                 highResolution);
@@ -195,8 +191,8 @@ public class DebugShapeFactory {
      * @param meshResolution (0=low, 1=high)
      * @return a new array of corner locations (in world coordinates)
      */
-    public static Vector3f[] footprint(CollisionShape shape,
-            Transform shapeToWorld, int meshResolution) {
+    public static Vector3f[] footprint(
+            CollisionShape shape, Transform shapeToWorld, int meshResolution) {
         assert !(shape instanceof CompoundCollisionShape);
         assert !(shape instanceof PlaneCollisionShape);
         Validate.nonNull(shapeToWorld, "shape-to-world");
@@ -212,7 +208,7 @@ public class DebugShapeFactory {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @param shape the shape to visualize (not null, not compound, not plane,
      * unaffected)
@@ -230,7 +226,7 @@ public class DebugShapeFactory {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @param shape the shape to visualize (may be null, unaffected)
      * @return a new Spatial or null
@@ -243,11 +239,11 @@ public class DebugShapeFactory {
 
         } else if (shape instanceof CompoundCollisionShape) {
             result = createNode((CompoundCollisionShape) shape, noListener,
-                    DebugMeshNormals.None, lowResolution);
+                    MeshNormals.None, lowResolution);
 
         } else {
-            result = createGeometry(shape, noListener, DebugMeshNormals.None,
-                    lowResolution);
+            result = createGeometry(
+                    shape, noListener, MeshNormals.None, lowResolution);
         }
 
         return result;
@@ -265,7 +261,7 @@ public class DebugShapeFactory {
     public static Spatial getDebugShape(PhysicsCollisionObject pco) {
         CollisionShape shape = pco.getCollisionShape();
         DebugMeshInitListener listener = pco.debugMeshInitListener();
-        DebugMeshNormals normals = pco.debugMeshNormals();
+        MeshNormals normals = pco.debugMeshNormals();
         int resolution = pco.debugMeshResolution();
 
         Spatial result;
@@ -288,8 +284,8 @@ public class DebugShapeFactory {
      * @return a new, unflipped, direct buffer full of scaled shape coordinates
      * (capacity a multiple of 9)
      */
-    public static FloatBuffer getDebugTriangles(CollisionShape shape,
-            int meshResolution) {
+    public static FloatBuffer getDebugTriangles(
+            CollisionShape shape, int meshResolution) {
         Validate.nonNull(shape, "shape");
         Validate.inRange(meshResolution, "mesh resolution", lowResolution,
                 highResolution);
@@ -445,10 +441,10 @@ public class DebugShapeFactory {
         int totalFloats = 0;
 
         for (int childIndex = 0; childIndex < numChildren; ++childIndex) {
-            ChildCollisionShape childShape = children[childIndex];
-            CollisionShape shape = childShape.getShape();
-            childShape.copyTransform(tmpTransform);
-            FloatBuffer buffer = getDebugTriangles(shape, meshResolution);
+            ChildCollisionShape child = children[childIndex];
+            CollisionShape baseShape = child.getShape();
+            child.copyTransform(tmpTransform);
+            FloatBuffer buffer = getDebugTriangles(baseShape, meshResolution);
 
             int numFloats = buffer.capacity();
             MyBuffer.transform(buffer, 0, numFloats, tmpTransform);
@@ -487,10 +483,10 @@ public class DebugShapeFactory {
         int totalFloats = 0;
 
         for (int childIndex = 0; childIndex < numChildren; ++childIndex) {
-            ChildCollisionShape childShape = children[childIndex];
-            CollisionShape shape = childShape.getShape();
-            childShape.copyTransform(tmpTransform);
-            FloatBuffer buffer = debugVertices(shape, meshResolution);
+            ChildCollisionShape child = children[childIndex];
+            CollisionShape baseShape = child.getShape();
+            child.copyTransform(tmpTransform);
+            FloatBuffer buffer = debugVertices(baseShape, meshResolution);
 
             int numFloats = buffer.capacity();
             MyBuffer.transform(buffer, 0, numFloats, tmpTransform);
@@ -515,12 +511,13 @@ public class DebugShapeFactory {
      * shape.
      *
      * @param shape (not null, not compound, unaffected)
+     * @param listener (may be null)
      * @param normals which normals to generate (not null)
      * @param resolution how much detail for convex shapes (0=low, 1=high)
      * @return a new Geometry (not null)
      */
     private static Geometry createGeometry(CollisionShape shape,
-            DebugMeshInitListener listener, DebugMeshNormals normals,
+            DebugMeshInitListener listener, MeshNormals normals,
             int resolution) {
         assert shape != null;
         assert !(shape instanceof CompoundCollisionShape);
@@ -534,8 +531,8 @@ public class DebugShapeFactory {
             mesh = cache.get(key);
             if (mesh == null) {
                 if (shape instanceof PlaneCollisionShape) {
-                    mesh = createPlaneMesh((PlaneCollisionShape) shape,
-                            normals);
+                    mesh = createPlaneMesh(
+                            (PlaneCollisionShape) shape, normals);
                 } else {
                     mesh = createMesh(shape, normals, resolution);
                 }
@@ -564,8 +561,8 @@ public class DebugShapeFactory {
      * @param resolution how much detail for convex shapes (0=low, 1=high)
      * @return a new Mesh (not null)
      */
-    private static Mesh createMesh(CollisionShape shape,
-            DebugMeshNormals normals, int resolution) {
+    private static Mesh createMesh(
+            CollisionShape shape, MeshNormals normals, int resolution) {
         assert resolution >= lowResolution : resolution;
         assert resolution <= highResolution : resolution;
 
@@ -574,11 +571,10 @@ public class DebugShapeFactory {
         getTriangles(shapeId, resolution, callback);
 
         Mesh mesh = new Mesh();
-        mesh.setBuffer(VertexBuffer.Type.Position, numAxes,
-                callback.getVertices());
-        /*
-         * Add a normal buffer, if requested.
-         */
+        mesh.setBuffer(
+                VertexBuffer.Type.Position, numAxes, callback.getVertices());
+
+        // Add a normal buffer, if requested.
         switch (normals) {
             case Facet:
                 mesh.setBuffer(VertexBuffer.Type.Normal, numAxes,
@@ -598,9 +594,8 @@ public class DebugShapeFactory {
                 String message = "normals = " + normals;
                 throw new IllegalArgumentException(message);
         }
-        /*
-         * If the mesh is not too big, generate an index buffer.
-         */
+
+        // If the mesh is not too big, generate an index buffer.
         if (mesh.getVertexCount() <= maxVerticesToIndex) {
             mesh = MyMesh.addIndices(mesh);
         }
@@ -615,12 +610,13 @@ public class DebugShapeFactory {
      * Create a Node for visualizing the specified CompoundCollisionShape.
      *
      * @param compoundShape (not null, unaffected)
+     * @param listener (may be null)
      * @param normals which normals to generate (not null)
      * @param resolution how much detail for convex child shapes (0=low, 1=high)
      * @return a new Node (not null)
      */
     private static Node createNode(CompoundCollisionShape compoundShape,
-            DebugMeshInitListener listener, DebugMeshNormals normals,
+            DebugMeshInitListener listener, MeshNormals normals,
             int resolution) {
         assert normals != null;
         assert resolution >= lowResolution : resolution;
@@ -633,9 +629,9 @@ public class DebugShapeFactory {
         Vector3f tmpOffset = new Vector3f();
         ChildCollisionShape[] children = compoundShape.listChildren();
         for (ChildCollisionShape child : children) {
-            CollisionShape childShape = child.getShape();
-            Geometry geometry = createGeometry(childShape, listener, normals,
-                    resolution);
+            CollisionShape baseShape = child.getShape();
+            Geometry geometry
+                    = createGeometry(baseShape, listener, normals, resolution);
 
             // apply scaled offset
             child.copyOffset(tmpOffset);
@@ -660,11 +656,9 @@ public class DebugShapeFactory {
      * @param normals which normals to generate (not null)
      * @return a new, indexed, Triangles-mode Mesh
      */
-    private static Mesh createPlaneMesh(PlaneCollisionShape shape,
-            DebugMeshNormals normals) {
-        /*
-         * Generate mesh positions for a large 2-sided square.
-         */
+    private static Mesh createPlaneMesh(
+            PlaneCollisionShape shape, MeshNormals normals) {
+        // Generate mesh positions for a large 2-sided square.
         int numVertices = 8; // 4 vertices for each size
         int numFloats = numVertices * numAxes;
         FloatBuffer posBuffer = BufferUtils.createFloatBuffer(numFloats);
@@ -678,16 +672,14 @@ public class DebugShapeFactory {
         }
         assert posBuffer.position() == numFloats;
         posBuffer.flip();
-        /*
-         * Transform mesh positions to the surface of the CollisionShape.
-         */
+
+        // Transform mesh positions to the surface of the CollisionShape.
         Transform transform = planeTransform(shape);
-        float scale = meshSideLength() / root2;
+        float scale = meshSideLength() / MyMath.root2;
         transform.setScale(scale);
         MyBuffer.transform(posBuffer, 0, numFloats, transform);
-        /*
-         * Generate an index buffer for a 2-sided square.
-         */
+
+        // Generate an index buffer for a 2-sided square.
         ByteBuffer indexBuffer = BufferUtils.createByteBuffer(new byte[]{
             2, 1, 0,
             3, 2, 0,
@@ -698,10 +690,9 @@ public class DebugShapeFactory {
         Mesh result = new Mesh();
         result.setBuffer(VertexBuffer.Type.Position, numAxes, posBuffer);
         result.setBuffer(VertexBuffer.Type.Index, MyMesh.vpt, indexBuffer);
-        /*
-         * Add a normal buffer, if requested.
-         */
-        if (normals != DebugMeshNormals.None) {
+
+        // Add a normal buffer, if requested.
+        if (normals != MeshNormals.None) {
             Plane plane = shape.getPlane();
             Vector3f v1 = plane.getNormal();
 
@@ -733,13 +724,12 @@ public class DebugShapeFactory {
      * @return a new, unflipped, direct buffer full of scaled shape coordinates
      * (capacity a multiple of 9)
      */
-    private static FloatBuffer createPlaneTriangles(PlaneCollisionShape shape,
-            float halfExtent) {
+    private static FloatBuffer
+            createPlaneTriangles(PlaneCollisionShape shape, float halfExtent) {
         assert shape != null;
         assert halfExtent > 0f : halfExtent;
-        /*
-         * Generate vertex locations for a large square in the Y-Z plane.
-         */
+
+        // Generate vertex locations for a large square in the Y-Z plane.
         FloatBuffer result = BufferUtils.createFloatBuffer(
                 0f, 0f, -1f,
                 0f, 1f, 0f,
@@ -749,9 +739,8 @@ public class DebugShapeFactory {
                 0f, 0f, 1f
         );
         int numFloats = result.capacity();
-        /*
-         * Transform vertex locations to the surface of the shape.
-         */
+
+        // Transform vertex locations to the surface of the shape.
         Transform transform = planeTransform(shape);
         transform.setScale(halfExtent);
         MyBuffer.transform(result, 0, numFloats, transform);
@@ -768,13 +757,12 @@ public class DebugShapeFactory {
      * @return a new, unflipped, direct buffer full of scaled shape coordinates
      * (capacity a multiple of 3)
      */
-    private static FloatBuffer createPlaneVertices(PlaneCollisionShape shape,
-            float halfExtent) {
+    private static FloatBuffer
+            createPlaneVertices(PlaneCollisionShape shape, float halfExtent) {
         assert shape != null;
         assert halfExtent > 0f : halfExtent;
-        /*
-         * Generate vertex locations for a large square in the Y-Z plane.
-         */
+
+        // Generate vertex locations for a large square in the Y-Z plane.
         FloatBuffer result = BufferUtils.createFloatBuffer(
                 0f, 0f, -1f,
                 0f, 1f, 0f,
@@ -782,9 +770,8 @@ public class DebugShapeFactory {
                 0f, -1f, 0f
         );
         int numFloats = result.capacity();
-        /*
-         * Transform vertex locations to the surface of the shape.
-         */
+
+        // Transform vertex locations to the surface of the shape.
         Transform transform = planeTransform(shape);
         transform.setScale(halfExtent);
         MyBuffer.transform(result, 0, numFloats, transform);
@@ -816,9 +803,9 @@ public class DebugShapeFactory {
     // *************************************************************************
     // native private methods
 
-    native private static void getTriangles(long shapeId, int meshResolution,
-            DebugMeshCallback buffer);
+    native private static void getTriangles(
+            long shapeId, int meshResolution, DebugMeshCallback buffer);
 
-    native private static void getVertices(long shapeId, int meshResolution,
-            DebugMeshCallback buffer);
+    native private static void getVertices(
+            long shapeId, int meshResolution, DebugMeshCallback buffer);
 }

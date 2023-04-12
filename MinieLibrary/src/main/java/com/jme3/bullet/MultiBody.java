@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021 jMonkeyEngine
+ * Copyright (c) 2020-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,8 +51,8 @@ import java.util.logging.Logger;
 import jme3utilities.Validate;
 
 /**
- * An articulated rigid body based on Bullet's btMultiBody. Uses Featherstone's
- * algorithm.
+ * An articulated rigid body based on Bullet's {@code btMultiBody}. Uses
+ * Featherstone's algorithm.
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -943,15 +943,15 @@ public class MultiBody
 
         if (baseCollider != null) {
             CollisionShape baseShape = baseCollider.getCollisionShape();
-            baseCollider = null;
+            this.baseCollider = null;
             baseShape = cloner.clone(baseShape);
             addBaseCollider(baseShape);
             assert getBaseCollider(multiBodyId) == baseCollider.nativeId();
             baseCollider.copyPcoProperties(old.getBaseCollider());
         }
 
-        numConfigured = 0;
-        links = new MultiBodyLink[numLinks];
+        this.numConfigured = 0;
+        this.links = new MultiBodyLink[numLinks];
         for (int i = 0; i < numLinks; ++i) {
             links[i] = configureClonedLink(old.links[i]);
         }
@@ -970,7 +970,7 @@ public class MultiBody
     @Override
     public MultiBody jmeClone() {
         try {
-            MultiBody clone = (MultiBody) super.clone();
+            MultiBody clone = (MultiBody) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -1002,13 +1002,13 @@ public class MultiBody
 
         if (baseCollider != null) {
             CollisionShape baseShape = baseCollider.getCollisionShape();
-            baseCollider = null;
+            this.baseCollider = null;
             addBaseCollider(baseShape);
         }
 
         MultiBodyLink[] originalLinks = links;
-        links = new MultiBodyLink[numLinks];
-        numConfigured = capsule.readInt(tagNumConfigured, 0);
+        this.links = new MultiBodyLink[numLinks];
+        this.numConfigured = capsule.readInt(tagNumConfigured, 0);
         for (int i = 0; i < numConfigured; ++i) {
             configureClonedLink(originalLinks[i]);
         }
@@ -1112,11 +1112,14 @@ public class MultiBody
             parent = links[parentIndex];
         }
 
-        Vector3f axis, parent2Link, parent2Pivot, pivot2Link;
+        Vector3f axis;
+        Vector3f parent2Link;
+        Vector3f parent2Pivot;
+        Vector3f pivot2Link;
         MultiBodyLink result;
         switch (jointType) {
             case Fixed:
-                assert disableCollision == true;
+                assert disableCollision;
                 parent2Pivot = original.parent2Pivot(null);
                 pivot2Link = original.pivot2Link(null);
                 result = configureFixedLink(mass, inertia, parent, orientation,
@@ -1175,11 +1178,11 @@ public class MultiBody
     // *************************************************************************
     // native private methods
 
-    native private static void addBaseForce(long multiBodyId,
-            Vector3f forceVector);
+    native private static void
+            addBaseForce(long multiBodyId, Vector3f forceVector);
 
-    native private static void addBaseTorque(long multiBodyId,
-            Vector3f torqueVector);
+    native private static void
+            addBaseTorque(long multiBodyId, Vector3f torqueVector);
 
     native private static void clearConstraintForces(long multiBodyId);
 
@@ -1198,28 +1201,28 @@ public class MultiBody
 
     native private static long getBaseCollider(long multiBodyId);
 
-    native private static void getBaseForce(long multiBodyId,
-            Vector3f storeVector);
+    native private static void
+            getBaseForce(long multiBodyId, Vector3f storeVector);
 
-    native private static void getBaseInertia(long multiBodyId,
-            Vector3f storeVector);
+    native private static void
+            getBaseInertia(long multiBodyId, Vector3f storeVector);
 
     native private static float getBaseMass(long multiBodyId);
 
-    native private static void getBaseOmega(long multiBodyId,
-            Vector3f storeVector);
+    native private static void
+            getBaseOmega(long multiBodyId, Vector3f storeVector);
 
-    native private static void getBasePos(long multiBodyId,
-            Vector3f storeVector);
+    native private static void
+            getBasePos(long multiBodyId, Vector3f storeVector);
 
-    native private static void getBaseTorque(long multiBodyId,
-            Vector3f storeVector);
+    native private static void
+            getBaseTorque(long multiBodyId, Vector3f storeVector);
 
-    native private static void getBaseVel(long multiBodyId,
-            Vector3f storeVector);
+    native private static void
+            getBaseVel(long multiBodyId, Vector3f storeVector);
 
-    native private static void getBaseWorldTransform(long multiBodyId,
-            Transform storeTransform);
+    native private static void
+            getBaseWorldTransform(long multiBodyId, Transform storeTransform);
 
     native private static boolean getCanSleep(long multiBodyId);
 
@@ -1245,8 +1248,8 @@ public class MultiBody
 
     native private static boolean getUseGyroTerm(long multiBodyId);
 
-    native private static void getWorldToBaseRot(long multiBodyId,
-            Quaternion storeQuaternion);
+    native private static void
+            getWorldToBaseRot(long multiBodyId, Quaternion storeQuaternion);
 
     native private static boolean hasFixedBase(long multiBodyId);
 
@@ -1254,26 +1257,26 @@ public class MultiBody
 
     native private static boolean isUsingRK4Integration(long multiBodyId);
 
-    native private static void setBaseCollider(long multiBodyId,
-            long colliderId);
+    native private static void
+            setBaseCollider(long multiBodyId, long colliderId);
 
-    native private static void setBaseOmega(long multiBodyId,
-            Vector3f angularVelocityVector);
+    native private static void
+            setBaseOmega(long multiBodyId, Vector3f angularVelocityVector);
 
-    native private static void setBasePos(long multiBodyId,
-            Vector3f positionVector);
+    native private static void
+            setBasePos(long multiBodyId, Vector3f positionVector);
 
-    native private static void setBaseVel(long multiBodyId,
-            Vector3f velocityVector);
+    native private static void
+            setBaseVel(long multiBodyId, Vector3f velocityVector);
 
-    native private static void setBaseWorldTransform(long multiBodyId,
-            Transform transform);
+    native private static void
+            setBaseWorldTransform(long multiBodyId, Transform transform);
 
-    native private static void setCollideWithGroups(long multiBodyId,
-            int collisionGroups);
+    native private static void
+            setCollideWithGroups(long multiBodyId, int collisionGroups);
 
-    native private static void setCollisionGroup(long multiBodyId,
-            int collisionGroup);
+    native private static void
+            setCollisionGroup(long multiBodyId, int collisionGroup);
 
     native private static void setupFixed(long multiBodyId, int linkIndex,
             float mass, Vector3f inertiaVector, int parentLinkIndex,
@@ -1302,11 +1305,11 @@ public class MultiBody
             Quaternion parent2LinkQuaternion, Vector3f parent2PivotVector,
             Vector3f pivotToLinkVector, boolean disableParentCollision);
 
-    native private static void setWorldToBaseRot(long multiBodyId,
-            Quaternion quaternion);
+    native private static void
+            setWorldToBaseRot(long multiBodyId, Quaternion quaternion);
 
-    native private static void useGlobalVelocities(long multiBodyId,
-            boolean use);
+    native private static void
+            useGlobalVelocities(long multiBodyId, boolean use);
 
     native private static void useRK4Integration(long multiBodyId, boolean use);
 }

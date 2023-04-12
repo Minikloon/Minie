@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -45,6 +45,7 @@ import com.jme3.math.Vector3f;
 import com.jme3.scene.Mesh;
 import com.jme3.scene.VertexBuffer;
 import java.nio.FloatBuffer;
+import java.util.logging.Logger;
 import jme3utilities.math.MyBuffer;
 import jme3utilities.mesh.RectangleMesh;
 import jme3utilities.minie.PhysicsDumper;
@@ -56,23 +57,57 @@ import jme3utilities.minie.PhysicsDumper;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class TestIssue3 extends SimpleApplication
+final public class TestIssue3 extends SimpleApplication
         implements ActionListener, PhysicsTickListener {
+    // *************************************************************************
+    // constants and loggers
 
-    private int tickCount = 0;
-    private PhysicsCharacter character;
-    private PhysicsSpace physicsSpace;
+    /**
+     * message logger for this class
+     */
+    final public static Logger logger
+            = Logger.getLogger(TestIssue3.class.getName());
+    // *************************************************************************
+    // fields
+
+    /**
+     * count of physics timesteps simulated
+     */
+    private static int tickCount = 0;
+    /**
+     * jumping character to be tested
+     */
+    private static PhysicsCharacter character;
+    /**
+     * space for physics simulation
+     */
+    private static PhysicsSpace physicsSpace;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestIssue3 application.
+     */
+    public TestIssue3() { // explicit to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
+    // new methods exposed
 
     /**
      * Main entry point for the TestIssue3 application.
      *
-     * @param ignored unused
+     * @param arguments unused
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         TestIssue3 app = new TestIssue3();
         app.start();
     }
+    // *************************************************************************
+    // SimpleApplication methods
 
+    /**
+     * Initialize this application.
+     */
     @Override
     public void simpleInitApp() {
         inputManager.addMapping("Jump", new KeyTrigger(KeyInput.KEY_SPACE));
@@ -103,6 +138,13 @@ public class TestIssue3 extends SimpleApplication
         new PhysicsDumper().dump(bulletAppState);
     }
 
+    /**
+     * Process an input action.
+     *
+     * @param binding textual description of the action (not null)
+     * @param ongoing true if the action is ongoing, otherwise false
+     * @param tpf time interval between frames (in seconds, &ge;0)
+     */
     @Override
     public void onAction(String binding, boolean ongoing, float tpf) {
         if (ongoing && binding.equals("Jump")) {
@@ -113,6 +155,12 @@ public class TestIssue3 extends SimpleApplication
         }
     }
 
+    /**
+     * Callback from Bullet, invoked just before the physics is stepped.
+     *
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
+     */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
         ++tickCount;
@@ -122,6 +170,12 @@ public class TestIssue3 extends SimpleApplication
         }
     }
 
+    /**
+     * Callback from Bullet, invoked just after the physics has been stepped.
+     *
+     * @param space the space that was just stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
+     */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
         // do nothing

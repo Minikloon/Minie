@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -68,6 +68,7 @@ import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.InfluenceUtil;
 import jme3utilities.MySpatial;
+import jme3utilities.MyString;
 import jme3utilities.debug.SkeletonVisualizer;
 import jme3utilities.minie.DumpFlags;
 import jme3utilities.minie.PhysicsDumper;
@@ -116,62 +117,66 @@ public class BuoyDemo extends PhysicsDemo {
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * Control being tested
      */
-    private DynamicAnimControl dac;
+    private static DynamicAnimControl dac;
     /**
      * root node of the C-G model on which the Control is being tested
      */
-    private Node cgModel;
+    private static Node cgModel;
     /**
      * scene-graph subtree containing all geometries visible in reflections
      */
-    final private Node reflectiblesNode = new Node("reflectibles");
+    final private static Node reflectiblesNode = new Node("reflectibles");
     /**
      * scene-graph subtree containing all reflective geometries
      */
-    final private Node reflectorsNode = new Node("reflectors");
+    final private static Node reflectorsNode = new Node("reflectors");
     /**
      * scene processor for water effects
      */
-    private SimpleWaterProcessor processor;
+    private static SimpleWaterProcessor processor;
     /**
      * visualizer for the skeleton of the C-G model
      */
-    private SkeletonVisualizer sv;
+    private static SkeletonVisualizer sv;
     /**
      * name of the Animation/Action to play on the C-G model
      */
-    private String animationName = null;
+    private static String animationName = null;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the BuoyDemo application.
+     */
+    public BuoyDemo() { // made explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the BuoyDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new BuoyDemo();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new BuoyDemo();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -181,7 +186,9 @@ public class BuoyDemo extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        super.acorusInit();
+
         rootNode.attachChild(reflectiblesNode);
         rootNode.attachChild(reflectorsNode);
 
@@ -189,9 +196,8 @@ public class BuoyDemo extends PhysicsDemo {
         configureDumper();
         configurePhysics();
         addLighting();
-        /*
-         * Hide the render-statistics overlay.
-         */
+
+        // Hide the render-statistics overlay.
         stateManager.getState(StatsAppState.class).toggleStats();
 
         addSurface();
@@ -200,7 +206,7 @@ public class BuoyDemo extends PhysicsDemo {
     }
 
     /**
-     * Configure the PhysicsDumper.
+     * Configure the PhysicsDumper during startup.
      */
     @Override
     public void configureDumper() {
@@ -208,6 +214,26 @@ public class BuoyDemo extends PhysicsDemo {
 
         PhysicsDumper dumper = getDumper();
         dumper.setEnabled(DumpFlags.JointsInSpaces, true);
+    }
+
+    /**
+     * Calculate screen bounds for the detailed help node.
+     *
+     * @param viewPortWidth (in pixels, &gt;0)
+     * @param viewPortHeight (in pixels, &gt;0)
+     * @return a new instance
+     */
+    @Override
+    public Rectangle detailedHelpBounds(int viewPortWidth, int viewPortHeight) {
+        // Position help nodes along the top edge of the viewport.
+        float margin = 10f; // in pixels
+        float width = viewPortWidth - 2f * margin;
+        float height = viewPortHeight - 2f * margin;
+        float leftX = margin;
+        float topY = margin + height;
+        Rectangle result = new Rectangle(leftX, topY, width, height);
+
+        return result;
     }
 
     /**
@@ -222,7 +248,7 @@ public class BuoyDemo extends PhysicsDemo {
     }
 
     /**
-     * Determine the length of debug axis arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -232,7 +258,8 @@ public class BuoyDemo extends PhysicsDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -266,15 +293,6 @@ public class BuoyDemo extends PhysicsDemo {
         dim.bind("toggle meshes", KeyInput.KEY_M);
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind("toggle skeleton", KeyInput.KEY_V);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - 2f * margin;
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -298,6 +316,7 @@ public class BuoyDemo extends PhysicsDemo {
                 case "toggle skeleton":
                     toggleSkeleton();
                     return;
+                default:
             }
 
             String[] words = actionString.split(" ");
@@ -340,7 +359,7 @@ public class BuoyDemo extends PhysicsDemo {
     // private methods
 
     /**
-     * Add lighting and reflections to the scene.
+     * Add lighting and reflections to the main scene.
      */
     private void addLighting() {
         ColorRGBA ambientColor = new ColorRGBA(0.2f, 0.2f, 0.2f, 1f);
@@ -359,13 +378,11 @@ public class BuoyDemo extends PhysicsDemo {
         Plane surface = new Plane(Vector3f.UNIT_Y, surfaceElevation);
         processor.setPlane(surface);
         processor.setReflectionScene(reflectiblesNode);
-        /*
-         * Clip everything below the surface.
-         */
+
+        // Clip everything below the surface.
         processor.setReflectionClippingOffset(-0.1f);
-        /*
-         * Configure water and wave parameters.
-         */
+
+        // Configure water and wave parameters.
         float waveHeight = 0.2f;
         processor.setDistortionScale(waveHeight);
         float waterTransparency = 0.4f;
@@ -438,9 +455,8 @@ public class BuoyDemo extends PhysicsDemo {
         dac.setGravity(new Vector3f(0f, -50f, 0f));
         PhysicsSpace physicsSpace = getPhysicsSpace();
         dac.setPhysicsSpace(physicsSpace);
-        /*
-         * Add buoyancy to each BoneLink.
-         */
+
+        // Add buoyancy to each BoneLink.
         List<PhysicsLink> links = dac.listLinks(PhysicsLink.class);
         float density = 1.5f;
         for (PhysicsLink link : links) {
@@ -468,15 +484,15 @@ public class BuoyDemo extends PhysicsDemo {
      */
     private void addSky() {
         String assetPath = "Textures/Sky/Bright/BrightSky.dds";
-        Spatial sky = SkyFactory.createSky(assetManager, assetPath,
-                SkyFactory.EnvMapType.CubeMap);
+        Spatial sky = SkyFactory.createSky(
+                assetManager, assetPath, SkyFactory.EnvMapType.CubeMap);
         reflectiblesNode.attachChild(sky);
     }
 
     /**
      * Add a large Quad to represent the surface of the water.
      */
-    private void addSurface() {
+    private static void addSurface() {
         float diameter = 2000f;
         Mesh mesh = new Quad(diameter, diameter);
         mesh.scaleTextureCoordinates(new Vector2f(80f, 80f));
@@ -519,7 +535,7 @@ public class BuoyDemo extends PhysicsDemo {
     /**
      * Put the loaded model into ragdoll mode with buoyancy enabled.
      */
-    private void goFloating() {
+    private static void goFloating() {
         if (dac.isReady()) {
             dac.setRagdollMode();
         }
@@ -618,9 +634,9 @@ public class BuoyDemo extends PhysicsDemo {
             spatial.setShadowMode(RenderQueue.ShadowMode.Cast);
         }
 
-        LinkConfig swordConfig = new LinkConfig(5f, MassHeuristic.Density,
-                ShapeHeuristic.VertexHull, Vector3f.UNIT_XYZ,
-                CenterHeuristic.AABB);
+        LinkConfig swordConfig = new LinkConfig(
+                5f, MassHeuristic.Density, ShapeHeuristic.VertexHull,
+                Vector3f.UNIT_XYZ, CenterHeuristic.AABB);
         dac = new SinbadControl();
         dac.attach("Handle.R", swordConfig, sword);
 
@@ -639,9 +655,9 @@ public class BuoyDemo extends PhysicsDemo {
             spatial.setShadowMode(RenderQueue.ShadowMode.Cast);
         }
 
-        LinkConfig swordConfig = new LinkConfig(5f, MassHeuristic.Density,
-                ShapeHeuristic.VertexHull, Vector3f.UNIT_XYZ,
-                CenterHeuristic.AABB);
+        LinkConfig swordConfig = new LinkConfig(
+                5f, MassHeuristic.Density, ShapeHeuristic.VertexHull,
+                Vector3f.UNIT_XYZ, CenterHeuristic.AABB);
         dac = new SinbadControl();
         dac.attach("Handle.L", swordConfig, sword);
         dac.attach("Handle.R", swordConfig, sword);
@@ -652,7 +668,7 @@ public class BuoyDemo extends PhysicsDemo {
     /**
      * Toggle mesh rendering on/off.
      */
-    private void toggleMeshes() {
+    private static void toggleMeshes() {
         Spatial.CullHint hint = cgModel.getLocalCullHint();
         if (hint == Spatial.CullHint.Inherit
                 || hint == Spatial.CullHint.Never) {
@@ -666,7 +682,7 @@ public class BuoyDemo extends PhysicsDemo {
     /**
      * Toggle the skeleton visualizer on/off.
      */
-    private void toggleSkeleton() {
+    private static void toggleSkeleton() {
         boolean enabled = sv.isEnabled();
         sv.setEnabled(!enabled);
     }

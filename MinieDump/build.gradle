@@ -10,17 +10,15 @@ tasks.withType(JavaCompile) { // Java compile-time options:
     options.deprecation = true
 }
 
-mainClassName = 'jme3utilities.minie.cli.MinieDump'
-if (!hasProperty('mainClass')) {
-    ext.mainClass = mainClassName
+application {
+    mainClass = 'jme3utilities.cli.J3oDump'
 }
-jar.manifest.attributes('Main-Class': mainClassName)
 
 dependencies {
+    implementation desktopCoordinates
     implementation heartCoordinates
-    implementation 'org.jmonkeyengine:jme3-desktop:' + jme3Version
-    runtimeOnly 'org.jmonkeyengine:jme3-plugins:' + jme3Version
+    runtimeOnly    pluginsCoordinates
 
-    //implementation 'com.github.stephengold:Minie:' + minieVersion
-    implementation project(':MinieLibrary')
+    //implementation 'com.github.stephengold:Minie:' + minieVersion // for published library
+    implementation project(':MinieLibrary') // for latest sourcecode
 }

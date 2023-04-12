@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,6 @@ import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 import com.jme3.bullet.collision.shapes.CollisionShape;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.font.BitmapText;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.light.AmbientLight;
@@ -57,6 +56,7 @@ import java.util.logging.Logger;
 import jme3utilities.Heart;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
+import jme3utilities.MyString;
 import jme3utilities.minie.test.common.PhysicsDemo;
 import jme3utilities.ui.CameraOrbitAppState;
 import jme3utilities.ui.InputMode;
@@ -84,49 +84,53 @@ public class TestMultiBody extends PhysicsDemo {
     // fields
 
     /**
-     * text displayed in the upper-left corner of the GUI node
+     * lines of text displayed in the upper-left corner of the GUI node ([0] is
+     * the top line)
      */
-    final private BitmapText[] statusLines = new BitmapText[1];
+    final private static BitmapText[] statusLines = new BitmapText[1];
     /**
-     * AppState to manage the MultiBodySpace
+     * AppState to manage the PhysicsSpace
      */
-    private MultiBodyAppState bulletAppState;
+    private static MultiBodyAppState bulletAppState;
     /**
      * name of the test being run
      */
-    private String testName = "test1";
+    private static String testName = "test1";
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestMultiBody application.
+     */
+    public TestMultiBody() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestMultiBody application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Enable direct-memory tracking.
-         */
+
+        // Enable direct-memory tracking.
         BufferUtils.setTrackDirectMemoryEnabled(true);
 
-        Application application = new TestMultiBody();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(16); // anti-aliasing
+        settings.setTitle(title); // Customize the window's title bar.
         settings.setVSync(false);
-        application.setSettings(settings);
 
+        Application application = new TestMultiBody();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -136,7 +140,10 @@ public class TestMultiBody extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        addStatusLines();
+        super.acorusInit();
+
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -146,8 +153,7 @@ public class TestMultiBody extends PhysicsDemo {
         viewPort.setBackgroundColor(skyColor);
 
         addLighting(rootNode, false);
-        addStatusLines();
-        speed = pausedSpeed;
+        this.speed = pausedSpeed;
 
         float halfExtent = 4f;
         float topY = -1f;
@@ -157,7 +163,7 @@ public class TestMultiBody extends PhysicsDemo {
     }
 
     /**
-     * Configure materials during startup.
+     * Initialize the library of named materials during startup.
      */
     @Override
     public void generateMaterials() {
@@ -178,7 +184,7 @@ public class TestMultiBody extends PhysicsDemo {
     }
 
     /**
-     * Determine the length of debug axis arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -188,7 +194,8 @@ public class TestMultiBody extends PhysicsDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -208,15 +215,6 @@ public class TestMultiBody extends PhysicsDemo {
         dim.bind(asToggleHelp, KeyInput.KEY_H);
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + 20f);
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -240,9 +238,27 @@ public class TestMultiBody extends PhysicsDemo {
 
                     addMultiBody();
                     return;
+
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        for (int lineIndex = 0; lineIndex < statusLines.length; ++lineIndex) {
+            float y = newHeight - 20f * lineIndex;
+            statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
+        }
+
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -281,8 +297,8 @@ public class TestMultiBody extends PhysicsDemo {
             int mapSize = 2_048; // in pixels
             int numSplits = 3;
             DirectionalLightShadowRenderer dlsr
-                    = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                            numSplits);
+                    = new DirectionalLightShadowRenderer(
+                            assetManager, mapSize, numSplits);
             dlsr.setLight(sun);
             dlsr.setShadowIntensity(0.5f);
             viewPort.addProcessor(dlsr);
@@ -298,8 +314,8 @@ public class TestMultiBody extends PhysicsDemo {
         Vector3f inertia = new Vector3f(1f, 1f, 1f);
         boolean fixedBase = false;
         boolean canSleep = false;
-        MultiBody multiBody = new MultiBody(numLinks, linkMass, inertia,
-                fixedBase, canSleep);
+        MultiBody multiBody = new MultiBody(
+                numLinks, linkMass, inertia, fixedBase, canSleep);
 
         CollisionShape baseShape = new SphereCollisionShape(0.3f);
         multiBody.addBaseCollider(baseShape);
@@ -322,8 +338,6 @@ public class TestMultiBody extends PhysicsDemo {
     private void addStatusLines() {
         for (int lineIndex = 0; lineIndex < statusLines.length; ++lineIndex) {
             statusLines[lineIndex] = new BitmapText(guiFont);
-            float y = cam.getHeight() - 20f * lineIndex;
-            statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
             guiNode.attachChild(statusLines[lineIndex]);
         }
     }
@@ -332,9 +346,7 @@ public class TestMultiBody extends PhysicsDemo {
      * Clean up after a test.
      */
     private void cleanupAfterTest() {
-        /*
-         * Remove any scenery. Debug meshes are under a different root node.
-         */
+        // Remove any scenery. Debug meshes are under a different root node.
         rootNode.detachAllChildren();
 
         stateManager.detach(bulletAppState);

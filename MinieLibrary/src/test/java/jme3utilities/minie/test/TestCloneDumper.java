@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2020, Stephen Gold
+ Copyright (c) 2019-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,7 @@ import jme3utilities.minie.PhysicsDumper;
 import org.junit.Test;
 
 /**
- * Test cloning a PhysicsDumper.
+ * Test cloning a PhysicsDumper. TODO replace asserts with JUnit Assert
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -60,7 +60,7 @@ public class TestCloneDumper {
     // *************************************************************************
     // private methods
 
-    private void cloneTest(PhysicsDumper du, PhysicsDumper duClone) {
+    private static void cloneTest(PhysicsDumper du, PhysicsDumper duClone) {
         assert duClone != du;
         assert duClone.getDescriber() != du.getDescriber();
 
@@ -82,7 +82,7 @@ public class TestCloneDumper {
      * @param du the dumper to modify (not null)
      * @param b the key value
      */
-    private void setParameters(PhysicsDumper du, float b) {
+    private static void setParameters(PhysicsDumper du, float b) {
         boolean flag = (b > 0.15f && b < 0.45f);
         du.setEnabled(DumpFlags.Buckets, flag);
         du.setEnabled(DumpFlags.ChildShapes, !flag);
@@ -113,7 +113,7 @@ public class TestCloneDumper {
      * @param du the dumper to verify (not null, unaffected)
      * @param b the key value
      */
-    private void verifyParameters(PhysicsDumper du, float b) {
+    private static void verifyParameters(PhysicsDumper du, float b) {
         boolean flag = (b > 0.15f && b < 0.45f);
         assert du.isEnabled(DumpFlags.Buckets) == flag : flag;
         assert du.isEnabled(DumpFlags.ChildShapes) == !flag : flag;

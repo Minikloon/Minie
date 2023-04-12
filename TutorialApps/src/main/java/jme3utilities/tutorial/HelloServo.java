@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, Stephen Gold
+ Copyright (c) 2021-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -58,21 +58,28 @@ import com.jme3.system.AppSettings;
 
 /**
  * A simple example of a PhysicsJoint with a servo.
- *
+ * <p>
  * Builds upon HelloMotor.
  *
  * @author Stephen Gold sgold@sonic.net
  */
 public class HelloServo extends SimpleApplication {
     // *************************************************************************
+    // fields
+
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
+    // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloServo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloServo application = new HelloServo();
 
         // Enable gamma correction for accurate lighting.
@@ -92,13 +99,13 @@ public class HelloServo extends SimpleApplication {
     @Override
     public void simpleInitApp() {
         configureCamera();
-        PhysicsSpace physicsSpace = configurePhysics();
+        physicsSpace = configurePhysics();
 
         // Add a dynamic, green frame.
-        PhysicsRigidBody frameBody = addFrame(physicsSpace);
+        PhysicsRigidBody frameBody = addFrame();
 
         // Add a dynamic, yellow box for the door.
-        PhysicsRigidBody doorBody = addDoor(physicsSpace);
+        PhysicsRigidBody doorBody = addDoor();
 
         // Add a double-ended physics joint to join the door to the frame.
         Vector3f pivotLocation = new Vector3f(-1f, 0f, 0f);
@@ -132,15 +139,14 @@ public class HelloServo extends SimpleApplication {
         inputManager.addMapping("pos2", new KeyTrigger(KeyInput.KEY_2));
         inputManager.addMapping("pos3", new KeyTrigger(KeyInput.KEY_3));
         inputManager.addMapping("pos4", new KeyTrigger(KeyInput.KEY_4));
-        InputListener listener = new ActionListener() {
+        InputListener actionListener = new ActionListener() {
             @Override
             public void onAction(String action, boolean ongoing, float tpf) {
                 if (!ongoing) {
                     return; // ignore key release
                 }
-                /*
-                 * Swing the door to the requested position.
-                 */
+
+                // Swing the door to the requested position.
                 switch (action) {
                     case "pos1":
                         motor.set(MotorParam.ServoTarget, 1.2f);
@@ -154,10 +160,12 @@ public class HelloServo extends SimpleApplication {
                     case "pos4":
                         motor.set(MotorParam.ServoTarget, 0f);
                         break;
+                    default:
                 }
             }
         };
-        inputManager.addListener(listener, "pos1", "pos2", "pos3", "pos4");
+        inputManager.addListener(
+                actionListener, "pos1", "pos2", "pos3", "pos4");
     }
     // *************************************************************************
     // private methods
@@ -165,10 +173,9 @@ public class HelloServo extends SimpleApplication {
     /**
      * Create a dynamic rigid body with a box shape and add it to the space.
      *
-     * @param physicsSpace (not null)
      * @return the new body
      */
-    private PhysicsRigidBody addDoor(PhysicsSpace physicsSpace) {
+    private PhysicsRigidBody addDoor() {
         BoxCollisionShape shape = new BoxCollisionShape(0.8f, 0.8f, 0.1f);
 
         float mass = 0.2f;
@@ -185,45 +192,11 @@ public class HelloServo extends SimpleApplication {
     }
 
     /**
-     * Add lighting and shadows to the specified scene.
-     */
-    private void addLighting(Spatial scene) {
-        ColorRGBA ambientColor = new ColorRGBA(0.03f, 0.03f, 0.03f, 1f);
-        AmbientLight ambient = new AmbientLight(ambientColor);
-        scene.addLight(ambient);
-        ambient.setName("ambient");
-
-        ColorRGBA directColor = new ColorRGBA(0.2f, 0.2f, 0.2f, 1f);
-        Vector3f direction = new Vector3f(-7f, -3f, -5f).normalizeLocal();
-        DirectionalLight sun = new DirectionalLight(direction, directColor);
-        scene.addLight(sun);
-        sun.setName("sun");
-
-        // Render shadows based on the directional light.
-        viewPort.clearProcessors();
-        int shadowMapSize = 2_048; // in pixels
-        int numSplits = 3;
-        DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager,
-                        shadowMapSize, numSplits);
-        dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
-        dlsr.setEdgesThickness(5);
-        dlsr.setLight(sun);
-        dlsr.setShadowIntensity(0.6f);
-        viewPort.addProcessor(dlsr);
-
-        // Set the viewport's background color to light blue.
-        ColorRGBA skyColor = new ColorRGBA(0.1f, 0.2f, 0.4f, 1f);
-        viewPort.setBackgroundColor(skyColor);
-    }
-
-    /**
      * Create a dynamic body with a square-frame shape and add it to the space.
      *
-     * @param physicsSpace (not null)
      * @return the new body
      */
-    private PhysicsRigidBody addFrame(PhysicsSpace physicsSpace) {
+    private PhysicsRigidBody addFrame() {
         CapsuleCollisionShape xShape
                 = new CapsuleCollisionShape(0.1f, 2f, PhysicsSpace.AXIS_X);
         CapsuleCollisionShape yShape
@@ -245,6 +218,42 @@ public class HelloServo extends SimpleApplication {
     }
 
     /**
+     * Add lighting and shadows to the specified scene and set the background
+     * color.
+     *
+     * @param scene the scene to augment (not null)
+     */
+    private void addLighting(Spatial scene) {
+        ColorRGBA ambientColor = new ColorRGBA(0.03f, 0.03f, 0.03f, 1f);
+        AmbientLight ambient = new AmbientLight(ambientColor);
+        scene.addLight(ambient);
+        ambient.setName("ambient");
+
+        ColorRGBA directColor = new ColorRGBA(0.2f, 0.2f, 0.2f, 1f);
+        Vector3f direction = new Vector3f(-7f, -3f, -5f).normalizeLocal();
+        DirectionalLight sun = new DirectionalLight(direction, directColor);
+        scene.addLight(sun);
+        sun.setName("sun");
+
+        // Render shadows based on the directional light.
+        viewPort.clearProcessors();
+        int shadowMapSize = 2_048; // in pixels
+        int numSplits = 3;
+        DirectionalLightShadowRenderer dlsr
+                = new DirectionalLightShadowRenderer(
+                        assetManager, shadowMapSize, numSplits);
+        dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
+        dlsr.setEdgesThickness(5);
+        dlsr.setLight(sun);
+        dlsr.setShadowIntensity(0.6f);
+        viewPort.addProcessor(dlsr);
+
+        // Set the viewport's background color to light blue.
+        ColorRGBA skyColor = new ColorRGBA(0.1f, 0.2f, 0.4f, 1f);
+        viewPort.setBackgroundColor(skyColor);
+    }
+
+    /**
      * Position the camera during startup.
      */
     private void configureCamera() {
@@ -256,6 +265,8 @@ public class HelloServo extends SimpleApplication {
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();

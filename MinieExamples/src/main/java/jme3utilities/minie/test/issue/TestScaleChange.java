@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2020, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -55,28 +55,36 @@ public class TestScaleChange extends SimpleApplication {
     /**
      * shape being tested
      */
-    private CollisionShape box;
+    private static CollisionShape box;
     /**
      * copy of the scale factors
      */
-    private float scale = 1f;
+    private static float scale = 1f;
     /**
      * control being tested
      */
-    private GhostControl gc;
+    private static GhostControl gc;
     /**
      * space for physics simulation
      */
-    private PhysicsSpace physicsSpace;
+    private static PhysicsSpace physicsSpace;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestScaleChange application.
+     */
+    public TestScaleChange() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestScaleChange application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         TestScaleChange app = new TestScaleChange();
         app.start();
     }

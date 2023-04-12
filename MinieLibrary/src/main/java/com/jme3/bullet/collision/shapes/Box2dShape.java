@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021 jMonkeyEngine
+ * Copyright (c) 2019-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,8 @@ import jme3utilities.Validate;
 import jme3utilities.math.MyMath;
 
 /**
- * An axis-aligned, rectangular CollisionShape based on Bullet's btBox2dShape.
+ * An axis-aligned, rectangular collision shape based on Bullet's
+ * {@code btBox2dShape}.
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -91,8 +92,8 @@ public class Box2dShape extends ConvexShape {
     public Box2dShape(float halfExtent) {
         Validate.nonNegative(halfExtent, "half extent");
 
-        halfExtentX = halfExtent;
-        halfExtentY = halfExtent;
+        this.halfExtentX = halfExtent;
+        this.halfExtentY = halfExtent;
         createShape();
     }
 
@@ -108,8 +109,8 @@ public class Box2dShape extends ConvexShape {
         Validate.nonNegative(xHalfExtent, "half extent on X");
         Validate.nonNegative(yHalfExtent, "half extent on Y");
 
-        halfExtentX = xHalfExtent;
-        halfExtentY = yHalfExtent;
+        this.halfExtentX = xHalfExtent;
+        this.halfExtentY = yHalfExtent;
         createShape();
     }
 
@@ -117,13 +118,13 @@ public class Box2dShape extends ConvexShape {
      * Instantiate a rectangle shape with the specified half extents.
      *
      * @param halfExtents the desired unscaled half extents (not null, no
-     * negative component, unaffected, Z component ignored)
+     * negative component, unaffected)
      */
     public Box2dShape(Vector2f halfExtents) {
         Validate.nonNegative(halfExtents, "half extents");
 
-        halfExtentX = halfExtents.x;
-        halfExtentY = halfExtents.y;
+        this.halfExtentX = halfExtents.x;
+        this.halfExtentY = halfExtents.y;
         createShape();
     }
 
@@ -136,8 +137,8 @@ public class Box2dShape extends ConvexShape {
     public Box2dShape(Vector3f halfExtents) {
         Validate.nonNegative(halfExtents, "half extents");
 
-        halfExtentX = halfExtents.x;
-        halfExtentY = halfExtents.y;
+        this.halfExtentX = halfExtents.x;
+        this.halfExtentY = halfExtents.y;
         createShape();
     }
     // *************************************************************************
@@ -157,7 +158,7 @@ public class Box2dShape extends ConvexShape {
         return result;
     }
     // *************************************************************************
-    // CollisionShape methods
+    // ConvexShape methods
 
     /**
      * Callback from {@link com.jme3.util.clone.Cloner} to convert this
@@ -172,21 +173,6 @@ public class Box2dShape extends ConvexShape {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
         createShape();
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public Box2dShape jmeClone() {
-        try {
-            Box2dShape clone = (Box2dShape) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -215,8 +201,8 @@ public class Box2dShape extends ConvexShape {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        halfExtentX = capsule.readFloat(tagX, 1f);
-        halfExtentY = capsule.readFloat(tagY, 1f);
+        this.halfExtentX = capsule.readFloat(tagX, 1f);
+        this.halfExtentY = capsule.readFloat(tagY, 1f);
         createShape();
     }
 
@@ -238,7 +224,7 @@ public class Box2dShape extends ConvexShape {
     // Java private methods
 
     /**
-     * Instantiate the configured btBox2dShape.
+     * Instantiate the configured {@code btBox2dShape}.
      */
     private void createShape() {
         assert halfExtentX >= 0f : halfExtentX;

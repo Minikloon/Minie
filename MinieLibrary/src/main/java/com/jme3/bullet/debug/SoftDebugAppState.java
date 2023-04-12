@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2015 jMonkeyEngine
+ * Copyright (c) 2009-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,7 @@ package com.jme3.bullet.debug;
 
 import com.jme3.asset.AssetManager;
 import com.jme3.bullet.PhysicsSoftSpace;
+import com.jme3.bullet.collision.PhysicsCollisionObject;
 import com.jme3.bullet.objects.PhysicsSoftBody;
 import com.jme3.material.Material;
 import com.jme3.material.RenderState;
@@ -59,6 +60,10 @@ public class SoftDebugAppState extends BulletDebugAppState {
     // constants and loggers
 
     /**
+     * local copy of {@link com.jme3.math.ColorRGBA#White}
+     */
+    final private static ColorRGBA whiteColor = new ColorRGBA(1f, 1f, 1f, 1f);
+    /**
      * message logger for this class
      */
     final public static Logger logger2
@@ -70,6 +75,10 @@ public class SoftDebugAppState extends BulletDebugAppState {
      * limit which clusters are visualized, or null to visualize no clusters
      */
     private BulletDebugAppState.DebugAppStateFilter clusterFilter;
+    /**
+     * limit which wind velocities are visualized, or null to visualize none
+     */
+    private BulletDebugAppState.DebugAppStateFilter windVelocityFilter;
     /**
      * map soft bodies to visualization nodes
      */
@@ -90,6 +99,10 @@ public class SoftDebugAppState extends BulletDebugAppState {
      * material for visualizing all pinned soft-body nodes
      */
     private Material pinMaterial;
+    /**
+     * material for visualizing all soft-body wind velocities
+     */
+    private Material windVelocityMaterial;
     /**
      * materials for soft-body faces
      */
@@ -172,13 +185,34 @@ public class SoftDebugAppState extends BulletDebugAppState {
     }
 
     /**
+     * Access the Material for visualizing wind velocities.
+     *
+     * @return the pre-existing instance (not null)
+     */
+    Material getWindVelocityMaterial() {
+        assert windVelocityMaterial != null;
+        return windVelocityMaterial;
+    }
+
+    /**
      * Alter which soft-body clusters are visualized. For internal use only.
      *
      * @param filter the desired filter, or null to visualize no clusters
      */
     public void setClusterFilter(
             BulletDebugAppState.DebugAppStateFilter filter) {
-        clusterFilter = filter;
+        this.clusterFilter = filter;
+    }
+
+    /**
+     * Alter which wind velocities are included in the debug visualization.
+     *
+     * @param filter the filter to use (alias created) or null to visualize no
+     * wind velocities (default=null)
+     */
+    public void setWindVelocityFilter(
+            BulletDebugAppState.DebugAppStateFilter filter) {
+        this.windVelocityFilter = filter;
     }
     // *************************************************************************
     // BulletDebugAppState methods
@@ -193,11 +227,11 @@ public class SoftDebugAppState extends BulletDebugAppState {
         assert am != null;
         super.setupMaterials(am);
 
-        anchorMaterial
+        this.anchorMaterial
                 = createWireMaterial(am, ColorRGBA.Green, "anchorMaterial", 1);
 
         String matDefPath = "MatDefs/wireframe/multicolor2.j3md";
-        clusterMaterial = new Material(am, matDefPath);
+        this.clusterMaterial = new Material(am, matDefPath);
         ColorRGBA clusterColor = new ColorRGBA(1f, 0f, 0f, 1f); // red
         clusterMaterial.setColor("Color", clusterColor); // creates an alias
         float shapeSize = 10f;
@@ -211,16 +245,16 @@ public class SoftDebugAppState extends BulletDebugAppState {
         renderState.setBlendMode(RenderState.BlendMode.Alpha);
         renderState.setDepthTest(false);
 
-        faceMaterials[0] = MyAsset.createInvisibleMaterial(am);
-        faceMaterials[1]
+        this.faceMaterials[0] = MyAsset.createInvisibleMaterial(am);
+        this.faceMaterials[1]
                 = createWireMaterial(am, ColorRGBA.Red, "debug red ss", 1);
-        faceMaterials[2]
+        this.faceMaterials[2]
                 = createWireMaterial(am, ColorRGBA.Red, "debug red ds", 2);
 
-        linkMaterial
+        this.linkMaterial
                 = createWireMaterial(am, ColorRGBA.Orange, "linkMaterial", 1);
 
-        pinMaterial = new Material(am, matDefPath);
+        this.pinMaterial = new Material(am, matDefPath);
         ColorRGBA pinColor = new ColorRGBA(1f, 0f, 0f, 1f); // red
         pinMaterial.setColor("Color", pinColor); // creates an alias
         shapeSize = 24f;
@@ -233,6 +267,19 @@ public class SoftDebugAppState extends BulletDebugAppState {
         renderState = pinMaterial.getAdditionalRenderState();
         renderState.setBlendMode(RenderState.BlendMode.Alpha);
         renderState.setDepthTest(false);
+
+        this.windVelocityMaterial
+                = createWireMaterial(am, whiteColor, "wind velocity", 2);
+    }
+
+    /**
+     * Synchronize the velocity visualizers with the collision objects in the
+     * PhysicsSpace.
+     */
+    @Override
+    protected void updateVelocities() {
+        super.updateVelocities();
+        updateWindVelocities();
     }
 
     /**
@@ -252,8 +299,8 @@ public class SoftDebugAppState extends BulletDebugAppState {
      */
     private void updateSoftBodies() {
         HashMap<PhysicsSoftBody, Node> oldMap = softBodies;
-        //create new map
-        softBodies = new HashMap<>(oldMap.size());
+        // create new map
+        this.softBodies = new HashMap<>(oldMap.size());
         DebugConfiguration config = getConfiguration();
         PhysicsSoftSpace pSpace = (PhysicsSoftSpace) config.getSpace();
         Collection<PhysicsSoftBody> list = pSpace.getSoftBodyList();
@@ -265,9 +312,8 @@ public class SoftDebugAppState extends BulletDebugAppState {
             }
             softBodies.put(softBody, node);
         }
-        /*
-         * Detach nodes of soft bodies that have been removed from the space.
-         */
+
+        // Detach nodes of soft bodies that have been removed from the space.
         for (Node node : oldMap.values()) {
             node.removeFromParent();
         }
@@ -293,6 +339,37 @@ public class SoftDebugAppState extends BulletDebugAppState {
             }
 
             updateAxes(node, displayShape);
+        }
+    }
+
+    /**
+     * Synchronize the wind-velocity debug controls with the soft bodies in the
+     * PhysicsSpace.
+     */
+    private void updateWindVelocities() {
+        if (windVelocityFilter == null) {
+            return;
+        }
+
+        Map<PhysicsCollisionObject, Node> pcoMap = getPcoMap();
+        for (Map.Entry<PhysicsCollisionObject, Node> entry
+                : pcoMap.entrySet()) {
+            PhysicsCollisionObject pco = entry.getKey();
+            boolean display = pco instanceof PhysicsSoftBody
+                    && windVelocityFilter.displayObject(pco);
+
+            Node transformedNode = entry.getValue();
+            Node parent = transformedNode.getParent();
+            Control control
+                    = parent.getControl(WindVelocityDebugControl.class);
+
+            if (control == null && display) {
+                logger.log(Level.FINE, "Create new WindVelocityDebugControl");
+                control = new WindVelocityDebugControl(this, pco);
+                parent.addControl(control);
+            } else if (control != null && !display) {
+                parent.removeControl(control);
+            }
         }
     }
 }

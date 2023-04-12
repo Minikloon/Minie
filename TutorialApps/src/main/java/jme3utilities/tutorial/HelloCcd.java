@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ import com.jme3.math.Vector3f;
 
 /**
  * A simple example of continuous collision detection (CCD).
- *
+ * <p>
  * Builds upon HelloStaticBody.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -50,9 +50,9 @@ public class HelloCcd extends SimpleApplication {
     /**
      * Main entry point for the HelloCcd application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloCcd application = new HelloCcd();
         application.start();
     }
@@ -98,8 +98,8 @@ public class HelloCcd extends SimpleApplication {
         // Create a thin, static disc and add it to the space.
         float discRadius = 2f;
         float discThickness = 0.05f;
-        CollisionShape discShape = new CylinderCollisionShape(discRadius,
-                discThickness, PhysicsSpace.AXIS_Y);
+        CollisionShape discShape = new CylinderCollisionShape(
+                discRadius, discThickness, PhysicsSpace.AXIS_Y);
         PhysicsRigidBody disc
                 = new PhysicsRigidBody(discShape, PhysicsBody.massForStatic);
         physicsSpace.addCollisionObject(disc);

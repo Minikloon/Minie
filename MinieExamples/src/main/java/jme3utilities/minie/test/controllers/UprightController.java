@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2019, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -94,8 +94,8 @@ public class UprightController extends IKController {
      * @param directionInLinkBody the up direction (in the link body's local
      * coordinates, not null, not zero, unaffected)
      */
-    public UprightController(PhysicsLink controlledLink,
-            Vector3f directionInLinkBody) {
+    public UprightController(
+            PhysicsLink controlledLink, Vector3f directionInLinkBody) {
         super(controlledLink);
         Validate.nonZero(directionInLinkBody, "direction in link body");
         this.directionInLinkBody = directionInLinkBody.normalize();
@@ -136,7 +136,7 @@ public class UprightController extends IKController {
      * @param newFactor (default = 0.1)
      */
     public void setErrorGainFactor(float newFactor) {
-        errorGainFactor = newFactor;
+        this.errorGainFactor = newFactor;
     }
     // *************************************************************************
     // IKController methods
@@ -154,14 +154,14 @@ public class UprightController extends IKController {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
 
-        directionInLinkBody = cloner.clone(directionInLinkBody);
-        previousError = cloner.clone(previousError);
+        this.directionInLinkBody = cloner.clone(directionInLinkBody);
+        this.previousError = cloner.clone(previousError);
     }
 
     /**
      * Apply an impulse to the controlled rigid body to keep the controlled link
-     * upright. Meant to be invoked by the controlled link before each physics
-     * tick.
+     * upright. Meant to be invoked by the controlled link before each
+     * simulation step.
      *
      * @param timeStep the physics timestep (in seconds, &ge;0)
      */
@@ -174,14 +174,12 @@ public class UprightController extends IKController {
 
         PhysicsLink link = getLink();
         assert !link.isKinematic();
-        /*
-         * Convert the body's "up" direction to physics-space coordinates.
-         */
+
+        // Convert the body's "up" direction to physics-space coordinates.
         Transform localToWorld = link.physicsTransform(null);
         Vector3f actual = localToWorld.getRotation().mult(directionInLinkBody);
-        /*
-         * error = actual X desired
-         */
+
+        // error = actual X desired
         Vector3f error = actual.cross(unitY);
         /*
          * Return early if the error angle is 0.
@@ -202,14 +200,12 @@ public class UprightController extends IKController {
         Vector3f errorAxis = error.divide(absSinErrorAngle);
         float errorMagnitude = (error.y >= 0f) ? absSinErrorAngle : 1f;
         errorAxis.mult(errorMagnitude, error);
-        /*
-         * Calculate delta: the change in the error vector.
-         */
+
+        // Calculate delta: the change in the error vector.
         Vector3f delta = error.subtract(previousError, null);
         previousError.set(error);
-        /*
-         * Calculate a torque impulse.
-         */
+
+        // Calculate a torque impulse.
         Vector3f sum = new Vector3f(0f, 0f, 0f);
         // delta term
         MyVector3f.accumulateScaled(sum, delta, deltaGainFactor);
@@ -220,9 +216,8 @@ public class UprightController extends IKController {
         rigidBody.getInverseInertiaWorld(tmpInertia);
         tmpInertia.invertLocal();
         tmpInertia.mult(sum, sum);
-        /*
-         * Apply the torque impulse to the controlled link's rigid body.
-         */
+
+        // Apply the torque impulse to the controlled link's rigid body.
         rigidBody.applyTorqueImpulse(sum);
     }
 
@@ -238,12 +233,12 @@ public class UprightController extends IKController {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        deltaGainFactor = capsule.readFloat("deltaGainFactor", 0.1f);
-        errorGainFactor = capsule.readFloat("errorGainFactor", 0.1f);
-        directionInLinkBody = (Vector3f) capsule.readSavable(
+        this.deltaGainFactor = capsule.readFloat("deltaGainFactor", 0.1f);
+        this.errorGainFactor = capsule.readFloat("errorGainFactor", 0.1f);
+        this.directionInLinkBody = (Vector3f) capsule.readSavable(
                 "directionInLinkBody", new Vector3f(1f, 0f, 0f));
-        previousError = (Vector3f) capsule.readSavable("previousError",
-                new Vector3f());
+        this.previousError = (Vector3f) capsule
+                .readSavable("previousError", new Vector3f());
     }
 
     /**

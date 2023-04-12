@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 jMonkeyEngine
+ * Copyright (c) 2020-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,11 +31,13 @@
  */
 package com.jme3.bullet.collision.shapes;
 
+import com.jme3.bullet.util.DebugShapeFactory;
+import java.nio.FloatBuffer;
 import java.util.logging.Logger;
 
 /**
  * The abstract base class for convex collision shapes based on Bullet's
- * btConvexShape.
+ * {@code btConvexShape}.
  * <p>
  * Subclasses include BoxCollisionShape and CapsuleCollisionShape.
  *
@@ -48,8 +50,37 @@ abstract public class ConvexShape extends CollisionShape {
     /**
      * message logger for this class
      */
-    final public static Logger logger
+    final public static Logger loggerX
             = Logger.getLogger(ConvexShape.class.getName());
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate a collision shape with no tracker and no assigned native
+     * object.
+     */
+    protected ConvexShape() { // explicit to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
+    // new methods exposed
+
+    /**
+     * Approximate this shape with a HullCollisionShape. Meant to be overridden.
+     *
+     * @return a new shape
+     */
+    public HullCollisionShape toHullShape() {
+        // Generate low-res debug vertices.
+        FloatBuffer buffer = DebugShapeFactory
+                .debugVertices(this, DebugShapeFactory.lowResolution);
+
+        // Flip the buffer.
+        buffer.rewind();
+        buffer.limit(buffer.capacity());
+
+        HullCollisionShape result = new HullCollisionShape(buffer);
+        return result;
+    }
     // *************************************************************************
     // CollisionShape methods
 
@@ -79,5 +110,36 @@ abstract public class ConvexShape extends CollisionShape {
     public boolean isConvex() {
         assert super.isConvex();
         return true;
+    }
+
+    /**
+     * Estimate the volume of this shape, including scale and margin.
+     *
+     * @return the volume (in physics-space units cubed, &ge;0)
+     */
+    @Override
+    public float scaledVolume() {
+        int meshResolution = DebugShapeFactory.lowResolution;
+        float result = DebugShapeFactory.volumeConvex(this, meshResolution);
+
+        assert result >= 0f : result;
+        return result;
+    }
+
+    /**
+     * Approximate this shape with a splittable shape.
+     *
+     * @return a new splittable shape
+     */
+    @Override
+    public CollisionShape toSplittableShape() {
+        CollisionShape result;
+        if (canSplit()) {
+            result = this;
+        } else {
+            result = toHullShape();
+        }
+
+        return result;
     }
 }

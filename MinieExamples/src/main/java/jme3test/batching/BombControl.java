@@ -53,6 +53,7 @@ import com.jme3.math.Vector3f;
 import com.jme3.scene.Spatial;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.logging.Logger;
 
 /**
  * @author normenhansen
@@ -67,10 +68,14 @@ class BombControl
     final private static float forceFactor = 1f;
     final private static float fxTime = 0.5f;
     final private static float maxTime = 4f;
+    /**
+     * message logger for this class
+     */
+    final static Logger logger4 = Logger.getLogger(BombControl.class.getName());
     // *************************************************************************
     // fields
 
-    private float curTime = -1.0f;
+    private float curTime = -1f;
     private float timer;
     private ParticleEmitter effect;
     private PhysicsGhostObject ghostObject;
@@ -114,8 +119,8 @@ class BombControl
     @Override
     public void physicsTick(PhysicsSpace space, float f) {
         //get all overlapping objects and apply impulse to them
-        for (Iterator<PhysicsCollisionObject> it = ghostObject.getOverlappingObjects().iterator(); it.hasNext();) {
-            PhysicsCollisionObject physicsCollisionObject = it.next();
+        for (PhysicsCollisionObject physicsCollisionObject
+                : ghostObject.getOverlappingObjects()) {
             if (physicsCollisionObject instanceof PhysicsRigidBody) {
                 PhysicsRigidBody rBody = (PhysicsRigidBody) physicsCollisionObject;
                 rBody.getPhysicsLocation(vector2);

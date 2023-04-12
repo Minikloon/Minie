@@ -5,15 +5,16 @@ The [Minie Project][project] is about improving the integration of
 and [Khaled Mamou's V-HACD Library][vhacd] into
 [the jMonkeyEngine (JME) game engine][jme].
 
-It contains 7 sub-projects:
+It contains 8 sub-projects:
 
  1. MinieLibrary: the Minie runtime library and its automated tests
  2. [DacWizard]: a GUI application to configure a ragdoll
- 3. TutorialApps: tutorial apps
- 4. MinieExamples: demos, examples, and non-automated test software
- 5. MinieAssets: generate assets used in MinieExamples
- 6. MinieDump: a command-line utility to dump J3O assets
- 7. Jme3Examples: physics examples from jme3-examples
+ 3. VhacdTuner: a GUI application to tune the V-HACD algorithm for a particular mesh
+ 4. TutorialApps: tutorial apps
+ 5. MinieExamples: demos, examples, and non-automated test software
+ 6. MinieAssets: generate assets used in MinieExamples
+ 7. MinieDump: a command-line utility to dump J3O assets
+ 8. Jme3Examples: physics examples from jme3-examples
 
 Complete source code (in Java) is provided under
 [a 3-clause BSD license][license].
@@ -92,7 +93,7 @@ Summary of added features:
    collision shapes, contact/constraint solvers, etcetera
  + option to apply scaling with a `RigidBodyControl`
 
-Some jme3-jbullet` classes that Minie omits:
+Some jme3-jbullet classes that Minie omits:
 
  + `KinematicRagdollControl`, `HumanoidRagdollPreset`, and `RagdollPreset`:
    use `DynamicAnimControl` instead
@@ -119,10 +120,8 @@ Newer releases (since v0.5.0) can be downloaded from
 Older releases (v0.1.1 through v0.4.5) can be downloaded from
 [the Jme3-utilities Project](https://github.com/stephengold/jme3-utilities/releases).
 
-Newer Maven artifacts (since v3.1.0) are available from
-[MavenCentral](https://search.maven.org/artifact/com.github.stephengold/Minie).
-
-Old Maven artifacts (v1.4.0 through v3.1.0) are available from JCenter.
+Maven artifacts since v3.1.0 are available from
+[MavenCentral](https://central.sonatype.com/search?q=Minie&namespace=com.github.stephengold).
 
 [Jump to table of contents](#toc)
 
@@ -244,7 +243,7 @@ preferably early in the development process.
  + [Debugging physics issues](https://stephengold.github.io/Minie/minie/minie-library-tutorials/debug.html)
  + [An introduction to New6Dof](https://stephengold.github.io/Minie/minie/minie-library-tutorials/new6dof.html)
  + [An introduction to DynamicAnimControl](https://stephengold.github.io/Minie/minie/minie-library-tutorials/dac.html)
- + [Collision detection](https://stephengold.github.io/Minie/minie/minie-library-tutorials/detect.html)
+ + [Collision detection](https://stephengold.github.io/Minie/minie/minie-library-tutorials/collision.html)
  + [An introduction to soft-body physics](https://stephengold.github.io/Minie/minie/minie-library-tutorials/softbody.html)
 
 [Jump to table of contents](#toc)
@@ -263,14 +262,21 @@ preferably early in the development process.
 
 ## External links
 
- + [The Minie Physics Library page](https://store.jmonkeyengine.org/38308161-c3cf-4e23-8754-528ca8387c11)
-   at [the JmonkeyStore](https://store.jmonkeyengine.org)
- + [The Bullet Physics SDK Manual](https://github.com/bulletphysics/bullet3/blob/master/docs/Bullet_User_Manual.pdf)
- + [The physics section of the jMonkeyEngine Wiki](https://wiki.jmonkeyengine.org/jme3/advanced/physics.html)
- + [Alan Chou's game-physics tutorial](http://allenchou.net/game-physics-series/)
++ [the Minie Physics Library page](https://library.jmonkeyengine.org/#!entry=11511%2F38308161-c3cf-4e23-8754-528ca8387c11)
+  in [the JmonkeyEngine Library][library]
++ [The Bullet Physics SDK Manual](https://github.com/bulletphysics/bullet3/blob/master/docs/Bullet_User_Manual.pdf)
++ [The physics section of the jMonkeyEngine Wiki](https://wiki.jmonkeyengine.org/docs/3.4/physics/physics.html)
++ [Alan Chou's game-physics tutorial](http://allenchou.net/game-physics-series/)
++ [V-HACD v4 slideshow](https://docs.google.com/presentation/d/1OZ4mtZYrGEC8qffqb8F7Le2xzufiqvaPpRbLHKKgTIM)
 
 YouTube videos about Minie:
 
+  + September 2022 teaser (splitting rigid bodies in real time)
+    [watch](https://www.youtube.com/watch?v=9IsCSgoKJeE) (0:53)
+    [source code](https://github.com/stephengold/Minie/blob/fd0a61d2d24f354e0a9418cfc904c5985b69cfd8/MinieExamples/src/main/java/jme3utilities/minie/test/SplitDemo.java)
+  + August 2022 walkthru of the VhacdTuner application
+    [watch](https://www.youtube.com/watch?v=iEWJtPujmM8) (7:45)
+    [source code](https://github.com/stephengold/Minie/blob/e1b7781fd06d8060ab96928379509a732fd9398f/VhacdTuner/src/main/java/jme3utilities/minie/tuner/VhacdTuner.java)
   + June 2019 teaser #2 (rubber duck)
     [watch](https://www.youtube.com/watch?v=GKc-_SqcpZo) (0:16)
     [source code](https://github.com/stephengold/Minie/blob/d0326f636dbed76c809cb8ec654bfaf94786e988/MinieExamples/src/main/java/jme3utilities/minie/test/TestSoftBodyControl.java)
@@ -329,7 +335,7 @@ a library in the [jMonkeyEngine Game Engine][jme].
 From January to November 2018, Minie was a sub-project of
 [the Jme3-utilities Project][utilities].
 
-Since November 2018, Minie has been a separate project at
+Since November 2018, Minie has been a separate project, hosted at
 [GitHub][minie].
 
 [Jump to table of contents](#toc)
@@ -358,7 +364,7 @@ artists and software developers:
 + Pavly Gerges (aka "Pavl_G") for testing Minie on Raspberry Pi
 + Adam T. Ryder (aka "tryder") for creating and licensing
   the [jME-TTF] rendering system
-+ [Paul Speed (aka "pspeed42")][pspeed], for creating the [SimMath library][simmath]
++ [Paul Speed (aka "pspeed42")][pspeed], for creating the [SimMath library][simMath]
 + "oxplay2", for reporting a `PhysicsRigidBody` bug and helping me pin it down
 + "duncanj", for pull request #15
 + "qwq", for suggesting changes to how rigid-body contacts are managed
@@ -369,9 +375,12 @@ artists and software developers:
     + the [Antora] static website generator
     + the [Blender] 3-D animation suite
     + the [Bullet] real-time physics library
+    + the [Checkstyle] tool
     + the [FindBugs] source-code analyzer
     + the [Firefox] and [Google Chrome][chrome] web browsers
     + the [Git] revision-control system and GitK commit viewer
+    + the [GitKraken] client
+    + the [GNU Project Debugger][gdb]
     + the [Gradle] build tool
     + the [IntelliJ IDEA][idea] and [NetBeans] integrated development environments
     + the [Java] compiler, standard doclet, and runtime environment
@@ -388,7 +397,8 @@ artists and software developers:
     + [ProFont], the programmers' font
     + the [WinMerge] differencing and merging tool
 
-I am grateful to [GitHub], [Sonatype], [JFrog], [YouTube], and [Imgur]
+I am grateful to [GitHub], [Sonatype], [JFrog],
+[Travis], [MacStadium], [YouTube], and [Imgur]
 for providing free hosting for this project
 and many other open-source projects.
 
@@ -400,20 +410,20 @@ correct the situation: sgold@sonic.net
 [Jump to table of contents](#toc)
 
 
-[ant]: https://ant.apache.org "Apache Ant Project"
 [antora]: https://antora.org/ "Antora Project"
 [blender]: https://docs.blender.org "Blender Project"
-[bsd3]: https://opensource.org/licenses/BSD-3-Clause "3-Clause BSD License"
 [bullet]: https://pybullet.org/wordpress "Bullet Real-Time Physics Simulation"
+[checkstyle]: https://checkstyle.org "Checkstyle"
 [chrome]: https://www.google.com/chrome "Chrome"
 [dacwizard]: https://github.com/stephengold/Minie/tree/master/DacWizard "DacWizard Application"
 [dokthar]: https://github.com/dokthar/jmonkeyengine "Dokthar's fork of JMonkeyEngine"
 [elements]: https://www.adobe.com/products/photoshop-elements.html "Photoshop Elements"
 [findbugs]: http://findbugs.sourceforge.net "FindBugs Project"
 [firefox]: https://www.mozilla.org/en-US/firefox "Firefox"
+[gdb]: https://www.gnu.org/software/gdb/ "GNU Project Debugger"
 [git]: https://git-scm.com "Git"
 [github]: https://github.com "GitHub"
-[gltf]: https://www.khronos.org/gltf "glTF Project"
+[gitkraken]: https://www.gitkraken.com "GitKraken client"
 [gradle]: https://gradle.org "Gradle Project"
 [heart]: https://github.com/stephengold/Heart "Heart Project"
 [idea]: https://www.jetbrains.com/idea/ "IntelliJ IDEA"
@@ -422,27 +432,28 @@ correct the situation: sgold@sonic.net
 [jfrog]: https://www.jfrog.com "JFrog"
 [jme]: https://jmonkeyengine.org  "jMonkeyEngine Project"
 [jme-ttf]: https://1337atr.weebly.com/jttf.html "jME-TTF Rendering System"
-[latest]: https://github.com/stephengold/Minie/releases/tag/latest "latest release"
-[libbulletjme]: https://github.com/stephengold/Libbulletjme "Libbulletjme Project"
+[library]: https://library.jmonkeyengine.org "jMonkeyEngine Library"
 [license]: https://github.com/stephengold/Minie/blob/master/LICENSE "Minie license"
 [log]: https://github.com/stephengold/Minie/blob/master/MinieLibrary/release-notes.md "release log"
+[macstadium]: https://www.macstadium.com/ "MacStadium"
 [makehuman]: http://www.makehumancommunity.org/ "MakeHuman Community"
 [manual]: https://github.com/bulletphysics/bullet3/blob/master/docs/Bullet_User_Manual.pdf "Bullet User Manual"
 [markdown]: https://daringfireball.net/projects/markdown "Markdown Project"
-[meld]: https://meldmerge.org "Meld Tool"
-[minie]: https://github.com/stephengold/Minie "Minie Repository"
+[meld]: https://meldmerge.org "Meld merge tool"
+[minie]: https://stephengold.github.io/Minie/minie/overview.html "Minie Project"
 [mint]: https://linuxmint.com "Linux Mint Project"
 [netbeans]: https://netbeans.org "NetBeans Project"
 [nifty]: https://nifty-gui.github.io/nifty-gui "Nifty GUI Project"
 [obs]: https://obsproject.com "Open Broadcaster Software Project"
 [profont]: https://tobiasjung.name/profont "ProFont Project"
 [project]: https://stephengold.github.io/Minie "Minie Project"
-[simmath]: https://github.com/Simsilica/SimMath "SimMath Library"
+[simMath]: https://github.com/Simsilica/SimMath "SimMath Library"
 [sonatype]: https://www.sonatype.com "Sonatype"
+[travis]: https://travis-ci.com "Travis CI"
 [utilities]: https://github.com/stephengold/jme3-utilities "Jme3-utilities Project"
 [vegdahl]: https://www.cessen.com "Nathan Vegdahl"
 [vhacd]: https://github.com/kmammou/v-hacd "V-HACD Library"
-[vhacdBindings]: https://github.com/riccardobl/v-hacd-java-bindings "V-HACD Java Bindings Project"
+[vhacdBindings]: https://github.com/riccardobl/v-hacd-java-bindings "Riccardo's V-hacd-java-bindings Project"
 [wes]: https://github.com/stephengold/Wes "Wes Project"
 [winmerge]: https://winmerge.org "WinMerge Project"
 [youtube]: https://www.youtube.com/ "YouTube"

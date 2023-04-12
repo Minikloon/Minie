@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -35,6 +35,7 @@ import com.jme3.bullet.collision.shapes.HullCollisionShape;
 import com.jme3.bullet.collision.shapes.MeshCollisionShape;
 import com.jme3.bullet.collision.shapes.MultiSphere;
 import com.jme3.bullet.collision.shapes.infos.IndexedMesh;
+import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Mesh;
@@ -65,23 +66,22 @@ public class TestEmptyShape {
     @Test
     public void testEmptyShape() {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
-        /*
-         * Instantiate various "empty" objects.
-         */
+
+        // Instantiate various "empty" objects.
         float[] floatArray = new float[0];
         IndexedMesh[] indexedMeshArray = new IndexedMesh[0];
         Mesh[] jmeMeshArray = new Mesh[0];
 
-        List<Float> floatList = new ArrayList<>();
-        List<IndexedMesh> indexedMeshList = new ArrayList<>();
-        List<Vector3f> vectorList = new ArrayList<>();
+        List<Float> floatList = new ArrayList<>(1);
+        List<IndexedMesh> indexedMeshList = new ArrayList<>(1);
+        List<Vector3f> vectorList = new ArrayList<>(1);
 
         FloatBuffer buffer = BufferUtils.createFloatBuffer(0);
         buffer.flip();
 
         Mesh jmeMesh = new Mesh();
-        jmeMesh.setBuffer(VertexBuffer.Type.Position, MyVector3f.numAxes,
-                buffer);
+        jmeMesh.setBuffer(
+                VertexBuffer.Type.Position, MyVector3f.numAxes, buffer);
         jmeMesh.updateBound();
         IndexedMesh indexedMesh = new IndexedMesh(jmeMesh);
         /*
@@ -90,89 +90,100 @@ public class TestEmptyShape {
          */
         CollisionShape shape = new EmptyShape(true);
         PhysicsRigidBody rigidBody
-                = new PhysicsRigidBody(shape, PhysicsRigidBody.massForStatic);
+                = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
         shape = new CompoundCollisionShape();
-        rigidBody = new PhysicsRigidBody(shape, PhysicsRigidBody.massForStatic);
+        rigidBody = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
         shape = new GImpactCollisionShape(indexedMeshArray);
-        rigidBody = new PhysicsRigidBody(shape, PhysicsRigidBody.massForStatic);
+        rigidBody = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
 
         shape = new GImpactCollisionShape(jmeMeshArray);
-        rigidBody = new PhysicsRigidBody(shape, PhysicsRigidBody.massForStatic);
-        /*
-         * Attempt to create empty shapes in various illegal ways.
-         */
+        rigidBody = new PhysicsRigidBody(shape, PhysicsBody.massForStatic);
+
+        // Attempt to create empty shapes in various illegal ways.
         try {
             shape = new HeightfieldCollisionShape(floatArray);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
-            shape = new HeightfieldCollisionShape(floatArray,
-                    Vector3f.UNIT_XYZ);
+            shape = new HeightfieldCollisionShape(
+                    floatArray, Vector3f.UNIT_XYZ);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new HullCollisionShape(vectorList);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new HullCollisionShape(floatArray);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new HullCollisionShape(buffer);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new HullCollisionShape(jmeMesh);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new HullCollisionShape(jmeMeshArray);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new MeshCollisionShape(true, indexedMesh);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new MeshCollisionShape(true, indexedMeshArray);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new MeshCollisionShape(true, indexedMeshList);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new MeshCollisionShape(jmeMesh, true);
             Assert.fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
 
         try {
             shape = new MultiSphere(vectorList, floatList);
         } catch (IllegalArgumentException exception) {
+            // do nothing
         }
     }
 }

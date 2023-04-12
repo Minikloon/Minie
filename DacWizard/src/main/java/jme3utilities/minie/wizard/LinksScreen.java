@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -76,7 +76,7 @@ public class LinksScreen extends GuiScreenController {
     // fields
 
     /**
-     * element of GUI button to proceed to the next Screen
+     * element of GUI button to proceed to the "test" screen
      */
     private Element nextElement;
     /**
@@ -102,7 +102,7 @@ public class LinksScreen extends GuiScreenController {
      *
      * @return "" if ready to proceed, otherwise an explanatory message
      */
-    String feedback() {
+    static String feedback() {
         return "";
     }
 
@@ -113,8 +113,8 @@ public class LinksScreen extends GuiScreenController {
      * @param event details of the event (not null, ignored)
      */
     @NiftyEventSubscriber(pattern = ".*Slider")
-    public void linksScreenSliderChanged(final String sliderId,
-            final SliderChangedEvent event) {
+    public void linksScreenSliderChanged(
+            final String sliderId, final SliderChangedEvent event) {
         Validate.nonNull(sliderId, "slider ID");
         assert sliderId.endsWith("Slider") : sliderId;
         Validate.nonNull(event, "event");
@@ -171,6 +171,8 @@ public class LinksScreen extends GuiScreenController {
 
     /**
      * Handle a "select centerHeuristic" action with an argument.
+     *
+     * @param heuristic the desired heuristic (not null)
      */
     void selectCenterHeuristic(CenterHeuristic heuristic) {
         LinkConfig config = config();
@@ -262,6 +264,8 @@ public class LinksScreen extends GuiScreenController {
 
     /**
      * Handle a "select shapeHeuristic" action with an argument.
+     *
+     * @param heuristic the desired heuristic (not null)
      */
     void selectShapeHeuristic(ShapeHeuristic heuristic) {
         LinkConfig config = config();
@@ -284,14 +288,16 @@ public class LinksScreen extends GuiScreenController {
         float oldParameter = config.massParameter();
         String defaultText = Float.toString(oldParameter);
         String actionPrefix = "set massParameter ";
-        DialogController controller = new FloatDialog("Set", Float.MIN_VALUE,
-                Float.MAX_VALUE, AllowNull.No);
+        DialogController controller = new FloatDialog(
+                "Set", Float.MIN_VALUE, Float.MAX_VALUE, AllowNull.No);
         showTextEntryDialog("Enter the mass-parameter value:", defaultText,
                 actionPrefix, controller);
     }
 
     /**
      * Handle a "set massParameter" action with an argument.
+     *
+     * @param value the desired parameter value (&gt;0)
      */
     void setMassParameter(float value) {
         LinkConfig config = config();
@@ -321,6 +327,9 @@ public class LinksScreen extends GuiScreenController {
 
     /**
      * Handle a "set shapeScale" action with an argument.
+     *
+     * @param scaleFactors the desired scale factors (not null, no negative
+     * component, unaffected)
      */
     void setShapeScale(Vector3f scaleFactors) {
         LinkConfig config = config();
@@ -344,8 +353,8 @@ public class LinksScreen extends GuiScreenController {
      * @param application (not null)
      */
     @Override
-    public void initialize(AppStateManager stateManager,
-            Application application) {
+    public void initialize(
+            AppStateManager stateManager, Application application) {
         super.initialize(stateManager, application);
 
         InputMode inputMode = InputMode.findMode("links");
@@ -366,24 +375,22 @@ public class LinksScreen extends GuiScreenController {
         if (nextButton == null) {
             throw new RuntimeException("missing GUI control: nextButton");
         }
-        nextElement = nextButton.getElement();
+        this.nextElement = nextButton.getElement();
 
-        treeBox = getScreen().findNiftyControl("hierarchy", TreeBox.class);
+        this.treeBox = getScreen().findNiftyControl("hierarchy", TreeBox.class);
         if (treeBox == null) {
             throw new RuntimeException("missing GUI control: hierarchy");
         }
 
         TreeItem<LinkValue> rootItem = new TreeItem<>();
         rootItem.setExpanded(true);
-        /*
-         * Create an item for the torso.
-         */
+
+        // Create an item for the torso.
         LinkValue linkItem = new LinkValue(DacConfiguration.torsoName);
         TreeItem<LinkValue> torsoItem = new TreeItem<>(linkItem);
         torsoItem.setExpanded(true);
-        /*
-         * Create an item for each linked bone in the hierarchy.
-         */
+
+        // Create an item for each linked bone in the hierarchy.
         Model model = DacWizard.getModel();
         int[] linkedBoneIndices = model.listLinkedBones();
         int numLinkedBones = linkedBoneIndices.length;
@@ -395,9 +402,8 @@ public class LinksScreen extends GuiScreenController {
             lbItems[lbIndex] = new TreeItem<>(linkItem);
             lbItems[lbIndex].setExpanded(true);
         }
-        /*
-         * Parent each item.
-         */
+
+        // Parent each item.
         for (int childLbi = 0; childLbi < numLinkedBones; ++childLbi) {
             TreeItem<LinkValue> childItem = lbItems[childLbi];
             LinkValue childValue = childItem.getValue();
@@ -405,7 +411,7 @@ public class LinksScreen extends GuiScreenController {
             String parentName = model.linkedBoneParentName(childName);
             if (parentName.equals(DacConfiguration.torsoName)) {
                 torsoItem.addTreeItem(childItem);
-            } else {
+            } else { // parent is a BoneLink
                 TreeItem<LinkValue> parentItem
                         = findLinkedBoneItem(parentName, lbItems);
                 parentItem.addTreeItem(childItem);
@@ -413,13 +419,12 @@ public class LinksScreen extends GuiScreenController {
         }
         rootItem.addTreeItem(torsoItem);
         treeBox.setTree(rootItem);
-        /*
-         * Initialize the selection.
-         */
+
+        // Initialize the selection.
         String selected = model.selectedLink();
         if (selected.equals(DacConfiguration.torsoName)) {
             treeBox.selectItem(torsoItem);
-        } else {
+        } else { // a BoneLink is selected
             TreeItem<LinkValue> item = findLinkedBoneItem(selected, lbItems);
             treeBox.selectItem(item);
         }
@@ -444,7 +449,7 @@ public class LinksScreen extends GuiScreenController {
         String boneName;
         if (selectedLinks.isEmpty()) {
             boneName = model.selectedLink();
-        } else {
+        } else { // an item is selected
             assert selectedLinks.size() == 1 : selectedLinks.size();
             TreeItem<LinkValue> selectedItem = selectedLinks.get(0);
             LinkValue value = selectedItem.getValue();
@@ -462,7 +467,7 @@ public class LinksScreen extends GuiScreenController {
             setSliderEnabled("maxY", false);
             setSliderEnabled("minZ", false);
             setSliderEnabled("maxZ", false);
-        } else {
+        } else { // a BoneLink is selected
             RangeOfMotion rom = model.rom(boneName);
             xRangeStatus = describe(rom, PhysicsSpace.AXIS_X);
             yRangeStatus = describe(rom, PhysicsSpace.AXIS_Y);
@@ -510,6 +515,10 @@ public class LinksScreen extends GuiScreenController {
         } else {
             nextElement.hide();
         }
+
+        AngleMode angleMode = model.angleMode();
+        String angleModeText = angleMode.toString();
+        setButtonText("angleMode", angleModeText);
     }
     // *************************************************************************
     // private methods
@@ -536,14 +545,27 @@ public class LinksScreen extends GuiScreenController {
      */
     private static String describe(RangeOfMotion rom, int axisIndex) {
         float maxRadians = rom.getMaxRotation(axisIndex);
-        float maxDegrees = MyMath.toDegrees(maxRadians);
-        int max = Math.round(maxDegrees);
-
         float minRadians = rom.getMinRotation(axisIndex);
-        float minDegrees = MyMath.toDegrees(minRadians);
-        int min = Math.round(minDegrees);
 
-        String text = String.format("%+d to %+d degrees", min, max);
+        String text;
+        AngleMode angleMode = DacWizard.getModel().angleMode();
+        switch (angleMode) {
+            case Degrees:
+                float maxDegrees = MyMath.toDegrees(maxRadians);
+                float minDegrees = MyMath.toDegrees(minRadians);
+                int max = Math.round(maxDegrees);
+                int min = Math.round(minDegrees);
+                text = String.format("%+d to %+d degrees", min, max);
+                break;
+
+            case Radians:
+                text = String.format(
+                        "%+.2f to %+.2f rad", minRadians, maxRadians);
+                break;
+
+            default:
+                throw new IllegalStateException("angleMode = " + angleMode);
+        }
 
         return text;
     }
@@ -556,14 +578,13 @@ public class LinksScreen extends GuiScreenController {
      * unaffected)
      * @return the pre-existing item, or null if not found
      */
-    private static TreeItem<LinkValue> findLinkedBoneItem(String boneName,
-            TreeItem<LinkValue>[] linkedBoneItems) {
+    private static TreeItem<LinkValue> findLinkedBoneItem(
+            String boneName, TreeItem<LinkValue>[] linkedBoneItems) {
         assert boneName != null;
         assert !boneName.isEmpty();
 
         TreeItem<LinkValue> result;
-        int numLinkedBones = linkedBoneItems.length;
-        for (TreeItem<jme3utilities.minie.wizard.LinkValue> linkedBoneItem : linkedBoneItems) {
+        for (TreeItem<LinkValue> linkedBoneItem : linkedBoneItems) {
             result = linkedBoneItem;
             LinkValue value = result.getValue();
             if (boneName.equals(value.boneName())) {
@@ -597,8 +618,8 @@ public class LinksScreen extends GuiScreenController {
         float minZ = readSlider("minZ", SliderTransform.None);
         minZ = MyMath.toRadians(minZ);
 
-        RangeOfMotion rom = new RangeOfMotion(maxX, minX, maxY, minY, maxZ,
-                minZ);
+        RangeOfMotion rom
+                = new RangeOfMotion(maxX, minX, maxY, minY, maxZ, minZ);
 
         Model model = DacWizard.getModel();
         String boneName = model.selectedLink();

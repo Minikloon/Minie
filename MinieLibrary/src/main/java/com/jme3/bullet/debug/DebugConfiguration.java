@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021 jMonkeyEngine
+ * Copyright (c) 2020-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,11 @@ public class DebugConfiguration {
      * true if-and-only-if (debug) visualization is enabled
      */
     private boolean isEnabled = false;
+    /**
+     * limit which angular velocities are visualized, or null to visualize no
+     * angular velocities
+     */
+    private BulletDebugAppState.DebugAppStateFilter angularVelocityFilter;
     /**
      * limit which bounding boxes are visualized, or null to visualize no
      * bounding boxes
@@ -126,6 +131,14 @@ public class DebugConfiguration {
      */
     private ViewPort[] viewPorts;
     // *************************************************************************
+    // constructors - TODO de-publicize
+
+    /**
+     * Instantiate a configuration with no space and no viewports.
+     */
+    public DebugConfiguration() { // to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
@@ -146,6 +159,15 @@ public class DebugConfiguration {
     public float axisLineWidth() {
         assert axisLineWidth >= 0f : axisLineWidth;
         return axisLineWidth;
+    }
+
+    /**
+     * Access the filter that limits which angular velocities are visualized.
+     *
+     * @return the pre-existing instance, or null
+     */
+    BulletDebugAppState.DebugAppStateFilter getAngularVelocityFilter() {
+        return angularVelocityFilter;
     }
 
     /**
@@ -242,10 +264,10 @@ public class DebugConfiguration {
         Validate.nonNull(application, "application");
 
         if (camera == null) {
-            camera = application.getCamera();
+            this.camera = application.getCamera();
         }
         if (viewPorts == null) {
-            viewPorts = new ViewPort[1];
+            this.viewPorts = new ViewPort[1];
             viewPorts[0] = application.getViewPort();
         }
     }
@@ -297,13 +319,24 @@ public class DebugConfiguration {
     }
 
     /**
+     * Alter which angular velocities are included in the visualization.
+     *
+     * @param filter the desired filter (alias created) or null to visualize no
+     * angular velocities (default=null)
+     */
+    public void setAngularVelocityFilter(
+            BulletDebugAppState.DebugAppStateFilter filter) {
+        this.angularVelocityFilter = filter;
+    }
+
+    /**
      * Alter the length of axis arrows.
      *
      * @param length the desired length (in world units, &ge;0)
      */
     public void setAxisArrowLength(float length) {
         Validate.nonNegative(length, "length");
-        axisArrowLength = length;
+        this.axisArrowLength = length;
     }
 
     /**
@@ -314,7 +347,7 @@ public class DebugConfiguration {
      */
     public void setAxisLineWidth(float width) {
         Validate.inRange(width, "width", 0f, Float.MAX_VALUE);
-        axisLineWidth = width;
+        this.axisLineWidth = width;
     }
 
     /**
@@ -325,7 +358,7 @@ public class DebugConfiguration {
      */
     public void setBoundingBoxFilter(
             BulletDebugAppState.DebugAppStateFilter filter) {
-        boundingBoxFilter = filter;
+        this.boundingBoxFilter = filter;
     }
 
     /**
@@ -345,14 +378,14 @@ public class DebugConfiguration {
      * @param enable true &rarr; enable, false &rarr; disable (default=false)
      */
     public void setEnabled(boolean enable) {
-        isEnabled = enable;
+        this.isEnabled = enable;
     }
 
     /**
      * Alter which physics objects are included in the visualization.
      *
-     * @param filter the desired filter, or null to visualize all objects
-     * (default=null)
+     * @param filter the desired filter (alias created) or null to visualize all
+     * objects (default=null)
      */
     public void setFilter(BulletDebugAppState.DebugAppStateFilter filter) {
         this.filter = filter;
@@ -361,12 +394,12 @@ public class DebugConfiguration {
     /**
      * Alter which gravity vectors are included in the visualization.
      *
-     * @param filter the desired filter, or null to visualize no gravity vectors
-     * (default=null)
+     * @param filter the desired filter (alias created) or null to visualize no
+     * gravity vectors (default=null)
      */
     public void setGravityVectorFilter(
             BulletDebugAppState.DebugAppStateFilter filter) {
-        gravityVectorFilter = filter;
+        this.gravityVectorFilter = filter;
     }
 
     /**
@@ -376,7 +409,7 @@ public class DebugConfiguration {
      * de-register the current listener (default=null)
      */
     public void setInitListener(DebugInitListener listener) {
-        initListener = listener;
+        this.initListener = listener;
     }
 
     /**
@@ -385,7 +418,7 @@ public class DebugConfiguration {
      * @param width the desired width (in pixels, &ge;1, default=1)
      */
     public void setJointLineWidth(float width) {
-        jointLineWidth = width;
+        this.jointLineWidth = width;
     }
 
     /**
@@ -395,7 +428,7 @@ public class DebugConfiguration {
      */
     public void setShadowMode(RenderQueue.ShadowMode mode) {
         Validate.nonNull(mode, "mode");
-        shadowMode = mode;
+        this.shadowMode = mode;
     }
 
     /**
@@ -405,7 +438,7 @@ public class DebugConfiguration {
      * for none
      */
     public void setSpace(PhysicsSpace physicsSpace) {
-        space = physicsSpace;
+        this.space = physicsSpace;
     }
 
     /**
@@ -416,7 +449,7 @@ public class DebugConfiguration {
      */
     public void setSweptSphereFilter(
             BulletDebugAppState.DebugAppStateFilter filter) {
-        sweptSphereFilter = filter;
+        this.sweptSphereFilter = filter;
     }
 
     /**
@@ -426,7 +459,7 @@ public class DebugConfiguration {
      * created) or null for physics=world (default=null)
      */
     public void setTransformSpatial(Spatial spatial) {
-        transformSpatial = spatial;
+        this.transformSpatial = spatial;
     }
 
     /**
@@ -437,7 +470,7 @@ public class DebugConfiguration {
      */
     public void setVelocityVectorFilter(
             BulletDebugAppState.DebugAppStateFilter filter) {
-        velocityVectorFilter = filter;
+        this.velocityVectorFilter = filter;
     }
 
     /**

@@ -125,12 +125,15 @@ public class SoftLinearJoint extends SoftPhysicsJoint {
      * a new vector, not null)
      */
     public Vector3f copyLocation(Vector3f storeResult) {
+        Vector3f result;
         // TODO verify copy
         if (storeResult == null) {
-            return location.clone();
+            result = location.clone();
         } else {
-            return storeResult.set(location);
+            result = storeResult.set(location);
         }
+
+        return result;
     }
 
     /**
@@ -158,30 +161,22 @@ public class SoftLinearJoint extends SoftPhysicsJoint {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        super.cloneFields(cloner, original);
+        assert !hasAssignedNativeObject();
+        SoftLinearJoint old = (SoftLinearJoint) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
 
-        location = cloner.clone(location);
+        super.cloneFields(cloner, original);
+        if (hasAssignedNativeObject()) {
+            return;
+        }
+
+        this.location = cloner.clone(location);
         createJoint();
 
-        SoftLinearJoint originalJoint = (SoftLinearJoint) original;
-        setCFM(originalJoint.getCFM());
-        setERP(originalJoint.getERP());
-        setSplit(originalJoint.getSplit());
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public SoftLinearJoint jmeClone() {
-        try {
-            SoftLinearJoint clone = (SoftLinearJoint) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
+        setCFM(old.getCFM());
+        setERP(old.getERP());
+        setSplit(old.getSplit());
     }
 
     /**
@@ -195,7 +190,8 @@ public class SoftLinearJoint extends SoftPhysicsJoint {
     public void read(JmeImporter importer) throws IOException {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
-        location = (Vector3f) capsule.readSavable(tagLocation, new Vector3f());
+        this.location
+                = (Vector3f) capsule.readSavable(tagLocation, new Vector3f());
         createJoint();
     }
 
@@ -235,14 +231,14 @@ public class SoftLinearJoint extends SoftPhysicsJoint {
         long jointId;
         if (isSoftRigid()) {
             assert cib == -1 : cib;
-            jointId = createJointSoftRigid(ida, cia, idb, erp, cfm, split,
-                    location);
+            jointId = createJointSoftRigid(
+                    ida, cia, idb, erp, cfm, split, location);
         } else {
             PhysicsSoftBody b = getSoftBodyB();
             assert cib >= 0 : cib;
             assert cib < b.countClusters() : cib;
-            jointId = createJointSoftSoft(ida, cia, idb, cib, erp, cfm, split,
-                    location);
+            jointId = createJointSoftSoft(
+                    ida, cia, idb, cib, erp, cfm, split, location);
         }
         setNativeIdNotTracked(jointId);
         assert checkParameters();

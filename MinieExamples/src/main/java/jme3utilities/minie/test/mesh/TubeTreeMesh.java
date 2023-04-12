@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2022, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -176,8 +176,8 @@ public class TubeTreeMesh extends Mesh {
         Validate.nonNull(armature, "armature");
         Validate.positive(radius, "radius");
         Validate.positive(loopsPerSegment, "loops per segment");
-        Validate.inRange(samplesPerLoop, "samples per loop", 3,
-                Integer.MAX_VALUE);
+        Validate.inRange(
+                samplesPerLoop, "samples per loop", 3, Integer.MAX_VALUE);
 
         this.armature = Heart.deepCopy(armature);
         this.armature.update();
@@ -269,13 +269,13 @@ public class TubeTreeMesh extends Mesh {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
 
-        weightBuffer = cloner.clone(weightBuffer);
-        normalBuffer = cloner.clone(normalBuffer);
-        positionBuffer = cloner.clone(positionBuffer);
-        indexBuffer = cloner.clone(indexBuffer);
+        this.weightBuffer = cloner.clone(weightBuffer);
+        this.normalBuffer = cloner.clone(normalBuffer);
+        this.positionBuffer = cloner.clone(positionBuffer);
+        this.indexBuffer = cloner.clone(indexBuffer);
         // armature not cloned (read-only)
         assert circleSamples == null : circleSamples;
-        reusable = cloner.clone(reusable);
+        this.reusable = cloner.clone(reusable);
     }
 
     /**
@@ -290,14 +290,13 @@ public class TubeTreeMesh extends Mesh {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        leafOvershoot = capsule.readFloat("leafOvershoot", 0f);
-        radius = capsule.readFloat("radius", 1f);
-        loopsPerSegment = capsule.readInt("loopsPerSegment", 3);
-        samplesPerLoop = capsule.readInt("samplesPerLoop", 12);
-        armature = (Armature) capsule.readSavable("armature", null);
-        /*
-         * Recalculate the derived properties.
-         */
+        this.leafOvershoot = capsule.readFloat("leafOvershoot", 0f);
+        this.radius = capsule.readFloat("radius", 1f);
+        this.loopsPerSegment = capsule.readInt("loopsPerSegment", 3);
+        this.samplesPerLoop = capsule.readInt("samplesPerLoop", 12);
+        this.armature = (Armature) capsule.readSavable("armature", null);
+
+        // Recalculate the derived properties.
         updateDerivedProperties();
     }
 
@@ -327,14 +326,16 @@ public class TubeTreeMesh extends Mesh {
      */
     private void allocateBuffers() {
         int weightCount = maxWpv * numVertices;
-        indexBuffer = IndexBuffer.createIndexBuffer(numVertices, weightCount);
+        this.indexBuffer
+                = IndexBuffer.createIndexBuffer(numVertices, weightCount);
         MyMesh.setBoneIndexBuffer(this, maxWpv, indexBuffer);
-        weightBuffer = BufferUtils.createFloatBuffer(weightCount);
+        this.weightBuffer
+                = BufferUtils.createFloatBuffer(weightCount);
         setBuffer(VertexBuffer.Type.BoneWeight, maxWpv, weightBuffer);
 
-        positionBuffer = BufferUtils.createVector3Buffer(numVertices);
+        this.positionBuffer = BufferUtils.createVector3Buffer(numVertices);
         setBuffer(VertexBuffer.Type.BindPosePosition, numAxes, positionBuffer);
-        normalBuffer = BufferUtils.createVector3Buffer(numVertices);
+        this.normalBuffer = BufferUtils.createVector3Buffer(numVertices);
         setBuffer(VertexBuffer.Type.BindPoseNormal, numAxes, normalBuffer);
 
         FloatBuffer pb = BufferUtils.createVector3Buffer(numVertices);
@@ -387,12 +388,12 @@ public class TubeTreeMesh extends Mesh {
      * centered at the origin.
      */
     private void initCircleSamples() {
-        circleSamples = new Vector3f[samplesPerLoop + 1];
+        this.circleSamples = new Vector3f[samplesPerLoop + 1];
         for (int sampleI = 0; sampleI <= samplesPerLoop; ++sampleI) {
             float theta = (FastMath.TWO_PI / samplesPerLoop) * sampleI;
             float cos = FastMath.cos(theta);
             float sin = FastMath.sin(theta);
-            circleSamples[sampleI] = new Vector3f(cos, sin, 0f);
+            this.circleSamples[sampleI] = new Vector3f(cos, sin, 0f);
         }
     }
 
@@ -432,8 +433,8 @@ public class TubeTreeMesh extends Mesh {
      * @param jointIndex2 the index of the 2nd Joint (&ge;0)
      * @param w1 the weight for the first Joint
      */
-    private void putAnimationForVertex(int jointIndex1, int jointIndex2,
-            float w1) {
+    private void putAnimationForVertex(
+            int jointIndex1, int jointIndex2, float w1) {
         float weight1 = FastMath.clamp(w1, 0f, 1f);
 
         int weightIndex;
@@ -474,36 +475,31 @@ public class TubeTreeMesh extends Mesh {
         Vector3f c = reusable[2];
 
         int startBufferOffset = positionBuffer.position();
-        /*
-         * Put a triangle for each sample point except the first and last.
-         */
+
+        // Put a triangle for each sample point except the first and last.
         for (int triIndex = 1; triIndex < samplesPerLoop - 1; ++triIndex) {
             Vector3f pos1 = circleSamples[0];
-            Vector3f pos2, pos3;
+            Vector3f pos2;
+            Vector3f pos3;
             if (normalZ > 0f) {
                 pos2 = circleSamples[triIndex];
                 pos3 = circleSamples[triIndex + 1];
             } else {
                 pos2 = circleSamples[triIndex + 1];
                 pos3 = circleSamples[triIndex];
-
-                //int i = (positionBuffer.position() - startBufferOffset) / numAxes;
-                //System.out.printf("+%d: %d%n", i, 0);
-                //System.out.printf("+%d: %d%n", i + 1, triIndex + 1);
-                //System.out.printf("+%d: %d%n", i + 2, triIndex);
             }
 
             a.set(radius * pos1.x, radius * pos1.y, posZ);
             b.set(radius * pos2.x, radius * pos2.y, posZ);
             c.set(radius * pos3.x, radius * pos3.y, posZ);
-            putTransformedTriangle(positionBuffer, centerPos, orientation,
-                    a, b, c);
+            putTransformedTriangle(
+                    positionBuffer, centerPos, orientation, a, b, c);
 
             a.set(0f, 0f, normalZ);
             b.set(0f, 0f, normalZ);
             c.set(0f, 0f, normalZ);
-            putTransformedTriangle(normalBuffer, translateIdentity, orientation,
-                    a, b, c);
+            putTransformedTriangle(
+                    normalBuffer, translateIdentity, orientation, a, b, c);
 
             putAnimationForTriangle(jointIndex);
         }
@@ -522,8 +518,9 @@ public class TubeTreeMesh extends Mesh {
      * @param v2 the 2nd vertex vector to transform (not null, modified)
      * @param v3 the 3rd vertex vector to transform (not null, modified)
      */
-    private void putTransformedTriangle(FloatBuffer buffer, Vector3f offset,
-            Quaternion rotation, Vector3f v1, Vector3f v2, Vector3f v3) {
+    private static void putTransformedTriangle(
+            FloatBuffer buffer, Vector3f offset, Quaternion rotation,
+            Vector3f v1, Vector3f v2, Vector3f v3) {
         rotation.mult(v1, v1);
         v1.addLocal(offset);
         buffer.put(v1.x).put(v1.y).put(v1.z);
@@ -579,9 +576,8 @@ public class TubeTreeMesh extends Mesh {
                 float y2 = circleSamples[rectIndex + 1].y * radius;
                 Vector3f normal1 = circleSamples[rectIndex];
                 Vector3f normal2 = circleSamples[rectIndex + 1];
-                /*
-                 * Put the lower-right triangle.
-                 */
+
+                // Put the lower-right triangle.
                 pos11.set(x1, y1, z1);
                 pos21.set(x2, y2, z1);
                 pos22.set(x2, y2, z2);
@@ -594,12 +590,14 @@ public class TubeTreeMesh extends Mesh {
                 putTransformedTriangle(normalBuffer, translateIdentity,
                         orientation, norm11, norm21, norm22);
 
-                putAnimationForVertex(endJointIndex, startJointIndex, fraction1);
-                putAnimationForVertex(endJointIndex, startJointIndex, fraction1);
-                putAnimationForVertex(endJointIndex, startJointIndex, fraction2);
-                /*
-                 * Put the upper-left triangle.
-                 */
+                putAnimationForVertex(
+                        endJointIndex, startJointIndex, fraction1);
+                putAnimationForVertex(
+                        endJointIndex, startJointIndex, fraction1);
+                putAnimationForVertex(
+                        endJointIndex, startJointIndex, fraction2);
+
+                // Put the upper-left triangle.
                 pos11.set(x1, y1, z1);
                 pos12.set(x1, y1, z2);
                 pos22.set(x2, y2, z2);
@@ -612,9 +610,12 @@ public class TubeTreeMesh extends Mesh {
                 putTransformedTriangle(normalBuffer, translateIdentity,
                         orientation, norm11, norm22, norm12);
 
-                putAnimationForVertex(endJointIndex, startJointIndex, fraction1);
-                putAnimationForVertex(endJointIndex, startJointIndex, fraction2);
-                putAnimationForVertex(endJointIndex, startJointIndex, fraction2);
+                putAnimationForVertex(
+                        endJointIndex, startJointIndex, fraction1);
+                putAnimationForVertex(
+                        endJointIndex, startJointIndex, fraction2);
+                putAnimationForVertex(
+                        endJointIndex, startJointIndex, fraction2);
             }
         }
     }
@@ -675,7 +676,7 @@ public class TubeTreeMesh extends Mesh {
             }
         }
 
-        circleSamples = null;
+        this.circleSamples = null;
     }
 
     /**
@@ -702,10 +703,11 @@ public class TubeTreeMesh extends Mesh {
         int trianglesPerCap = samplesPerLoop - 2;
         int trianglesPerLoop = 2 * samplesPerLoop;
         int trianglesPerSegment = trianglesPerLoop * loopsPerSegment;
-        int numTriangles = trianglesPerCap * numCaps + trianglesPerSegment * numSegments;
+        int numTriangles
+                = trianglesPerCap * numCaps + trianglesPerSegment * numSegments;
         logger.log(Level.INFO, "{0} triangles", numTriangles);
 
-        numVertices = vpt * numTriangles;
+        this.numVertices = vpt * numTriangles;
         logger.log(Level.INFO, "{0} vertices", numVertices);
         assert numVertices <= Short.MAX_VALUE : numVertices;
     }

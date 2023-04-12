@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021 jMonkeyEngine
+ * Copyright (c) 2019-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -103,7 +103,7 @@ public class CharacterControl extends AbstractPhysicsControl {
      * physics-space units)
      */
     public CharacterControl(ConvexShape shape, float stepHeight) {
-        character = new PhysicsCharacter(shape, stepHeight);
+        this.character = new PhysicsCharacter(shape, stepHeight);
     }
     // *************************************************************************
     // new methods exposed
@@ -137,11 +137,14 @@ public class CharacterControl extends AbstractPhysicsControl {
      * provided storage or a new vector, not null)
      */
     public Vector3f getViewDirection(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return viewDirection.clone();
+            result = viewDirection.clone();
         } else {
-            return storeResult.set(viewDirection);
+            result = storeResult.set(viewDirection);
         }
+
+        return result;
     }
 
     /**
@@ -208,7 +211,7 @@ public class CharacterControl extends AbstractPhysicsControl {
      * Alter the character's walk offset. The offset must be perpendicular to
      * the "up" direction. It will continue to be applied until altered again.
      *
-     * @param offset the desired position increment for each physics tick (in
+     * @param offset the desired position increment for each simulation step (in
      * physics-space coordinates, not null, unaffected)
      */
     public void setWalkDirection(Vector3f offset) {
@@ -240,10 +243,9 @@ public class CharacterControl extends AbstractPhysicsControl {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
 
-        character = cloner.clone(character);
-        // tmpQuaternion not cloned
-        // tmpVector not cloned
-        viewDirection = cloner.clone(viewDirection);
+        this.character = cloner.clone(character);
+        // tmpQuaternion and tmpVector are never cloned.
+        this.viewDirection = cloner.clone(viewDirection);
     }
 
     /**
@@ -258,21 +260,6 @@ public class CharacterControl extends AbstractPhysicsControl {
     }
 
     /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new Control (not null)
-     */
-    @Override
-    public CharacterControl jmeClone() {
-        try {
-            CharacterControl clone = (CharacterControl) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
-    }
-
-    /**
      * De-serialize this Control from the specified importer, for example when
      * loading from a J3O file.
      *
@@ -284,9 +271,10 @@ public class CharacterControl extends AbstractPhysicsControl {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        character = (PhysicsCharacter) capsule.readSavable(tagCharacter, null);
-        viewDirection = (Vector3f) capsule.readSavable(tagViewDirection,
-                new Vector3f(0f, 0f, 1f));
+        this.character
+                = (PhysicsCharacter) capsule.readSavable(tagCharacter, null);
+        this.viewDirection = (Vector3f) capsule
+                .readSavable(tagViewDirection, new Vector3f(0f, 0f, 1f));
 
         if (character != null) {
             Spatial controlled = getSpatial();

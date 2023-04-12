@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 jMonkeyEngine
+ * Copyright (c) 2019-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -85,18 +85,18 @@ class SweptSphereDebugControl extends AbstractPhysicsDebugControl {
      * @param debugAppState which app state (not null, alias created)
      * @param pco which collision object to visualize (not null, alias created)
      */
-    SweptSphereDebugControl(BulletDebugAppState debugAppState,
-            PhysicsCollisionObject pco) {
+    SweptSphereDebugControl(
+            BulletDebugAppState debugAppState, PhysicsCollisionObject pco) {
         super(debugAppState);
         this.pco = pco;
 
         Mesh mesh = updateMesh(null);
-        geom = new Geometry("swept sphere of " + pco, mesh);
+        this.geom = new Geometry("swept sphere of " + pco, mesh);
 
         float radius = pco.getCcdSweptSphereRadius();
         geom.setLocalScale(radius);
 
-        center = pco.getPhysicsLocation(null);
+        this.center = pco.getPhysicsLocation(null);
         geom.setLocalTranslation(center);
 
         Material material = debugAppState.getSweptSphereMaterial();
@@ -165,6 +165,9 @@ class SweptSphereDebugControl extends AbstractPhysicsDebugControl {
     /**
      * Update the Mesh of the debug geometry, based on whether the Camera is
      * known.
+     *
+     * @param oldMesh the mesh in use
+     * @return the updated mesh to use
      */
     private Mesh updateMesh(Mesh oldMesh) {
         DebugConfiguration config = debugAppState.getConfiguration();

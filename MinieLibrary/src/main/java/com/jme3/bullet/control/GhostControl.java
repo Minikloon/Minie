@@ -176,7 +176,7 @@ public class GhostControl
      * false&rarr;match world coordinates (default=false)
      */
     public void setApplyPhysicsLocal(boolean applyPhysicsLocal) {
-        applyLocal = applyPhysicsLocal;
+        this.applyLocal = applyPhysicsLocal;
     }
 
     /**
@@ -191,7 +191,7 @@ public class GhostControl
      * (default=false)
      */
     public void setApplyScale(boolean setting) {
-        applyScale = setting;
+        this.applyScale = setting;
     }
     // *************************************************************************
     // PhysicsControl methods
@@ -261,10 +261,10 @@ public class GhostControl
                     setPhysicsRotation(getSpatialRotation());
                 }
                 space.addCollisionObject(this);
-                added = true;
+                this.added = true;
             } else if (!enabled && added) {
                 space.removeCollisionObject(this);
-                added = false;
+                this.added = false;
             }
         }
     }
@@ -278,22 +278,22 @@ public class GhostControl
      */
     @Override
     public void setPhysicsSpace(PhysicsSpace newSpace) {
-        if (space == newSpace) {
+        if (this.space == newSpace) {
             return;
         }
-        if (added) {
+        if (this.added) {
             space.removeCollisionObject(this);
-            added = false;
+            this.added = false;
         }
         if (newSpace != null && isEnabled()) {
             newSpace.addCollisionObject(this);
-            added = true;
+            this.added = true;
         }
         /*
          * If this Control isn't enabled, its physics object will be
          * added to the new space when the Control becomes enabled.
          */
-        space = newSpace;
+        this.space = newSpace;
     }
 
     /**
@@ -309,7 +309,7 @@ public class GhostControl
             return;
         }
 
-        spatial = controlledSpatial;
+        this.spatial = controlledSpatial;
         setUserObject(controlledSpatial); // link from collision object
 
         if (controlledSpatial != null) {
@@ -363,22 +363,7 @@ public class GhostControl
     @Override
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
-        spatial = cloner.clone(spatial);
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new Control (not null)
-     */
-    @Override
-    public GhostControl jmeClone() {
-        try {
-            GhostControl clone = (GhostControl) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
+        this.spatial = cloner.clone(spatial);
     }
 
     /**
@@ -393,10 +378,10 @@ public class GhostControl
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        enabled = capsule.readBoolean(tagEnabled, true);
-        applyLocal = capsule.readBoolean(tagApplyLocalPhysics, false);
-        applyScale = capsule.readBoolean(tagApplyScale, false);
-        spatial = (Spatial) capsule.readSavable(tagSpatial, null);
+        this.enabled = capsule.readBoolean(tagEnabled, true);
+        this.applyLocal = capsule.readBoolean(tagApplyLocalPhysics, false);
+        this.applyScale = capsule.readBoolean(tagApplyScale, false);
+        this.spatial = (Spatial) capsule.readSavable(tagSpatial, null);
 
         setUserObject(spatial);
     }
@@ -434,10 +419,10 @@ public class GhostControl
         if (MySpatial.isIgnoringTransforms(spatial)) {
             result.set(scaleIdentity);
         } else if (isApplyPhysicsLocal()) {
-            Vector3f scale = spatial.getLocalScale();
+            Vector3f scale = spatial.getLocalScale(); // alias
             result.set(scale);
         } else {
-            Vector3f scale = spatial.getWorldScale();
+            Vector3f scale = spatial.getWorldScale(); // alias
             result.set(scale);
         }
 
@@ -453,9 +438,9 @@ public class GhostControl
         if (MySpatial.isIgnoringTransforms(spatial)) {
             return rotateIdentity;
         } else if (applyLocal) {
-            return spatial.getLocalRotation();
+            return spatial.getLocalRotation(); // alias
         } else {
-            return spatial.getWorldRotation();
+            return spatial.getWorldRotation(); // alias
         }
     }
 
@@ -468,9 +453,9 @@ public class GhostControl
         if (MySpatial.isIgnoringTransforms(spatial)) {
             return translateIdentity;
         } else if (applyLocal) {
-            return spatial.getLocalTranslation();
+            return spatial.getLocalTranslation(); // alias
         } else {
-            return spatial.getWorldTranslation();
+            return spatial.getWorldTranslation(); // alias
         }
     }
 }

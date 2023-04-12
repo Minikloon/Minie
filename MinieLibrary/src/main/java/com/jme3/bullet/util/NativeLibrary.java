@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021 jMonkeyEngine
+ * Copyright (c) 2019-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,13 +33,26 @@ package com.jme3.bullet.util;
 
 import com.jme3.bullet.NativePhysicsObject;
 import com.jme3.math.Vector3f;
+import java.util.logging.Logger;
 
 /**
  * Static interface to the Libbulletjme native library.
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class NativeLibrary {
+final public class NativeLibrary {
+    // *************************************************************************
+    // constants and loggers
+
+    /**
+     * message logger for this class
+     */
+    final public static Logger logger
+            = Logger.getLogger(NativeLibrary.class.getName());
+    /**
+     * expected version string of the native library
+     */
+    final public static String expectedVersion = "18.1.0";
     // *************************************************************************
     // constructors
 
@@ -52,6 +65,16 @@ public class NativeLibrary {
     // new methods exposed
 
     /**
+     * Count the cumulative number of clamped CCD motions (native variable:
+     * gNumClampedCcdMotions).
+     * <p>
+     * For debugging. The value shouldn't grow too large.
+     *
+     * @return the count (&ge;0)
+     */
+    native public static int countClampedCcdMotions();
+
+    /**
      * Count how many threads are available for task scheduling.
      *
      * @return the count (&ge;0)
@@ -59,7 +82,8 @@ public class NativeLibrary {
     native public static int countThreads();
 
     /**
-     * Crash the JVM with an EXCEPTION_ACCESS_VIOLATION or SIGILL, for testing.
+     * Crash the JVM with an EXCEPTION_ACCESS_VIOLATION or SIGILL. Intended for
+     * testing only!
      */
     native public static void crash();
 
@@ -86,7 +110,7 @@ public class NativeLibrary {
     /**
      * Execute btAssert(0). This has no effect on Release builds, but if the
      * native library was built with debugging enabled, it should terminate the
-     * JVM.
+     * Java Virtual Machine. Intended for testing only!
      */
     native public static void fail();
 
@@ -134,7 +158,15 @@ public class NativeLibrary {
     native public static boolean isThreadSafe();
 
     /**
-     * Reset a Quickprof. This feature is enabled only in native libraries built
+     * Return the address of the current thread's JNIEnv. For debugging and
+     * testing.
+     *
+     * @return the virtual address of the (native) object (not zero)
+     */
+    native public static long jniEnvId();
+
+    /**
+     * Reset Quickprof. This feature is enabled only in native libraries built
      * with the BT_ENABLE_PROFILE macro defined. Must be invoked on the
      * designated physics thread.
      */
@@ -160,9 +192,9 @@ public class NativeLibrary {
     native public static void setStartupMessageEnabled(boolean printFlag);
 
     /**
-     * Determine the native library's core version number.
+     * Determine the native library's version string.
      *
-     * @return the version number (typically of the form Major.Minor.Patch)
+     * @return the version string (typically of the form Major.Minor.Patch)
      */
     native public static String versionNumber();
     // *************************************************************************
@@ -173,6 +205,12 @@ public class NativeLibrary {
      * native library, to start the Physics Cleaner thread.
      */
     private static void postInitialization() {
+        String lbjVersion = versionNumber();
+        if (!lbjVersion.equals(expectedVersion)) {
+            logger.warning("Expected a v" + expectedVersion
+                    + " native library but loaded v" + lbjVersion + "!");
+        }
+
         Thread physicsCleaner = new Thread("Physics Cleaner") {
             @Override
             public void run() {

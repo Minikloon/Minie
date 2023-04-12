@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2021, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -26,7 +26,6 @@
  */
 package jme3utilities.minie.test;
 
-import com.jme3.app.SimpleApplication;
 import com.jme3.bullet.PhysicsSoftSpace;
 import com.jme3.bullet.SoftPhysicsAppState;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
@@ -38,35 +37,61 @@ import com.jme3.bullet.objects.infos.SoftBodyConfig;
 import com.jme3.bullet.objects.infos.SoftBodyMaterial;
 import com.jme3.bullet.util.NativeSoftBodyUtil;
 import com.jme3.math.Vector3f;
+import com.jme3.system.AppSettings;
 import jme3utilities.MyMesh;
+import jme3utilities.MyString;
 import jme3utilities.Validate;
+import jme3utilities.ui.AcorusDemo;
 
 /**
  * A simple cloth simulation with a pinned node, using a native mesh.
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class TestPin extends SimpleApplication {
+public class TestPin extends AcorusDemo {
+    // *************************************************************************
+    // constants and loggers
+
+    /**
+     * application name (for the title bar of the app's window)
+     */
+    final private static String applicationName = TestPin.class.getSimpleName();
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestPin application.
+     */
+    public TestPin() { // made explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestPin application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+        boolean loadDefaults = true;
+        AppSettings settings = new AppSettings(loadDefaults);
+        settings.setTitle(title); // Customize the window's title bar.
+
         TestPin application = new TestPin();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
-    // SimpleApplication methods
+    // AcorusDemo methods
 
     /**
      * Initialize this application.
      */
     @Override
-    public void simpleInitApp() {
+    public void acorusInit() {
+        super.acorusInit();
+
         // Set up Bullet physics (with debug enabled).
         SoftPhysicsAppState bulletAppState = new SoftPhysicsAppState();
         bulletAppState.setDebugEnabled(true);
@@ -86,7 +111,8 @@ public class TestPin extends SimpleApplication {
         // Generate a subdivided square mesh with alternating diagonals.
         int numLines = 41;
         float lineSpacing = 0.1f; // mesh units
-        IndexedMesh squareGrid = createClothGrid(numLines, numLines, lineSpacing);
+        IndexedMesh squareGrid
+                = createClothGrid(numLines, numLines, lineSpacing);
 
         // Create a soft square and add it to the physics space.
         PhysicsSoftBody cloth = new PhysicsSoftBody();
@@ -124,24 +150,23 @@ public class TestPin extends SimpleApplication {
      * lines (in mesh units, &gt;0)
      * @return a new IndexedMesh
      */
-    private static IndexedMesh createClothGrid(int xLines, int zLines,
-            float lineSpacing) {
+    private static IndexedMesh
+         createClothGrid(int xLines, int zLines, float lineSpacing) {
         Validate.inRange(xLines, "X lines", 2, Integer.MAX_VALUE);
         Validate.inRange(zLines, "Z lines", 2, Integer.MAX_VALUE);
         Validate.positive(lineSpacing, "line spacing");
 
         int numVertices = xLines * zLines;
         Vector3f[] positionArray = new Vector3f[numVertices];
-        /*
-         * Write the vertex locations:
-         */
+
+        // Write the vertex locations:
         int vectorIndex = 0;
         for (int xIndex = 0; xIndex < zLines; ++xIndex) {
             float x = (2 * xIndex - zLines + 1) * lineSpacing / 2f;
             for (int zIndex = 0; zIndex < xLines; ++zIndex) {
                 float z = (2 * zIndex - xLines + 1) * lineSpacing / 2f;
                 positionArray[vectorIndex] = new Vector3f(x, 0f, z);
-                vectorIndex++;
+                ++vectorIndex;
             }
         }
         assert vectorIndex == positionArray.length;
@@ -149,9 +174,8 @@ public class TestPin extends SimpleApplication {
         int numTriangles = 2 * (xLines - 1) * (zLines - 1);
         int numIndices = MyMesh.vpt * numTriangles;
         int[] indexArray = new int[numIndices];
-        /*
-         * Write vertex indices for triangles:
-         */
+
+        // Write vertex indices for triangles:
         int intIndex = 0;
         for (int zIndex = 0; zIndex < xLines - 1; ++zIndex) {
             for (int xIndex = 0; xIndex < zLines - 1; ++xIndex) {

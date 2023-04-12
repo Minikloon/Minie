@@ -102,11 +102,19 @@ abstract public class AbstractPhysicsControl
     /**
      * temporary storage during calculations TODO thread safety
      */
-    private Quaternion tmp_inverseWorldRotation = new Quaternion();
+    private Quaternion tmpInverseWorldRotation = new Quaternion();
     /**
      * Spatial to which this Control is added, or null if none
      */
     private Spatial controlledSpatial;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate an enabled control that isn't added to any space or spatial.
+     */
+    protected AbstractPhysicsControl() { // avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
@@ -138,7 +146,7 @@ abstract public class AbstractPhysicsControl
      * false&rarr;match world coordinates (default=false)
      */
     public void setApplyPhysicsLocal(boolean applyPhysicsLocal) {
-        localPhysics = applyPhysicsLocal;
+        this.localPhysics = applyPhysicsLocal;
     }
     // *************************************************************************
     // new protected methods
@@ -156,17 +164,28 @@ abstract public class AbstractPhysicsControl
      * @param physicsOrientation the desired orientation (in physics-space
      * coordinates, not null, unaffected)
      */
-    protected void applyPhysicsTransform(Vector3f physicsLocation,
-            Quaternion physicsOrientation) {
+    protected void applyPhysicsTransform(
+            Vector3f physicsLocation, Quaternion physicsOrientation) {
         if (enabled && controlledSpatial != null) {
             Vector3f localLocation = controlledSpatial.getLocalTranslation();
-            Quaternion localRotationQuat = controlledSpatial.getLocalRotation();
+            Quaternion localRotationQuat
+                    = controlledSpatial.getLocalRotation(); // alias
             if (!localPhysics && controlledSpatial.getParent() != null) {
-                localLocation.set(physicsLocation).subtractLocal(controlledSpatial.getParent().getWorldTranslation());
-                localLocation.divideLocal(controlledSpatial.getParent().getWorldScale());
-                tmp_inverseWorldRotation.set(controlledSpatial.getParent().getWorldRotation()).inverseLocal().multLocal(localLocation);
+                localLocation
+                        .set(physicsLocation)
+                        .subtractLocal(
+                                controlledSpatial.getParent()
+                                        .getWorldTranslation());
+                localLocation.divideLocal(
+                        controlledSpatial.getParent().getWorldScale());
+                tmpInverseWorldRotation
+                        .set(controlledSpatial.getParent().getWorldRotation())
+                        .inverseLocal().multLocal(localLocation);
                 localRotationQuat.set(physicsOrientation);
-                tmp_inverseWorldRotation.set(controlledSpatial.getParent().getWorldRotation()).inverseLocal().mult(localRotationQuat, localRotationQuat);
+                tmpInverseWorldRotation
+                        .set(controlledSpatial.getParent().getWorldRotation())
+                        .inverseLocal()
+                        .mult(localRotationQuat, localRotationQuat);
 
                 controlledSpatial.setLocalTranslation(localLocation);
                 controlledSpatial.setLocalRotation(localRotationQuat);
@@ -192,13 +211,16 @@ abstract public class AbstractPhysicsControl
      * not null)
      */
     protected Quaternion getSpatialRotation() {
+        Quaternion result;
         if (MySpatial.isIgnoringTransforms(controlledSpatial)) {
-            return rotateIdentity;
+            result = rotateIdentity;
         } else if (localPhysics) {
-            return controlledSpatial.getLocalRotation();
+            result = controlledSpatial.getLocalRotation(); // alias
         } else {
-            return controlledSpatial.getWorldRotation();
+            result = controlledSpatial.getWorldRotation(); // alias
         }
+
+        return result;
     }
 
     /**
@@ -209,13 +231,16 @@ abstract public class AbstractPhysicsControl
      * null)
      */
     protected Vector3f getSpatialTranslation() {
+        Vector3f result;
         if (MySpatial.isIgnoringTransforms(controlledSpatial)) {
-            return translateIdentity;
+            result = translateIdentity;
         } else if (localPhysics) {
-            return controlledSpatial.getLocalTranslation();
+            result = controlledSpatial.getLocalTranslation(); // alias
         } else {
-            return controlledSpatial.getWorldTranslation();
+            result = controlledSpatial.getWorldTranslation(); // alias
         }
+
+        return result;
     }
 
     /**
@@ -260,9 +285,9 @@ abstract public class AbstractPhysicsControl
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        tmp_inverseWorldRotation = cloner.clone(tmp_inverseWorldRotation);
-        controlledSpatial = cloner.clone(controlledSpatial);
-        // space not cloned
+        // space is never cloned.
+        this.tmpInverseWorldRotation = cloner.clone(tmpInverseWorldRotation);
+        this.controlledSpatial = cloner.clone(controlledSpatial);
     }
 
     /**
@@ -272,9 +297,13 @@ abstract public class AbstractPhysicsControl
      */
     @Override
     public AbstractPhysicsControl jmeClone() {
+        if (added) {
+            String message = "Can't clone a " + getClass().getSimpleName()
+                    + " while it's added to a physics space.";
+            throw new IllegalStateException(message);
+        }
         try {
-            AbstractPhysicsControl clone
-                    = (AbstractPhysicsControl) super.clone();
+            AbstractPhysicsControl clone = (AbstractPhysicsControl) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -327,9 +356,10 @@ abstract public class AbstractPhysicsControl
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        enabled = capsule.readBoolean(tagEnabled, true);
-        controlledSpatial = (Spatial) capsule.readSavable(tagSpatial, null);
-        localPhysics = capsule.readBoolean(tagApplyLocalPhysics, false);
+        this.enabled = capsule.readBoolean(tagEnabled, true);
+        this.controlledSpatial
+                = (Spatial) capsule.readSavable(tagSpatial, null);
+        this.localPhysics = capsule.readBoolean(tagApplyLocalPhysics, false);
     }
 
     /**
@@ -364,10 +394,10 @@ abstract public class AbstractPhysicsControl
                     setPhysicsRotation(getSpatialRotation());
                 }
                 addPhysics();
-                added = true;
+                this.added = true;
             } else if (!enable && added) {
                 removePhysics();
-                added = false;
+                this.added = false;
             }
         }
     }
@@ -387,12 +417,12 @@ abstract public class AbstractPhysicsControl
 
         if (added) {
             removePhysics();
-            added = false;
+            this.added = false;
         }
-        space = newSpace;
+        this.space = newSpace;
         if (newSpace != null && isEnabled()) {
             addPhysics();
-            added = true;
+            this.added = true;
         }
         /*
          * If the Control isn't enabled, its physics objects will be
@@ -416,7 +446,7 @@ abstract public class AbstractPhysicsControl
             removeSpatialData(controlledSpatial);
         }
 
-        controlledSpatial = newSpatial;
+        this.controlledSpatial = newSpatial;
 
         if (newSpatial != null) {
             createSpatialData(controlledSpatial);
@@ -438,6 +468,7 @@ abstract public class AbstractPhysicsControl
 
         capsule.write(enabled, tagEnabled, true);
         capsule.write(localPhysics, tagApplyLocalPhysics, false);
+        // added, space, and tmpInverseWorldRotation are never written.
         capsule.write(controlledSpatial, tagSpatial, null);
     }
 }

@@ -48,7 +48,8 @@ import java.util.logging.Logger;
 import jme3utilities.Validate;
 
 /**
- * Information about one wheel of a vehicle, based on Bullet's btWheelInfo.
+ * Information about one wheel of a vehicle, based on Bullet's
+ * {@code btWheelInfo}.
  *
  * @author normenhansen
  */
@@ -115,11 +116,11 @@ public class VehicleWheel implements JmeCloneable, Savable {
     /**
      * reusable rotation matrix
      */
-    private Matrix3f tmp_Matrix = new Matrix3f();
+    private Matrix3f tmpMatrix = new Matrix3f();
     /**
      * temporary storage during calculations
      */
-    private Quaternion tmp_inverseWorldRotation = new Quaternion();
+    private Quaternion tmpInverseWheelRotation = new Quaternion();
     /**
      * wheel orientation in physics-space coordinates
      */
@@ -199,19 +200,19 @@ public class VehicleWheel implements JmeCloneable, Savable {
             return;
         }
 
-        Quaternion localRotationQuat = subtree.getLocalRotation();
+        Quaternion localRotationQuat = subtree.getLocalRotation(); // alias
         Vector3f localLocation = subtree.getLocalTranslation();
         Spatial parent = subtree.getParent();
         if (!applyLocal && parent != null) {
-            Vector3f parentOffset = parent.getWorldTranslation();
-            Quaternion parentRot = parent.getWorldRotation();
+            Vector3f parentOffset = parent.getWorldTranslation(); // alias
+            Quaternion parentRot = parent.getWorldRotation(); // alias
             localLocation.set(wheelWorldLocation).subtractLocal(parentOffset);
             localLocation.divideLocal(parent.getWorldScale());
-            tmp_inverseWorldRotation.set(parentRot).inverseLocal()
+            tmpInverseWheelRotation.set(parentRot).inverseLocal()
                     .multLocal(localLocation);
 
             localRotationQuat.set(wheelWorldRotation);
-            tmp_inverseWorldRotation.set(parentRot).inverseLocal()
+            tmpInverseWheelRotation.set(parentRot).inverseLocal()
                     .mult(localRotationQuat, localRotationQuat);
 
             subtree.setLocalTranslation(localLocation);
@@ -257,11 +258,14 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * a new instance)
      */
     public Vector3f getAxle(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return axisDirection.clone();
+            result = axisDirection.clone();
         } else {
-            return storeResult.set(axisDirection);
+            result = storeResult.set(axisDirection);
         }
+
+        return result;
     }
 
     /**
@@ -275,12 +279,13 @@ public class VehicleWheel implements JmeCloneable, Savable {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @return a new location vector (in physics-space coordinates, not null)
      */
     public Vector3f getCollisionLocation() {
-        return getCollisionLocation(null);
+        Vector3f result = getCollisionLocation(null);
+        return result;
     }
 
     /**
@@ -297,12 +302,13 @@ public class VehicleWheel implements JmeCloneable, Savable {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @return a new unit vector (in physics-space coordinates, not null)
      */
     public Vector3f getCollisionNormal() {
-        return getCollisionNormal(null);
+        Vector3f result = getCollisionNormal(null);
+        return result;
     }
 
     /**
@@ -319,7 +325,7 @@ public class VehicleWheel implements JmeCloneable, Savable {
     }
 
     /**
-     * Determine how much this wheel has turned since the last physics step.
+     * Determine how much this wheel has turned since the last simulation step.
      *
      * @return the rotation angle (in radians)
      */
@@ -359,7 +365,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * @return the coefficient of friction
      */
     public float getFrictionSlip() {
-        return tuning.getFrictionSlip();
+        float result = tuning.getFrictionSlip();
+        return result;
     }
 
     /**
@@ -372,7 +379,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library. The jme3-jbullet version
+     * returns a pre-existing vector instead of a new one.
      *
      * @return a new location vector (in physics-space coordinates, not null)
      */
@@ -388,11 +396,14 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * or a new instance)
      */
     public Vector3f getLocation(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return location.clone();
+            result = location.clone();
         } else {
-            return storeResult.set(location);
+            result = storeResult.set(location);
         }
+
+        return result;
     }
 
     /**
@@ -402,7 +413,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * @return the maximum force
      */
     public float getMaxSuspensionForce() {
-        return tuning.getMaxSuspensionForce();
+        float result = tuning.getMaxSuspensionForce();
+        return result;
     }
 
     /**
@@ -416,7 +428,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * relative to its rest length (in hundredths of a physics-space unit)
      */
     public float getMaxSuspensionTravelCm() {
-        return tuning.getMaxSuspensionTravelCm();
+        float result = tuning.getMaxSuspensionTravelCm();
+        return result;
     }
 
     /**
@@ -466,7 +479,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * 1&rarr;wheel has full traction)
      */
     public float getSkidInfo() {
-        return getSkidInfo(vehicleId, wheelIndex);
+        float result = getSkidInfo(vehicleId, wheelIndex);
+        return result;
     }
 
     /**
@@ -497,7 +511,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * @return the stiffness constant
      */
     public float getSuspensionStiffness() {
-        return tuning.getSuspensionStiffness();
+        float result = tuning.getSuspensionStiffness();
+        return result;
     }
 
     /**
@@ -507,7 +522,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * @return the damping
      */
     public float getWheelsDampingCompression() {
-        return tuning.getSuspensionCompression();
+        float result = tuning.getSuspensionCompression();
+        return result;
     }
 
     /**
@@ -517,7 +533,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * @return the damping
      */
     public float getWheelsDampingRelaxation() {
-        return tuning.getSuspensionDamping();
+        float result = tuning.getSuspensionDamping();
+        return result;
     }
 
     /**
@@ -537,11 +554,14 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * storeResult or a new instance)
      */
     public Vector3f getWheelWorldLocation(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return wheelWorldLocation.clone();
+            result = wheelWorldLocation.clone();
         } else {
-            return storeResult.set(wheelWorldLocation);
+            result = storeResult.set(wheelWorldLocation);
         }
+
+        return result;
     }
 
     /**
@@ -552,11 +572,14 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * a new instance)
      */
     public Quaternion getWheelWorldRotation(Quaternion storeResult) {
+        Quaternion result;
         if (storeResult == null) {
-            return wheelWorldRotation.clone();
+            result = wheelWorldRotation.clone();
         } else {
-            return storeResult.set(wheelWorldRotation);
+            result = storeResult.set(wheelWorldRotation);
         }
+
+        return result;
     }
 
     /**
@@ -612,7 +635,7 @@ public class VehicleWheel implements JmeCloneable, Savable {
      * @param frontWheel true&rarr;front wheel, false&rarr;non-front wheel
      */
     public void setFrontWheel(boolean frontWheel) {
-        isFront = frontWheel;
+        this.isFront = frontWheel;
         applyInfo();
     }
 
@@ -698,7 +721,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
 
     /**
      * Alter the length of this wheel's suspension (native field:
-     * m_suspensionLength). Bullet updates the length on every physics tick.
+     * m_suspensionLength). Bullet updates the length during every simulation
+     * step.
      *
      * @param length the desired length (in physics-space units)
      */
@@ -781,8 +805,8 @@ public class VehicleWheel implements JmeCloneable, Savable {
      */
     public void updatePhysicsState() {
         getWheelLocation(vehicleId, wheelIndex, wheelWorldLocation);
-        getWheelRotation(vehicleId, wheelIndex, tmp_Matrix);
-        wheelWorldRotation.fromRotationMatrix(tmp_Matrix);
+        getWheelRotation(vehicleId, wheelIndex, tmpMatrix);
+        wheelWorldRotation.fromRotationMatrix(tmpMatrix);
     }
     // *************************************************************************
     // JmeCloneable methods
@@ -798,15 +822,15 @@ public class VehicleWheel implements JmeCloneable, Savable {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        location = cloner.clone(location);
-        suspensionDirection = cloner.clone(suspensionDirection);
-        axisDirection = cloner.clone(axisDirection);
-        tuning = cloner.clone(tuning);
-        wheelWorldLocation = cloner.clone(wheelWorldLocation);
-        wheelWorldRotation = cloner.clone(wheelWorldRotation);
-        subtree = cloner.clone(subtree);
-        tmp_Matrix = cloner.clone(tmp_Matrix);
-        tmp_inverseWorldRotation = cloner.clone(tmp_inverseWorldRotation);
+        this.location = cloner.clone(location);
+        this.suspensionDirection = cloner.clone(suspensionDirection);
+        this.axisDirection = cloner.clone(axisDirection);
+        this.tuning = cloner.clone(tuning);
+        this.wheelWorldLocation = cloner.clone(wheelWorldLocation);
+        this.wheelWorldRotation = cloner.clone(wheelWorldRotation);
+        this.subtree = cloner.clone(subtree);
+        this.tmpMatrix = cloner.clone(tmpMatrix);
+        this.tmpInverseWheelRotation = cloner.clone(tmpInverseWheelRotation);
 
         VehicleWheel originalWheel = (VehicleWheel) original;
         setRotationAngle(originalWheel.getRotationAngle());
@@ -821,7 +845,7 @@ public class VehicleWheel implements JmeCloneable, Savable {
     @Override
     public VehicleWheel jmeClone() {
         try {
-            VehicleWheel clone = (VehicleWheel) super.clone();
+            VehicleWheel clone = (VehicleWheel) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -841,19 +865,19 @@ public class VehicleWheel implements JmeCloneable, Savable {
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        subtree = (Spatial) capsule.readSavable(tagWheelSpatial, null);
-        isFront = capsule.readBoolean(tagFrontWheel, false);
-        location = (Vector3f) capsule.readSavable(tagWheelLocation,
-                new Vector3f());
-        suspensionDirection = (Vector3f) capsule.readSavable(tagWheelDirection,
-                new Vector3f());
-        axisDirection = (Vector3f) capsule.readSavable(tagWheelAxle,
-                new Vector3f());
-        tuning = (VehicleTuning) capsule.readSavable(tagTuning,
-                new VehicleTuning());
-        rollInfluence = capsule.readFloat(tagRollInfluence, 1f);
-        radius = capsule.readFloat(tagWheelRadius, 0.5f);
-        restLength = capsule.readFloat(tagRestLength, 1f);
+        this.subtree = (Spatial) capsule.readSavable(tagWheelSpatial, null);
+        this.isFront = capsule.readBoolean(tagFrontWheel, false);
+        this.location = (Vector3f) capsule
+                .readSavable(tagWheelLocation, new Vector3f());
+        this.suspensionDirection = (Vector3f) capsule
+                .readSavable(tagWheelDirection, new Vector3f());
+        this.axisDirection = (Vector3f) capsule
+                .readSavable(tagWheelAxle, new Vector3f());
+        this.tuning = (VehicleTuning) capsule
+                .readSavable(tagTuning, new VehicleTuning());
+        this.rollInfluence = capsule.readFloat(tagRollInfluence, 1f);
+        this.radius = capsule.readFloat(tagWheelRadius, 0.5f);
+        this.restLength = capsule.readFloat(tagRestLength, 1f);
 
         float angle = capsule.readFloat(tagRotationAngle, 0f);
         setRotationAngle(angle);
@@ -928,14 +952,14 @@ public class VehicleWheel implements JmeCloneable, Savable {
 
     native private static float getBrake(long vehicleId, int wheelIndex);
 
-    native private static void getCollisionLocation(long vehicleId,
-            int wheelIndex, Vector3f vector);
+    native private static void getCollisionLocation(
+            long vehicleId, int wheelIndex, Vector3f vector);
 
-    native private static void getCollisionNormal(long vehicleId,
-            int wheelIndex, Vector3f vector);
+    native private static void
+            getCollisionNormal(long vehicleId, int wheelIndex, Vector3f vector);
 
-    native private static float getDeltaRotation(long vehicleId,
-            int wheelIndex);
+    native private static float
+            getDeltaRotation(long vehicleId, int wheelIndex);
 
     native private static float getEngineForce(long vehicleId, int wheelIndex);
 
@@ -943,30 +967,30 @@ public class VehicleWheel implements JmeCloneable, Savable {
 
     native private static float getRestLength(long vehicleId, int wheelIndex);
 
-    native private static float getRollInfluence(long vehicleId,
-            int wheelIndex);
+    native private static float
+            getRollInfluence(long vehicleId, int wheelIndex);
 
-    native private static float getRotationAngle(long vehicleId,
-            int wheelIndex);
+    native private static float
+            getRotationAngle(long vehicleId, int wheelIndex);
 
     native private static float getSkidInfo(long vehicleId, int wheelIndex);
 
     native private static float getSteerAngle(long vehicleId, int wheelIndex);
 
-    native private static float getSuspensionLength(long vehicleId,
-            int wheelIndex);
+    native private static float
+            getSuspensionLength(long vehicleId, int wheelIndex);
 
-    native private static void getWheelLocation(long vehicleId, int wheelIndex,
-            Vector3f vector);
+    native private static void
+            getWheelLocation(long vehicleId, int wheelIndex, Vector3f vector);
 
-    native private static void getWheelRotation(long vehicleId, int wheelIndex,
-            Matrix3f matrix);
+    native private static void
+            getWheelRotation(long vehicleId, int wheelIndex, Matrix3f matrix);
 
     native private static boolean isFront(long vehicleId, int wheelIndex);
 
-    native private static void setRotationAngle(long vehicleId, int wheelIndex,
-            float angle);
+    native private static void
+            setRotationAngle(long vehicleId, int wheelIndex, float angle);
 
-    native private static void setSuspensionLength(long vehicleId,
-            int wheelIndex, float length);
+    native private static void
+            setSuspensionLength(long vehicleId, int wheelIndex, float length);
 }

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,6 @@ import com.jme3.app.state.AppState;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.bullet.collision.shapes.SphereCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.joints.Point2PointJoint;
 import com.jme3.bullet.objects.PhysicsRigidBody;
@@ -50,6 +49,7 @@ import com.jme3.system.AppSettings;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import jme3utilities.Heart;
+import jme3utilities.MeshNormals;
 import jme3utilities.MyAsset;
 import jme3utilities.MyString;
 import jme3utilities.math.MyMath;
@@ -63,7 +63,9 @@ import jme3utilities.ui.InputMode;
 import jme3utilities.ui.ShowDialog;
 
 /**
- * A PhysicsDemo to simulate Newton's cradle.
+ * A physics demo that simulates a Newton's cradle.
+ * <p>
+ * https://en.wikipedia.org/wiki/Newton%27s_cradle
  * <p>
  * Collision objects are rendered entirely by debug visualization.
  *
@@ -89,13 +91,13 @@ public class NewtonsCradle
     // fields
 
     /**
-     * status displayed in the upper-left corner of the GUI node
+     * text displayed at the bottom of the GUI node
      */
-    private BitmapText statusText;
+    private static BitmapText statusText;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * proposed display settings, for the DsEditOverlay
      */
@@ -105,6 +107,14 @@ public class NewtonsCradle
      */
     final private static Vector3f tmpVector = new Vector3f();
     // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the NewtonsCradle application.
+     */
+    public NewtonsCradle() { // explicit to avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
@@ -113,17 +123,15 @@ public class NewtonsCradle
      * @param arguments array of command-line arguments (not null)
      */
     public static void main(String[] arguments) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
         for (String arg : arguments) {
             switch (arg) {
                 case "--deleteOnly":
-                    deleteStoredSettings(applicationName);
-                    System.exit(0);
-                    break;
+                    Heart.deleteStoredSettings(applicationName);
+                    return;
+                default:
             }
         }
 
@@ -133,8 +141,8 @@ public class NewtonsCradle
                 2_048, 1_080 // max width, height
         );
         final String title = applicationName + " " + MyString.join(arguments);
-        proposedSettings = new DisplaySettings(application, applicationName,
-                sizeLimits) {
+        proposedSettings = new DisplaySettings(
+                application, applicationName, sizeLimits) {
             @Override
             protected void applyOverrides(AppSettings settings) {
                 setShowDialog(ShowDialog.Never);
@@ -167,7 +175,7 @@ public class NewtonsCradle
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -175,9 +183,8 @@ public class NewtonsCradle
 
         ColorRGBA skyColor = new ColorRGBA(0.1f, 0.2f, 0.4f, 1f);
         viewPort.setBackgroundColor(skyColor);
-        /*
-         * Add the status text to the GUI.
-         */
+
+        // Add the status text to the GUI.
         statusText = new BitmapText(guiFont);
         statusText.setLocalTranslation(205f, 25f, 0f);
         guiNode.attachChild(statusText);
@@ -186,13 +193,13 @@ public class NewtonsCradle
         boolean success = stateManager.attach(dseOverlay);
         assert success;
 
-        super.actionInitializeApplication();
+        super.acorusInit();
 
         restartSimulation(5);
     }
 
     /**
-     * Initialize materials during startup.
+     * Initialize the library of named materials during startup.
      */
     @Override
     public void generateMaterials() {
@@ -214,7 +221,7 @@ public class NewtonsCradle
     }
 
     /**
-     * Determine the length of debug axis arrows when visible.
+     * Determine the length of debug axis arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -224,7 +231,8 @@ public class NewtonsCradle
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -284,6 +292,8 @@ public class NewtonsCradle
                 case "simulate 4":
                     restartSimulation(4);
                     return;
+
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
@@ -296,12 +306,12 @@ public class NewtonsCradle
      * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
      */
     @Override
-    public void resize(int newWidth, int newHeight) {
+    public void onViewPortResize(int newWidth, int newHeight) {
         proposedSettings.resize(newWidth, newHeight);
         DsEditOverlay dseOverlay = stateManager.getState(DsEditOverlay.class);
-        dseOverlay.resize(newWidth, newHeight);
+        dseOverlay.onViewPortResize(newWidth, newHeight);
 
-        super.resize(newWidth, newHeight);
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -331,9 +341,11 @@ public class NewtonsCradle
     // private methods
 
     /**
-     * Add lighting and shadows to the specified scene.
+     * Add lighting to the specified scene.
+     *
+     * @param rootSpatial which scene (not null)
      */
-    private void addLighting(Spatial rootSpatial) {
+    private static void addLighting(Spatial rootSpatial) {
         ColorRGBA ambientColor = new ColorRGBA(0.5f, 0.5f, 0.5f, 1f);
         AmbientLight ambient = new AmbientLight(ambientColor);
         rootSpatial.addLight(ambient);
@@ -348,6 +360,9 @@ public class NewtonsCradle
     /**
      * Add a dynamic ball to the PhysicsSpace, suspended between 2 single-ended
      * point-to-point joints.
+     *
+     * @param xOffset the desired X coordinate for the ball's center
+     * @return the new instance (not null)
      */
     private PhysicsRigidBody addSuspendedBall(float xOffset) {
         float radius = 9.9f;
@@ -356,7 +371,7 @@ public class NewtonsCradle
         Vector3f location = new Vector3f(xOffset, 0f, 0f);
         Material material = findMaterial("ball");
         ball.setDebugMaterial(material);
-        ball.setDebugMeshNormals(DebugMeshNormals.Sphere);
+        ball.setDebugMeshNormals(MeshNormals.Sphere);
         ball.setDebugMeshResolution(DebugShapeFactory.highResolution);
         ball.setFriction(0f);
         ball.setPhysicsLocation(location);
@@ -421,7 +436,7 @@ public class NewtonsCradle
      */
     private void restartSimulation(int numBalls) {
         clearSpace();
-        speed = pausedSpeed;
+        this.speed = pausedSpeed;
 
         float xSeparation = 20f;
 
@@ -454,8 +469,8 @@ public class NewtonsCradle
             totalEnergy += potentialEnergy;
         }
 
-        String message = String.format("KE+PE=%f%s", totalEnergy,
-                isPaused() ? "  PAUSED" : "");
+        String message = String.format(
+                "KE+PE=%f%s", totalEnergy, isPaused() ? "  PAUSED" : "");
         statusText.setText(message);
     }
 }

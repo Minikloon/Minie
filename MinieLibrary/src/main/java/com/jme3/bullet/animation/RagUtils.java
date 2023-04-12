@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022 jMonkeyEngine
+ * Copyright (c) 2018-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,8 @@ import com.jme3.anim.SkinningControl;
 import com.jme3.animation.Bone;
 import com.jme3.animation.Skeleton;
 import com.jme3.animation.SkeletonControl;
+import com.jme3.bullet.collision.shapes.CompoundCollisionShape;
+import com.jme3.bullet.collision.shapes.CylinderCollisionShape;
 import com.jme3.bullet.joints.PhysicsJoint;
 import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.export.InputCapsule;
@@ -72,6 +74,7 @@ import jme3utilities.MySpatial;
 import jme3utilities.MyString;
 import jme3utilities.Validate;
 import jme3utilities.math.MyBuffer;
+import jme3utilities.math.MyMath;
 import jme3utilities.math.MyVector3f;
 import jme3utilities.math.RectangularSolid;
 import jme3utilities.math.VectorSet;
@@ -84,7 +87,7 @@ import jme3utilities.math.VectorSetUsingBuffer;
  *
  * Based on KinematicRagdollControl by Normen Hansen and Rémy Bouquet (Nehon).
  */
-public class RagUtils {
+final public class RagUtils {
     // *************************************************************************
     // constants and loggers
 
@@ -107,14 +110,17 @@ public class RagUtils {
     /**
      * Assign each mesh vertex to a bone/torso link and add its location (mesh
      * coordinates in bind pose) to that link's list.
+     * <p>
+     * A software skin update must precede any request for vertex locations.
+     * TODO use the Wes library to avoid this limitation?
      *
      * @param meshes array of animated meshes to use (not null, unaffected)
      * @param managerMap a map from bone indices to managing link names (not
      * null, unaffected)
      * @return a new map from bone/torso names to sets of vertex coordinates
      */
-    public static Map<String, VectorSet> coordsMap(Mesh[] meshes,
-            String[] managerMap) {
+    public static Map<String, VectorSet>
+            coordsMap(Mesh[] meshes, String[] managerMap) {
         Validate.nonNull(managerMap, "manager map");
 
         float[] wArray = new float[4];
@@ -124,8 +130,8 @@ public class RagUtils {
         for (Mesh mesh : meshes) {
             int numVertices = mesh.getVertexCount();
             for (int vertexI = 0; vertexI < numVertices; ++vertexI) {
-                String managerName = findManager(mesh, vertexI, iArray, wArray,
-                        managerMap);
+                String managerName = findManager(
+                        mesh, vertexI, iArray, wArray, managerMap);
                 VectorSet set = coordsMap.get(managerName);
                 if (set == null) {
                     set = new VectorSetUsingBuffer(1, false);
@@ -181,7 +187,7 @@ public class RagUtils {
      * null)
      * @return a root joint, or null if none found
      */
-    static Joint findMainJoint(Armature armature, Mesh[] targetMeshes) {
+    public static Joint findMainJoint(Armature armature, Mesh[] targetMeshes) {
         Validate.nonNull(targetMeshes, "target meshes");
 
         Joint[] roots = armature.getRoots();
@@ -252,10 +258,10 @@ public class RagUtils {
     public static AbstractControl findSControl(Spatial subtree) {
         AbstractControl result = null;
         if (subtree != null) {
-            List<SkinningControl> skinners = MySpatial.listControls(subtree,
-                    SkinningControl.class, null);
-            List<SkeletonControl> skellers = MySpatial.listControls(subtree,
-                    SkeletonControl.class, null);
+            List<SkinningControl> skinners = MySpatial
+                    .listControls(subtree, SkinningControl.class, null);
+            List<SkeletonControl> skellers = MySpatial
+                    .listControls(subtree, SkeletonControl.class, null);
             if (skellers.isEmpty() && skinners.size() == 1) {
                 result = skinners.get(0);
             } else if (skinners.isEmpty() && skellers.size() == 1) {
@@ -282,28 +288,26 @@ public class RagUtils {
             return;
         }
         int newRemainingHops = hopsRemaining - 1;
-        /*
-         * Consider each neighboring body that isn't the starting body.
-         */
+
+        // Consider each neighboring body that isn't the starting body.
         PhysicsJoint[] joints = current.listJoints();
         for (PhysicsJoint joint : joints) {
             PhysicsBody neighbor = joint.findOtherBody(current);
             if (neighbor != null && neighbor != start) {
-                /*
-                 * Decide whether to visit (or re-visit) the neighbor.
-                 */
+                // Decide whether to visit (or re-visit) the neighbor.
                 boolean visit = true;
                 if (visited.containsKey(neighbor)) { // previously visited
                     int mostRemainingHops = visited.get(neighbor);
-                    if (newRemainingHops <= mostRemainingHops) {// don't revisit
+                    if (newRemainingHops <= mostRemainingHops) {
+                        // don't revisit
                         visit = false;
                     }
                 }
                 if (visit) {
                     start.addToIgnoreList(neighbor);
                     visited.put(neighbor, newRemainingHops);
-                    ignoreCollisions(start, neighbor, newRemainingHops,
-                            visited);
+                    ignoreCollisions(
+                            start, neighbor, newRemainingHops, visited);
                 }
             }
         }
@@ -317,8 +321,8 @@ public class RagUtils {
      * @param storeResult storage for results (added to if not null)
      * @return an expanded List (either storeResult or a new List)
      */
-    public static List<Mesh> listDacMeshes(Spatial subtree,
-            List<Mesh> storeResult) {
+    public static List<Mesh>
+            listDacMeshes(Spatial subtree, List<Mesh> storeResult) {
         List<Mesh> result = (storeResult == null)
                 ? new ArrayList<Mesh>(10) : storeResult;
 
@@ -375,30 +379,121 @@ public class RagUtils {
     }
 
     /**
+     * Create a transformed CylinderCollisionShape that bounds the locations in
+     * the specified VectorSet.
+     *
+     * @param vectorSet the set of locations (not null, numVectors&gt;1,
+     * unaffected)
+     * @param scaleFactors scale factors to apply to local coordinates (not
+     * null, unaffected)
+     * @return a new shape
+     */
+    public static CompoundCollisionShape
+            makeCylinder(VectorSet vectorSet, Vector3f scaleFactors) {
+        Validate.nonNull(scaleFactors, "scale factors");
+        int numVectors = vectorSet.numVectors();
+        Validate.require(numVectors > 1, "multiple vectors");
+
+        RectangularSolid solid = makeRectangularSolid(vectorSet, scaleFactors);
+
+        Vector3f halfExtents = solid.halfExtents(null); // in local coordinates
+        float max = MyMath.max(halfExtents.x, halfExtents.y, halfExtents.z);
+        float mid = MyMath.mid(halfExtents.x, halfExtents.y, halfExtents.z);
+        float min = MyMath.min(halfExtents.x, halfExtents.y, halfExtents.z);
+        float halfHeight;
+        if (max - mid > mid - min) { // prolate
+            halfHeight = max;
+        } else { // oblate
+            halfHeight = min;
+        }
+        Vector3f heightDirection = new Vector3f(); // in local coordinates
+        if (halfHeight == halfExtents.x) {
+            heightDirection.set(1f, 0f, 0f);
+        } else if (halfHeight == halfExtents.y) {
+            heightDirection.set(0f, 1f, 0f);
+        } else {
+            assert halfHeight == halfExtents.z;
+            heightDirection.set(0f, 0f, 1f);
+        }
+
+        Quaternion localToWorld = solid.localToWorld(null);
+        Quaternion worldToLocal = localToWorld.inverse();
+        assert worldToLocal != null;
+
+        // Convert heightDirection to world coordinates:
+        localToWorld.mult(heightDirection, heightDirection);
+
+        // Calculate minimum half height and squared radius for the cylinder.
+        halfHeight = 0f;
+        double squaredRadius = 0.;
+        FloatBuffer buffer = vectorSet.toBuffer();
+        Vector3f worldCenter = vectorSet.mean(null);
+        Vector3f tempVector = new Vector3f();
+        buffer.rewind();
+        while (buffer.hasRemaining()) {
+            tempVector.x = buffer.get();
+            tempVector.y = buffer.get();
+            tempVector.z = buffer.get();
+            tempVector.subtractLocal(worldCenter);
+
+            // update halfHeight
+            float h = tempVector.dot(heightDirection);
+            float absH = FastMath.abs(h);
+            if (absH > halfHeight) {
+                halfHeight = absH;
+            }
+
+            // update squaredRadius
+            MyVector3f.accumulateScaled(tempVector, heightDirection, -h);
+            double r2 = MyVector3f.lengthSquared(tempVector);
+            if (r2 > squaredRadius) {
+                squaredRadius = r2;
+            }
+        }
+
+        // Generate the cylinder shape.
+        float height = 2f * halfHeight;
+        float radius = (float) Math.sqrt(squaredRadius);
+        CylinderCollisionShape cylinder
+                = new CylinderCollisionShape(radius, height, MyVector3f.xAxis);
+
+        // Choose an orientation for the cylinder.
+        Vector3f yAxis = new Vector3f();
+        Vector3f zAxis = new Vector3f();
+        MyVector3f.generateBasis(heightDirection, yAxis, zAxis);
+        Matrix3f cylinderOrientation = new Matrix3f();
+        cylinderOrientation.fromAxes(heightDirection, yAxis, zAxis);
+
+        CompoundCollisionShape result = new CompoundCollisionShape();
+        result.addChildShape(cylinder, worldCenter, cylinderOrientation);
+
+        return result;
+    }
+
+    /**
      * Instantiate a compact RectangularSolid that bounds the sample locations
      * contained in a VectorSet.
      *
-     * @param vectorSet the set of sample locations (not null, numVectors&gt;1,
+     * @param vectorSet the set of locations (not null, numVectors&gt;1,
      * contents unaffected)
-     * @param scaleFactors to apply to local coordinates (not null, unaffected)
+     * @param scaleFactors scale factors to apply to local coordinates (not
+     * null, unaffected)
      * @return a new RectangularSolid
      */
-    static RectangularSolid makeRectangularSolid(VectorSet vectorSet,
-            Vector3f scaleFactors) {
+    public static RectangularSolid
+            makeRectangularSolid(VectorSet vectorSet, Vector3f scaleFactors) {
+        Validate.nonNull(scaleFactors, "scale factors");
         int numVectors = vectorSet.numVectors();
-        assert numVectors > 1 : numVectors;
-        /*
-         * Orient local axes based on the eigenvectors of the covariance matrix.
-         */
+        Validate.require(numVectors > 1, "multiple vectors");
+
+        // Orient local axes based on the eigenvectors of the covariance matrix.
         Matrix3f covariance = vectorSet.covariance(null);
         Eigen3f eigen = new Eigen3f(covariance);
         Vector3f[] basis = eigen.getEigenVectors();
-        Quaternion localToWorld = new Quaternion();
-        localToWorld.fromAxes(basis);
+        Quaternion localToWorld = new Quaternion().fromAxes(basis);
         Quaternion worldToLocal = localToWorld.inverse();
-        /*
-         * Calculate the min and max for each local axis.
-         */
+
+        // Calculate the min and max for each local axis.
         Vector3f maxima = new Vector3f(Float.NEGATIVE_INFINITY,
                 Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY);
         Vector3f minima = new Vector3f(Float.POSITIVE_INFINITY,
@@ -414,9 +509,8 @@ public class RagUtils {
             MyVector3f.accumulateMaxima(maxima, tempVector);
             MyVector3f.accumulateMinima(minima, tempVector);
         }
-        /*
-         * Apply scale factors to local coordinates of extrema.
-         */
+
+        // Apply scale factors to local coordinates of extrema.
         Vector3f center = MyVector3f.midpoint(minima, maxima, null);
 
         maxima.subtractLocal(center);
@@ -441,12 +535,15 @@ public class RagUtils {
      * @param transform the transform to convert (not null, modified)
      */
     public static void meshToLocal(Bone parentBone, Transform transform) {
-        Vector3f location = transform.getTranslation();
-        Quaternion orientation = transform.getRotation();
-        Vector3f scale = transform.getScale();
+        Quaternion msr = parentBone.getModelSpaceRotation();
+        Validate.require(msr.norm() > 0f, "non-zero parent rotation");
+
+        Vector3f location = transform.getTranslation(); // alias
+        Quaternion orientation = transform.getRotation(); // alias
+        Vector3f scale = transform.getScale(); // alias
 
         Vector3f pmTranslate = parentBone.getModelSpacePosition();
-        Quaternion pmRotInv = parentBone.getModelSpaceRotation().inverse();
+        Quaternion pmRotInv = msr.inverse(); // TODO garbage
         Vector3f pmScale = parentBone.getModelSpaceScale();
 
         location.subtractLocal(pmTranslate);
@@ -464,14 +561,17 @@ public class RagUtils {
      * @param transform the transform to convert (not null, modified)
      */
     static void meshToLocal(Joint parent, Transform transform) {
-        Vector3f location = transform.getTranslation();
-        Quaternion orientation = transform.getRotation();
-        Vector3f scale = transform.getScale();
-
         Transform pm = parent.getModelTransform();
-        Vector3f pmTranslate = pm.getTranslation();
-        Quaternion pmRotInv = pm.getRotation().inverse();
-        Vector3f pmScale = pm.getScale();
+        Validate.require(
+                pm.getRotation().norm() > 0f, "non-zero parent rotation");
+
+        Vector3f location = transform.getTranslation(); // alias
+        Quaternion orientation = transform.getRotation(); // alias
+        Vector3f scale = transform.getScale(); // alias
+
+        Vector3f pmTranslate = pm.getTranslation(); // alias
+        Quaternion pmRotInv = pm.getRotation().inverse(); // TODO garbage
+        Vector3f pmScale = pm.getScale(); // alias
 
         location.subtractLocal(pmTranslate);
         location.divideLocal(pmScale);
@@ -488,8 +588,8 @@ public class RagUtils {
      * @return a new array or null
      * @throws IOException from capsule
      */
-    public static Transform[] readTransformArray(InputCapsule capsule,
-            String fieldName) throws IOException {
+    public static Transform[] readTransformArray(
+            InputCapsule capsule, String fieldName) throws IOException {
         Validate.nonNull(capsule, "capsule");
         Validate.nonNull(fieldName, "field name");
 
@@ -518,8 +618,8 @@ public class RagUtils {
      * @return a coordinate transform (either storeResult or a new vector, not
      * null)
      */
-    public static Transform relativeTransform(Spatial startSpatial,
-            Node ancestorNode, Transform storeResult) {
+    public static Transform relativeTransform(
+            Spatial startSpatial, Node ancestorNode, Transform storeResult) {
         Validate.nonNull(startSpatial, "spatial");
         Validate.nonNull(ancestorNode, "ancestor");
         assert startSpatial.hasAncestor(ancestorNode);
@@ -529,7 +629,7 @@ public class RagUtils {
         result.loadIdentity();
         Spatial loopSpatial = startSpatial;
         while (loopSpatial != ancestorNode) {
-            Transform localTransform = loopSpatial.getLocalTransform();
+            Transform localTransform = loopSpatial.getLocalTransform(); // alias
             result.combineWithParent(localTransform);
             loopSpatial = loopSpatial.getParent();
         }
@@ -552,8 +652,8 @@ public class RagUtils {
         for (int jointIndex = 0; jointIndex < numJoints; ++jointIndex) {
             Joint joint = armature.getJoint(jointIndex);
             if (joint == null) {
-                String msg = String.format("Joint %d in armature is null!",
-                        jointIndex);
+                String msg = String
+                        .format("Joint %d in armature is null!", jointIndex);
                 throw new IllegalArgumentException(msg);
             }
             String jointName = joint.getName();
@@ -561,7 +661,7 @@ public class RagUtils {
                 String message = String.format(
                         "Joint %d in armature has null name!", jointIndex);
                 throw new IllegalArgumentException(message);
-            } else if (jointName.equals(DynamicAnimControl.torsoName)) {
+            } else if (jointName.equals(DacConfiguration.torsoName)) {
                 String message = String.format(
                         "Joint %d in armature has a reserved name!",
                         jointIndex);
@@ -590,19 +690,18 @@ public class RagUtils {
         for (int boneIndex = 0; boneIndex < numBones; ++boneIndex) {
             Bone bone = skeleton.getBone(boneIndex);
             if (bone == null) {
-                String msg = String.format("Bone %d in skeleton is null!",
-                        boneIndex);
+                String msg = String
+                        .format("Bone %d in skeleton is null!", boneIndex);
                 throw new IllegalArgumentException(msg);
             }
             String boneName = bone.getName();
             if (boneName == null) {
-                String msg = String.format("Bone %d in skeleton has null name!",
-                        boneIndex);
-                throw new IllegalArgumentException(msg);
-            } else if (boneName.equals(DynamicAnimControl.torsoName)) {
                 String msg = String.format(
-                        "Bone %d in skeleton has a reserved name!",
-                        boneIndex);
+                        "Bone %d in skeleton has null name!", boneIndex);
+                throw new IllegalArgumentException(msg);
+            } else if (boneName.equals(DacConfiguration.torsoName)) {
+                String msg = String.format(
+                        "Bone %d in skeleton has a reserved name!", boneIndex);
                 throw new IllegalArgumentException(msg);
             } else if (nameSet.contains(boneName)) {
                 String msg = "Duplicate bone name in skeleton: "
@@ -749,8 +848,8 @@ public class RagUtils {
      * null, unaffected)
      * @return a new map from link names to total weight
      */
-    private static Map<String, Float> weightMap(int[] biArray,
-            float[] bwArray, String[] managerMap) {
+    private static Map<String, Float>
+            weightMap(int[] biArray, float[] bwArray, String[] managerMap) {
         assert biArray.length == 4;
         assert bwArray.length == 4;
 

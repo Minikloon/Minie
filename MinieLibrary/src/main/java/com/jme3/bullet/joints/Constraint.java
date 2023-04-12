@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021 jMonkeyEngine
+ * Copyright (c) 2019-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,8 +52,8 @@ import jme3utilities.Validate;
  * <li>A double-ended Constraint connects 2 rigid bodies together in the same
  * PhysicsSpace. One or both of the bodies must be dynamic.</li>
  * </ul>
- * Subclasses include: ConeJoint, HingeJoint, New6Dof, Point2PointJoint,
- * SixDofJoint, SixDofSpringJoint, and SliderJoint.
+ * Subclasses include: ConeJoint, GearJoint, HingeJoint, New6Dof,
+ * Point2PointJoint, SixDofJoint, SixDofSpringJoint, and SliderJoint.
  *
  * @author Stephen Gold sgold@sonic.net
  *
@@ -75,6 +75,7 @@ abstract public class Constraint extends PhysicsJoint {
     final private static String tagIsCollision
             = "isCollisionBetweenLinkedBodies";
     final private static String tagIsEnabled = "isEnabled";
+    final private static String tagIsFeedback = "isFeedback";
     final private static String tagNumIterations = "numIterations";
     final private static String tagPivotA = "pivotA";
     final private static String tagPivotB = "pivotB";
@@ -112,8 +113,8 @@ abstract public class Constraint extends PhysicsJoint {
      * @param pivotInBody the pivot location in the body's scaled local
      * coordinates (not null, unaffected)
      */
-    protected Constraint(PhysicsRigidBody body, JointEnd bodyEnd,
-            Vector3f pivotInBody) {
+    protected Constraint(
+            PhysicsRigidBody body, JointEnd bodyEnd, Vector3f pivotInBody) {
         Validate.nonNull(body, "body");
         Validate.nonNull(bodyEnd, "body end");
         Validate.nonNull(pivotInBody, "pivot in body");
@@ -121,14 +122,14 @@ abstract public class Constraint extends PhysicsJoint {
         switch (bodyEnd) {
             case A:
                 setBodyA(body);
-                pivotA = pivotInBody.clone();
-                pivotB = null;
+                this.pivotA = pivotInBody.clone();
+                this.pivotB = null;
                 break;
 
             case B:
                 setBodyB(body);
-                pivotA = null;
-                pivotB = pivotInBody.clone();
+                this.pivotA = null;
+                this.pivotB = pivotInBody.clone();
                 break;
 
             default:
@@ -163,14 +164,14 @@ abstract public class Constraint extends PhysicsJoint {
         switch (bodyEnd) {
             case A:
                 setBodyA(body);
-                pivotA = pivotInBody.clone();
-                pivotB = pivotInWorld.clone();
+                this.pivotA = pivotInBody.clone();
+                this.pivotB = pivotInWorld.clone();
                 break;
 
             case B:
                 setBodyB(body);
-                pivotA = pivotInWorld.clone();
-                pivotB = pivotInBody.clone();
+                this.pivotA = pivotInWorld.clone();
+                this.pivotB = pivotInBody.clone();
                 break;
 
             default:
@@ -206,8 +207,8 @@ abstract public class Constraint extends PhysicsJoint {
 
         setBodyA(bodyA);
         setBodyB(bodyB);
-        pivotA = pivotInA.clone();
-        pivotB = pivotInB.clone();
+        this.pivotA = pivotInA.clone();
+        this.pivotB = pivotInB.clone();
         bodyA.addJoint(this);
         bodyB.addJoint(this);
     }
@@ -268,14 +269,19 @@ abstract public class Constraint extends PhysicsJoint {
     public Vector3f getPivot(JointEnd end, Vector3f storeResult) {
         Validate.nonNull(end, "end");
 
+        Vector3f result;
         switch (end) {
             case A:
-                return getPivotA(storeResult);
+                result = getPivotA(storeResult);
+                break;
             case B:
-                return getPivotB(storeResult);
+                result = getPivotB(storeResult);
+                break;
             default:
                 throw new IllegalArgumentException("end = " + end);
         }
+
+        return result;
     }
 
     /**
@@ -412,9 +418,32 @@ abstract public class Constraint extends PhysicsJoint {
     // new protected methods
 
     /**
+     * Copy common properties from another constraint. Used during cloning.
+     *
+     * @param old (not null, unaffected)
+     */
+    final protected void copyConstraintProperties(Constraint old) {
+        assert old.hasAssignedNativeObject();
+        assert old.nativeId() != nativeId();
+
+        float bit = old.getBreakingImpulseThreshold();
+        setBreakingImpulseThreshold(bit);
+
+        boolean enableConstraint = old.isEnabled();
+        setEnabled(enableConstraint);
+
+        boolean enableFeedback = old.isFeedback();
+        setFeedback(enableFeedback);
+
+        int numIterations = old.getOverrideIterations();
+        overrideIterations(numIterations);
+    }
+
+    /**
      * Read the constraint type.
      *
-     * @param constraintId identifier of the btTypedConstraint (not 0)
+     * @param constraintId identifier of the {@code btTypedConstraint} (not
+     * zero)
      * @return a btTypedConstraintType ordinal value (&ge;3)
      */
     final native protected static int getConstraintType(long constraintId);
@@ -438,6 +467,9 @@ abstract public class Constraint extends PhysicsJoint {
 
         boolean isEnabled = capsule.readBoolean(tagIsEnabled, true);
         setEnabled(isEnabled);
+
+        boolean isFeedback = capsule.readBoolean(tagIsFeedback, false);
+        setFeedback(isFeedback);
 
         int numIterations = capsule.readInt(tagNumIterations, -1);
         overrideIterations(numIterations);
@@ -478,11 +510,22 @@ abstract public class Constraint extends PhysicsJoint {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        super.cloneFields(cloner, original);
+        assert !hasAssignedNativeObject();
+        Constraint old = (Constraint) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
 
-        pivotA = cloner.clone(pivotA);
-        pivotB = cloner.clone(pivotB);
-        // Each subclass must create the btTypedConstraint.
+        super.cloneFields(cloner, original);
+        if (hasAssignedNativeObject()) {
+            return;
+        }
+
+        this.pivotA = cloner.clone(pivotA);
+        this.pivotB = cloner.clone(pivotB);
+        /*
+         * Each subclass must create the btTypedConstraint
+         * and invoke setNativeId().
+         */
     }
 
     /**
@@ -533,21 +576,6 @@ abstract public class Constraint extends PhysicsJoint {
     }
 
     /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public Constraint jmeClone() {
-        try {
-            Constraint clone = (Constraint) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
-    }
-
-    /**
      * De-serialize this Constraint from the specified importer, for example
      * when loading from a J3O file.
      *
@@ -559,8 +587,8 @@ abstract public class Constraint extends PhysicsJoint {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        pivotA = (Vector3f) capsule.readSavable(tagPivotA, new Vector3f());
-        pivotB = (Vector3f) capsule.readSavable(tagPivotB, new Vector3f());
+        this.pivotA = (Vector3f) capsule.readSavable(tagPivotA, null);
+        this.pivotB = (Vector3f) capsule.readSavable(tagPivotB, null);
         /*
          * Each subclass must create the btTypedConstraint and then
          * invoke readConstraintProperties().
@@ -586,6 +614,7 @@ abstract public class Constraint extends PhysicsJoint {
                 Float.MAX_VALUE);
         capsule.write(isCollisionBetweenLinkedBodies(), tagIsCollision, true);
         capsule.write(isEnabled(), tagIsEnabled, true);
+        capsule.write(isFeedback(), tagIsFeedback, false);
         capsule.write(getOverrideIterations(), tagNumIterations, -1);
     }
     // *************************************************************************
@@ -603,8 +632,8 @@ abstract public class Constraint extends PhysicsJoint {
     // *************************************************************************
     // native private methods
 
-    native private static void enableFeedback(long constraintId,
-            boolean enable);
+    native private static void
+            enableFeedback(long constraintId, boolean enable);
 
     native private static void finalizeNative(long constraintId);
 
@@ -618,11 +647,11 @@ abstract public class Constraint extends PhysicsJoint {
 
     native private static boolean needsFeedback(long constraintId);
 
-    native private static void overrideIterations(long constraintId,
-            int numIterations);
+    native private static void
+            overrideIterations(long constraintId, int numIterations);
 
-    native private static void setBreakingImpulseThreshold(long constraintId,
-            float desiredThreshold);
+    native private static void setBreakingImpulseThreshold(
+            long constraintId, float desiredThreshold);
 
     native private static void setEnabled(long constraintId, boolean enable);
 }

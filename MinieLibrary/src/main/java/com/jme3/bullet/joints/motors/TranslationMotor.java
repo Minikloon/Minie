@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 jMonkeyEngine
+ * Copyright (c) 2019-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,6 @@
 package com.jme3.bullet.joints.motors;
 
 import com.jme3.bullet.NativePhysicsObject;
-import com.jme3.bullet.PhysicsSpace;
 import com.jme3.math.Vector3f;
 import java.util.logging.Logger;
 import jme3utilities.Validate;
@@ -41,7 +40,7 @@ import jme3utilities.Validate;
  * A 3-axis motor based on Bullet's btTranslationalLimitMotor2, used to control
  * the translation of a New6Dof constraint.
  *
- * @author sgold@sonic.net
+ * @author Stephen Gold sgold@sonic.net
  */
 public class TranslationMotor extends NativePhysicsObject {
     // *************************************************************************
@@ -133,8 +132,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * @return true if limited, otherwise false
      */
     public boolean isDampingLimited(int axisIndex) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         boolean result = isDampingLimited(motorId, axisIndex);
@@ -149,8 +147,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * @return true if enabled, otherwise false
      */
     public boolean isMotorEnabled(int axisIndex) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         boolean result = isMotorEnabled(motorId, axisIndex);
@@ -165,8 +162,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * @return true if enabled, otherwise false
      */
     public boolean isServoEnabled(int axisIndex) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         boolean result = isServoEnabled(motorId, axisIndex);
@@ -181,8 +177,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * @return true if enabled, otherwise false
      */
     public boolean isSpringEnabled(int axisIndex) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         boolean result = isSpringEnabled(motorId, axisIndex);
@@ -198,8 +193,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * @return true if limited, otherwise false
      */
     public boolean isStiffnessLimited(int axisIndex) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         boolean result = isStiffnessLimited(motorId, axisIndex);
@@ -270,8 +264,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * (default=false)
      */
     public void setDampingLimited(int axisIndex, boolean limitDamping) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         setDampingLimited(motorId, axisIndex, limitDamping);
@@ -284,8 +277,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * @param enableFlag true&rarr;enable, false&rarr;disable (default=false)
      */
     public void setMotorEnabled(int axisIndex, boolean enableFlag) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         setMotorEnabled(motorId, axisIndex, enableFlag);
@@ -299,8 +291,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * @param enableFlag true&rarr;enable, false&rarr;disable (default=false)
      */
     public void setServoEnabled(int axisIndex, boolean enableFlag) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         setServoEnabled(motorId, axisIndex, enableFlag);
@@ -313,8 +304,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * @param enableFlag true&rarr;enable, false&rarr;disable (default=false)
      */
     public void setSpringEnabled(int axisIndex, boolean enableFlag) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         setSpringEnabled(motorId, axisIndex, enableFlag);
@@ -328,8 +318,7 @@ public class TranslationMotor extends NativePhysicsObject {
      * @param limitFlag true&rarr;limit, false&rarr;don't limit (default=false)
      */
     public void setStiffnessLimited(int axisIndex, boolean limitFlag) {
-        Validate.inRange(axisIndex, "axis index", PhysicsSpace.AXIS_X,
-                PhysicsSpace.AXIS_Z);
+        Validate.axisIndex(axisIndex, "axis index");
 
         long motorId = nativeId();
         setStiffnessLimited(motorId, axisIndex, limitFlag);
@@ -341,28 +330,28 @@ public class TranslationMotor extends NativePhysicsObject {
 
     native private static void getDamping(long motorId, Vector3f storeVector);
 
-    native private static void getEquilibrium(long motorId,
-            Vector3f storeVector);
+    native private static void
+            getEquilibrium(long motorId, Vector3f storeVector);
 
-    native private static void getLowerLimit(long motorId,
-            Vector3f storeVector);
+    native private static void
+            getLowerLimit(long motorId, Vector3f storeVector);
 
-    native private static void getMaxMotorForce(long motorId,
-            Vector3f storeVector);
+    native private static void
+            getMaxMotorForce(long motorId, Vector3f storeVector);
 
-    native private static void getParameter(long motorId, int parameterIndex,
-            Vector3f storeVector);
+    native private static void getParameter(
+            long motorId, int parameterIndex, Vector3f storeVector);
 
-    native private static void getServoTarget(long motorId,
-            Vector3f storeVector);
+    native private static void
+            getServoTarget(long motorId, Vector3f storeVector);
 
     native private static void getStiffness(long motorId, Vector3f storeVector);
 
-    native private static void getTargetVelocity(long motorId,
-            Vector3f storeVector);
+    native private static void
+            getTargetVelocity(long motorId, Vector3f storeVector);
 
-    native private static void getUpperLimit(long motorId,
-            Vector3f storeVector);
+    native private static void
+            getUpperLimit(long motorId, Vector3f storeVector);
 
     native private static boolean isDampingLimited(long motorId, int axisIndex);
 
@@ -372,49 +361,49 @@ public class TranslationMotor extends NativePhysicsObject {
 
     native private static boolean isSpringEnabled(long motorId, int axisIndex);
 
-    native private static boolean isStiffnessLimited(long motorId,
-            int axisIndex);
+    native private static boolean
+            isStiffnessLimited(long motorId, int axisIndex);
 
     native private static void setBounce(long motorId, Vector3f bounceVector);
 
     native private static void setDamping(long motorId, Vector3f dampingVector);
 
-    native private static void setDampingLimited(long motorId, int axisIndex,
-            boolean limitFlag);
+    native private static void
+            setDampingLimited(long motorId, int axisIndex, boolean limitFlag);
 
-    native private static void setEquilibrium(long motorId,
-            Vector3f offsetVector);
+    native private static void
+            setEquilibrium(long motorId, Vector3f offsetVector);
 
-    native private static void setLowerLimit(long motorId,
-            Vector3f offsetVector);
+    native private static void
+            setLowerLimit(long motorId, Vector3f offsetVector);
 
-    native private static void setMaxMotorForce(long motorId,
-            Vector3f forceVector);
+    native private static void
+            setMaxMotorForce(long motorId, Vector3f forceVector);
 
-    native private static void setMotorEnabled(long motorId, int axisIndex,
-            boolean enableFlag);
+    native private static void
+            setMotorEnabled(long motorId, int axisIndex, boolean enableFlag);
 
-    native private static void setParameter(long motorId, int parameterIndex,
-            Vector3f vector);
+    native private static void
+            setParameter(long motorId, int parameterIndex, Vector3f vector);
 
-    native private static void setServoEnabled(long motorId, int axisIndex,
-            boolean enableFlag);
+    native private static void
+            setServoEnabled(long motorId, int axisIndex, boolean enableFlag);
 
-    native private static void setServoTarget(long motorId,
-            Vector3f targetVector);
+    native private static void
+            setServoTarget(long motorId, Vector3f targetVector);
 
-    native private static void setSpringEnabled(long motorId, int axisIndex,
-            boolean enableFlag);
+    native private static void
+            setSpringEnabled(long motorId, int axisIndex, boolean enableFlag);
 
-    native private static void setStiffness(long motorId,
-            Vector3f stiffnessVector);
+    native private static void
+            setStiffness(long motorId, Vector3f stiffnessVector);
 
-    native private static void setStiffnessLimited(long motorId, int axisIndex,
-            boolean limitFlag);
+    native private static void
+            setStiffnessLimited(long motorId, int axisIndex, boolean limitFlag);
 
-    native private static void setTargetVelocity(long motorId,
-            Vector3f velocityVector);
+    native private static void
+            setTargetVelocity(long motorId, Vector3f velocityVector);
 
-    native private static void setUpperLimit(long motorId,
-            Vector3f offsetVector);
+    native private static void
+            setUpperLimit(long motorId, Vector3f offsetVector);
 }

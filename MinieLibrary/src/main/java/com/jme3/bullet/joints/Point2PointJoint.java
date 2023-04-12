@@ -126,8 +126,8 @@ public class Point2PointJoint extends Constraint {
      * @param pivotInB the pivot location in B's scaled local coordinates (not
      * null, unaffected)
      */
-    public Point2PointJoint(PhysicsRigidBody rigidBodyA, PhysicsRigidBody rigidBodyB,
-            Vector3f pivotInA, Vector3f pivotInB) {
+    public Point2PointJoint(PhysicsRigidBody rigidBodyA,
+            PhysicsRigidBody rigidBodyB, Vector3f pivotInA, Vector3f pivotInB) {
         super(rigidBodyA, rigidBodyB, pivotInA, pivotInB);
         createJoint();
     }
@@ -142,7 +142,9 @@ public class Point2PointJoint extends Constraint {
      */
     public float getDamping() {
         long constraintId = nativeId();
-        return getDamping(constraintId);
+        float result = getDamping(constraintId);
+
+        return result;
     }
 
     /**
@@ -152,7 +154,9 @@ public class Point2PointJoint extends Constraint {
      */
     public float getImpulseClamp() {
         long constraintId = nativeId();
-        return getImpulseClamp(constraintId);
+        float result = getImpulseClamp(constraintId);
+
+        return result;
     }
 
     /**
@@ -162,7 +166,9 @@ public class Point2PointJoint extends Constraint {
      */
     public float getTau() {
         long constraintId = nativeId();
-        return getTau(constraintId);
+        float result = getTau(constraintId);
+
+        return result;
     }
 
     /**
@@ -209,39 +215,22 @@ public class Point2PointJoint extends Constraint {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
+        assert !hasAssignedNativeObject();
+        Point2PointJoint old = (Point2PointJoint) original;
+        assert old != this;
+        assert old.hasAssignedNativeObject();
+
         super.cloneFields(cloner, original);
+        if (hasAssignedNativeObject()) {
+            return;
+        }
 
         createJoint();
-
-        Point2PointJoint old = (Point2PointJoint) original;
-
-        float bit = old.getBreakingImpulseThreshold();
-        setBreakingImpulseThreshold(bit);
-
-        boolean enableJoint = old.isEnabled();
-        setEnabled(enableJoint);
-
-        int numIterations = old.getOverrideIterations();
-        overrideIterations(numIterations);
+        copyConstraintProperties(old);
 
         setDamping(old.getDamping());
         setImpulseClamp(old.getImpulseClamp());
         setTau(old.getTau());
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public Point2PointJoint jmeClone() {
-        try {
-            Point2PointJoint clone = (Point2PointJoint) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -326,9 +315,7 @@ public class Point2PointJoint extends Constraint {
 
         long constraintId;
         if (b == null) {
-            /*
-             * Create a single-ended joint.
-             */
+            // Create a single-ended joint.
             if (pivotB == null) {
                 constraintId = createJoint1(aId, pivotA);
             } else {
@@ -355,9 +342,8 @@ public class Point2PointJoint extends Constraint {
 
         } else {
             assert pivotB != null;
-            /*
-             * Create a double-ended joint.
-             */
+
+            // Create a double-ended joint.
             long bId = b.nativeId();
             constraintId = createJoint(aId, bId, pivotA, pivotB);
         }
@@ -368,8 +354,8 @@ public class Point2PointJoint extends Constraint {
     // *************************************************************************
     // native private methods
 
-    native private static long createJoint(long bodyIdA, long bodyIdB,
-            Vector3f pivotInA, Vector3f pivotInB);
+    native private static long createJoint(
+            long bodyIdA, long bodyIdB, Vector3f pivotInA, Vector3f pivotInB);
 
     native private static long createJoint1(long bodyIdA, Vector3f pivotInA);
 
@@ -385,8 +371,8 @@ public class Point2PointJoint extends Constraint {
 
     native private static void setDamping(long jointId, float desiredDamping);
 
-    native private static void setImpulseClamp(long jointId,
-            float desiredClamp);
+    native private static void
+            setImpulseClamp(long jointId, float desiredClamp);
 
     native private static void setPivotInA(long jointId, Vector3f pivotInA);
 

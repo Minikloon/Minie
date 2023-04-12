@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2022, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -65,6 +65,7 @@ import jme3utilities.Heart;
 import jme3utilities.InfluenceUtil;
 import jme3utilities.MyCamera;
 import jme3utilities.MySpatial;
+import jme3utilities.MyString;
 import jme3utilities.debug.PointVisualizer;
 import jme3utilities.debug.SkeletonVisualizer;
 import jme3utilities.math.MyArray;
@@ -112,102 +113,105 @@ public class BalanceDemo extends PhysicsDemo {
     /**
      * composer for playing canned animations
      */
-    private AnimComposer composer = null;
+    private static AnimComposer composer = null;
     /**
      * keeps the model's center of mass directly above its center of support
      */
-    private BalanceController balance = null;
+    private static BalanceController balance = null;
     /**
      * true once {@link #initWhenReady()} has been invoked for the latest model
      */
-    private boolean dacReadyInitDone = false;
+    private static boolean dacReadyInitDone = false;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * Control being tested
      */
-    private DynamicAnimControl dac;
+    private static DynamicAnimControl dac;
     /**
      * fraction of the model's weight that's on its right foot
      */
-    private float rightSupportFraction = 0.5f;
+    private static float rightSupportFraction = 0.5f;
     /**
      * gain for the UprightController (tuned for each model)
      */
-    private float uprightGain;
+    private static float uprightGain;
     /**
      * parameters that determine the torso's vertical acceleration
      */
-    private float vaBias = 0f; // tuned for each model
-    private float vaMagnitude = 0f; // tuned for each model
-    private float vaSign = +1f;
+    private static float vaBias = 0f; // tuned for each model
+    private static float vaMagnitude = 0f; // tuned for each model
+    private static float vaSign = +1f;
     /**
      * root node of the C-G model on which the Control is being tested
      */
-    private Node cgModel;
+    private static Node cgModel;
     /**
      * visualizer for the center of mass
      */
-    private PointVisualizer comPoint;
+    private static PointVisualizer comPoint;
     /**
      * visualizer for the center of support
      */
-    private PointVisualizer supportPoint;
+    private static PointVisualizer supportPoint;
     /**
      * visualizer for the skeleton of the C-G model
      */
-    private SkeletonVisualizer sv;
+    private static SkeletonVisualizer sv;
     /**
      * name of the Animation/Action to play on the C-G model
      */
-    private String animationName = null;
+    private static String animationName = null;
     /**
      * TorsoLink of the model
      */
-    private TorsoLink torso;
+    private static TorsoLink torso;
     /**
      * location of the left foot's center of support
      */
-    private Vector3f leftSupportLocation;
+    private static Vector3f leftSupportLocation;
     /**
      * location of the right foot's center of support
      */
-    private Vector3f rightSupportLocation;
+    private static Vector3f rightSupportLocation;
     /**
      * "up" direction of the torso, in its local coordinate system (unit vector,
      * different for each model)
      */
-    private Vector3f torsoUpDirection = null;
+    private static Vector3f torsoUpDirection = null;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the BalanceDemo application.
+     */
+    public BalanceDemo() { // to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the BalanceDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
-        Application application = new BalanceDemo();
-        /*
-         * Customize the window's title bar.
-         */
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
-        settings.setTitle(applicationName);
-
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setVSync(true);
-        application.setSettings(settings);
+        settings.setTitle(title); // Customize the window's title bar.
 
+        Application application = new BalanceDemo();
+        application.setSettings(settings);
         application.start();
     }
     // *************************************************************************
@@ -217,7 +221,8 @@ public class BalanceDemo extends PhysicsDemo {
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        super.acorusInit();
         configureCamera();
         configureDumper();
         generateMaterials();
@@ -227,18 +232,17 @@ public class BalanceDemo extends PhysicsDemo {
         viewPort.setBackgroundColor(skyColor);
 
         addLighting();
-        /*
-         * Hide the render-statistics overlay.
-         */
+
+        // Hide the render-statistics overlay.
         stateManager.getState(StatsAppState.class).toggleStats();
 
         int indicatorSize = 16; // in pixels
-        comPoint = new PointVisualizer(assetManager, indicatorSize,
-                ColorRGBA.Cyan, "ring");
+        comPoint = new PointVisualizer(
+                assetManager, indicatorSize, ColorRGBA.Cyan, "ring");
         rootNode.attachChild(comPoint);
 
-        supportPoint = new PointVisualizer(assetManager, indicatorSize,
-                ColorRGBA.Yellow, "square");
+        supportPoint = new PointVisualizer(
+                assetManager, indicatorSize, ColorRGBA.Yellow, "square");
         rootNode.attachChild(supportPoint);
 
         float halfExtent = 50f;
@@ -249,7 +253,7 @@ public class BalanceDemo extends PhysicsDemo {
     }
 
     /**
-     * Configure the PhysicsDumper.
+     * Configure the PhysicsDumper during startup.
      */
     @Override
     public void configureDumper() {
@@ -257,6 +261,26 @@ public class BalanceDemo extends PhysicsDemo {
 
         PhysicsDumper dumper = getDumper();
         dumper.setEnabled(DumpFlags.JointsInSpaces, true);
+    }
+
+    /**
+     * Calculate screen bounds for the detailed help node.
+     *
+     * @param viewPortWidth (in pixels, &gt;0)
+     * @param viewPortHeight (in pixels, &gt;0)
+     * @return a new instance
+     */
+    @Override
+    public Rectangle detailedHelpBounds(int viewPortWidth, int viewPortHeight) {
+        // Position help nodes along the top edge of the viewport.
+        float margin = 10f; // in pixels
+        float width = viewPortWidth - 2f * margin;
+        float height = viewPortHeight - 2f * margin;
+        float leftX = margin;
+        float topY = margin + height;
+        Rectangle result = new Rectangle(leftX, topY, width, height);
+
+        return result;
     }
 
     /**
@@ -271,7 +295,7 @@ public class BalanceDemo extends PhysicsDemo {
     }
 
     /**
-     * Determine the length of debug axis arrows when visible.
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -281,7 +305,8 @@ public class BalanceDemo extends PhysicsDemo {
     }
 
     /**
-     * Add application-specific hotkey bindings and override existing ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -319,19 +344,10 @@ public class BalanceDemo extends PhysicsDemo {
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind("toggle skeleton", KeyInput.KEY_V);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - 2f * margin;
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
-     * Process an action that wasn't handled by the active input mode.
+     * Process an action that wasn't handled by the active InputMode.
      *
      * @param actionString textual description of the action (not null)
      * @param ongoing true if the action is ongoing, otherwise false
@@ -353,7 +369,9 @@ public class BalanceDemo extends PhysicsDemo {
                 case "toggle skeleton":
                     toggleSkeleton();
                     return;
+                default:
             }
+
             String[] words = actionString.split(" ");
             if (words.length == 2 && "load".equals(words[0])) {
                 addModel(words[1]);
@@ -363,6 +381,8 @@ public class BalanceDemo extends PhysicsDemo {
                 return;
             }
         }
+
+        // The action is not handled: forward it to the superclass.
         super.onAction(actionString, ongoing, tpf);
     }
 
@@ -406,7 +426,7 @@ public class BalanceDemo extends PhysicsDemo {
     // private methods
 
     /**
-     * Add lighting and shadows to the scene.
+     * Add lighting and shadows to the main scene.
      */
     private void addLighting() {
         ColorRGBA ambientColor = new ColorRGBA(0.2f, 0.2f, 0.2f, 1f);
@@ -422,8 +442,8 @@ public class BalanceDemo extends PhysicsDemo {
         int mapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager, mapSize,
-                        numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, mapSize, numSplits);
         dlsr.setLight(sun);
         dlsr.setShadowIntensity(0.5f);
         viewPort.addProcessor(dlsr);
@@ -535,29 +555,26 @@ public class BalanceDemo extends PhysicsDemo {
      * Initialization that takes place once all links are ready for dynamic
      * mode.
      */
-    private void initWhenReady() {
+    private static void initWhenReady() {
         Biped biped = (Biped) dac;
         BoneLink leftFoot = biped.getLeftFoot();
         BoneLink rightFoot = biped.getRightFoot();
-        /*
-         * Pin the left foot to the ground.
-         */
+
+        // Pin the left foot to the ground.
         dac.setDynamicChain(leftFoot, 9, Vector3f.ZERO, false);
         Vector3f[] leftSole = leftFoot.footprint();
         for (Vector3f location : leftSole) {
             dac.pinToWorld(leftFoot, location);
         }
-        /*
-         * Pin the right foot to the ground.
-         */
+
+        // Pin the right foot to the ground.
         dac.setDynamicChain(rightFoot, 9, Vector3f.ZERO, false);
         Vector3f[] rightSole = rightFoot.footprint();
         for (Vector3f location : rightSole) {
             dac.pinToWorld(rightFoot, location);
         }
-        /*
-         * Apply a BalanceController to the torso.
-         */
+
+        // Apply a BalanceController to the torso.
         Vector3f acc = new Vector3f(0f, vaBias + vaSign * vaMagnitude, 0f);
         torso.setDynamic(acc);
         leftSupportLocation = MyArray.mean(leftSole, null);
@@ -566,17 +583,15 @@ public class BalanceDemo extends PhysicsDemo {
                 leftSupportLocation, rightSupportLocation, null);
         balance = new BalanceController(torso, supportLocation);
         torso.addIKController(balance);
-        /*
-         * Apply an UprightController to the torso.
-         */
+
+        // Apply an UprightController to the torso.
         UprightController upright
                 = new UprightController(torso, torsoUpDirection);
         torso.addIKController(upright);
         upright.setDeltaGainFactor(uprightGain);
         upright.setErrorGainFactor(uprightGain);
-        /*
-         * Start playing a canned animation.
-         */
+
+        // Start playing a canned animation.
         composer.setCurrentAction(animationName);
     }
 
@@ -687,9 +702,9 @@ public class BalanceDemo extends PhysicsDemo {
             spatial.setShadowMode(RenderQueue.ShadowMode.Cast);
         }
 
-        LinkConfig swordConfig = new LinkConfig(5f, MassHeuristic.Density,
-                ShapeHeuristic.VertexHull, Vector3f.UNIT_XYZ,
-                CenterHeuristic.AABB);
+        LinkConfig swordConfig = new LinkConfig(
+                5f, MassHeuristic.Density, ShapeHeuristic.VertexHull,
+                Vector3f.UNIT_XYZ, CenterHeuristic.AABB);
         dac = new SinbadControl();
         dac.attach("Handle.R", swordConfig, sword);
 
@@ -713,9 +728,9 @@ public class BalanceDemo extends PhysicsDemo {
             spatial.setShadowMode(RenderQueue.ShadowMode.Cast);
         }
 
-        LinkConfig swordConfig = new LinkConfig(5f, MassHeuristic.Density,
-                ShapeHeuristic.VertexHull, Vector3f.UNIT_XYZ,
-                CenterHeuristic.AABB);
+        LinkConfig swordConfig = new LinkConfig(
+                5f, MassHeuristic.Density, ShapeHeuristic.VertexHull,
+                Vector3f.UNIT_XYZ, CenterHeuristic.AABB);
         dac = new SinbadControl();
         dac.attach("Handle.L", swordConfig, sword);
         dac.attach("Handle.R", swordConfig, sword);
@@ -727,7 +742,7 @@ public class BalanceDemo extends PhysicsDemo {
         torsoUpDirection = Vector3f.UNIT_Y;
     }
 
-    private void setPosture(String vertical, String side) {
+    private static void setPosture(String vertical, String side) {
         switch (vertical) {
             case "squat":
                 vaSign = -1f;
@@ -757,7 +772,7 @@ public class BalanceDemo extends PhysicsDemo {
     /**
      * Toggle mesh rendering on/off.
      */
-    private void toggleMeshes() {
+    private static void toggleMeshes() {
         Spatial.CullHint hint = cgModel.getLocalCullHint();
         if (hint == Spatial.CullHint.Inherit
                 || hint == Spatial.CullHint.Never) {
@@ -771,7 +786,7 @@ public class BalanceDemo extends PhysicsDemo {
     /**
      * Toggle the skeleton visualizer on/off.
      */
-    private void toggleSkeleton() {
+    private static void toggleSkeleton() {
         boolean enabled = sv.isEnabled();
         sv.setEnabled(!enabled);
     }

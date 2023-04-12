@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@ import com.jme3.system.AppSettings;
 /**
  * A simple example involving a RigidBodyControl with
  * setApplyPhysicsLocal(true).
- *
+ * <p>
  * Builds upon HelloKinematicRbc.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -70,9 +70,9 @@ public class HelloLocalPhysics extends SimpleApplication {
     /**
      * Main entry point for the HelloLocalPhysics application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloLocalPhysics application = new HelloLocalPhysics();
 
         // Enable gamma correction for accurate lighting.
@@ -141,9 +141,7 @@ public class HelloLocalPhysics extends SimpleApplication {
      */
     @Override
     public void simpleUpdate(float tpf) {
-        /*
-         * Cause the node to orbit the origin.
-         */
+        // Cause the node to orbit the origin.
         float orbitalPeriod = 0.8f; // seconds
         float phaseAngle = elapsedTime * FastMath.TWO_PI / orbitalPeriod;
 
@@ -160,8 +158,10 @@ public class HelloLocalPhysics extends SimpleApplication {
 
     /**
      * Add lighting to the specified scene.
+     *
+     * @param scene the scene to augment (not null)
      */
-    private void addLighting(Spatial scene) {
+    private static void addLighting(Spatial scene) {
         ColorRGBA ambientColor = new ColorRGBA(0.02f, 0.02f, 0.02f, 1f);
         AmbientLight ambient = new AmbientLight(ambientColor);
         scene.addLight(ambient);
@@ -176,10 +176,13 @@ public class HelloLocalPhysics extends SimpleApplication {
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
+        //bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
         // Reduce the time step for better accuracy.

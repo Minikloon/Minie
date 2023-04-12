@@ -6,15 +6,15 @@ plugins {
     id 'application'
 }
 
+application {
+    mainClass = 'jme3utilities.minie.test.DropTest'
+}
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+
 tasks.withType(JavaCompile) { // Java compile-time options:
     options.deprecation = true
 }
-
-mainClassName = 'jme3utilities.minie.test.DropTest'
-if (!hasProperty('mainClass')) {
-    ext.mainClass = mainClassName
-}
-jar.manifest.attributes('Main-Class': mainClassName)
 
 dependencies {
     implementation acorusCoordinates
@@ -34,8 +34,8 @@ dependencies {
     //  -- it is included solely to avoid warnings from AssetConfig.
     runtimeOnly 'org.jmonkeyengine:jme3-jogg:' + jme3Version
 
-    //implementation 'com.github.stephengold:Minie:' + minieVersion
-    implementation project(':MinieLibrary')
+    //implementation 'com.github.stephengold:Minie:' + minieVersion // for published library
+    implementation project(':MinieLibrary') // for latest library build
 }
 
 processResources.dependsOn(':MinieAssets:models', ':MinieAssets:shapes', ':MinieAssets:textures')
@@ -43,3 +43,33 @@ processResources.dependsOn(':MinieAssets:models', ':MinieAssets:shapes', ':Minie
 // cleanup tasks:
 
 clean.dependsOn(':MinieAssets:cleanModels', ':MinieAssets:cleanShapes', ':MinieAssets:cleanTextures')
+
+// tasks to run specific apps:
+
+tasks.register('NewtonsCradle', JavaExec) {
+    mainClass = 'jme3utilities.minie.test.NewtonsCradle'
+}
+tasks.register('NewtonsCradleDeleteSettings', JavaExec) {
+    args '--deleteOnly'
+    mainClass = 'jme3utilities.minie.test.NewtonsCradle'
+}
+tasks.register('RopeDemo', JavaExec) {
+    mainClass = 'jme3utilities.minie.test.RopeDemo'
+}
+tasks.register('RopeDemoDeleteSettings', JavaExec) {
+    args '--deleteOnly'
+    mainClass = 'jme3utilities.minie.test.RopeDemo'
+}
+tasks.register('SplitDemo', JavaExec) {
+    mainClass = 'jme3utilities.minie.test.SplitDemo'
+}
+tasks.register('TestGearJoint', JavaExec) {
+    mainClass = 'jme3utilities.minie.test.TestGearJoint'
+}
+tasks.register('Windlass', JavaExec) {
+    mainClass = 'jme3utilities.minie.test.Windlass'
+}
+tasks.register('WindlassDeleteSettings', JavaExec) {
+    args '--deleteOnly'
+    mainClass = 'jme3utilities.minie.test.Windlass'
+}

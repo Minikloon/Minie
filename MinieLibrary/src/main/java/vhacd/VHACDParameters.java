@@ -1,16 +1,31 @@
 /*
-Copyright (c) 2016, Riccardo Balbo
-All rights reserved.
+ Copyright (c) 2016, Riccardo Balbo
+ All rights reserved.
 
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are met:
 
-1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+ 1. Redistributions of source code must retain the above copyright notice, this
+    list of conditions and the following disclaimer.
 
-2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
 
-3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+ 3. Neither the name of the copyright holder nor the names of its
+    contributors may be used to endorse or promote products derived from
+    this software without specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 package vhacd;
 
@@ -20,12 +35,14 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.logging.Logger;
 import jme3utilities.Validate;
 
 /**
- * A set of tuning parameters for convex decomposition, based on V-HACD's
- * IVHACD::Parameters.
+ * A set of tuning parameters for convex decomposition, based on classic
+ * V-HACD's IVHACD::Parameters.
  */
 public class VHACDParameters
         extends NativePhysicsObject
@@ -44,7 +61,7 @@ public class VHACDParameters
     /**
      * true&rarr;enable debug output
      */
-    private boolean DEBUG;
+    private boolean debug;
     // *************************************************************************
     // constructors
 
@@ -62,31 +79,31 @@ public class VHACDParameters
     // new methods exposed
 
     /**
-     * Read selected parameters from an InputStream.
+     * Read selected parameters from the specified InputStream.
      *
-     * @param is (not null)
+     * @param is the stream to read (not null)
      * @throws IOException from DataInputStream
      */
     public void fromInputStream(InputStream is) throws IOException {
-        DataInputStream dis = new DataInputStream(is);
+        try (DataInputStream dis = new DataInputStream(is)) {
+            setMaxConcavity(dis.readDouble());
+            setAlpha(dis.readDouble());
+            setBeta(dis.readDouble());
+            setMinVolumePerHull(dis.readDouble());
 
-        setMaxConcavity(dis.readDouble());
-        setAlpha(dis.readDouble());
-        setBeta(dis.readDouble());
-        setMinVolumePerHull(dis.readDouble());
-
-        setVoxelResolution(dis.readInt());
-        setMaxVerticesPerHull(dis.readInt());
-        setPlaneDownSampling(dis.readInt());
-        setConvexHullDownSampling(dis.readInt());
-        setPCA(dis.readInt() != 0);
-        setACDMode(ACDMode.values()[dis.readInt()]);
-        setConvexHullApproximation(dis.readInt());
-        setOclAcceleration(dis.readInt());
+            setVoxelResolution(dis.readInt());
+            setMaxVerticesPerHull(dis.readInt());
+            setPlaneDownSampling(dis.readInt());
+            setConvexHullDownSampling(dis.readInt());
+            setPCA(dis.readInt() != 0);
+            setACDMode(ACDMode.values()[dis.readInt()]);
+            setConvexHullApproximation(dis.readInt());
+            setOclAcceleration(dis.readInt());
+        }
     }
 
     /**
-     * Read the decomposition mode (native field: m_mode).
+     * Return the decomposition mode (native field: m_mode).
      *
      * @return an enum value (not null)
      */
@@ -99,7 +116,7 @@ public class VHACDParameters
     }
 
     /**
-     * Read the bias toward clipping along symmetry planes. (native field:
+     * Return the bias toward clipping along symmetry planes. (native field:
      * m_alpha).
      *
      * @return alpha (&ge;0, &le;1)
@@ -112,7 +129,7 @@ public class VHACDParameters
     }
 
     /**
-     * Read the bias toward clipping along revolution axes (native field:
+     * Return the bias toward clipping along revolution axes (native field:
      * m_beta).
      *
      * @return beta (&ge;0, &le;1)
@@ -125,7 +142,7 @@ public class VHACDParameters
     }
 
     /**
-     * Read the precision of the convex-hull generation process (native field:
+     * Return the precision of the convex-hull generation process (native field:
      * m_convexhullDownsampling).
      *
      * @return precision (&ge;1, &le;16)
@@ -143,11 +160,11 @@ public class VHACDParameters
      * @return true if enabled, otherwise false
      */
     public boolean getDebugEnabled() {
-        return DEBUG;
+        return debug;
     }
 
     /**
-     * Read the maximum concavity (native field: m_concavity).
+     * Return the maximum concavity (native field: m_concavity).
      *
      * @return concavity (&ge;0, &le;1)
      */
@@ -159,7 +176,7 @@ public class VHACDParameters
     }
 
     /**
-     * Read the maximum number of vertices per hull (native field:
+     * Return the maximum number of vertices per convex hull (native field:
      * m_maxNumVerticesPerCH).
      *
      * @return the limit (&ge;4, &le;1024)
@@ -172,7 +189,7 @@ public class VHACDParameters
     }
 
     /**
-     * Read the minimum volume for added vertices (native field:
+     * Return the minimum volume for added vertices (native field:
      * m_minVolumePerCH).
      *
      * @return the volume (&ge;0, &le;0.01)
@@ -197,7 +214,7 @@ public class VHACDParameters
     }
 
     /**
-     * Read the granularity of the search (native field: m_planeDownsampling).
+     * Return the granularity of the search (native field: m_planeDownsampling).
      *
      * @return granularity (&ge;1, &le;16)
      */
@@ -209,8 +226,8 @@ public class VHACDParameters
     }
 
     /**
-     * Read the maximum number of voxels generated during the voxelization stage
-     * (native field: m_resolution).
+     * Return the maximum number of voxels generated during the voxelization
+     * stage (native field: m_resolution).
      *
      * @return number (&ge;10000, &le;64000000)
      */
@@ -234,92 +251,96 @@ public class VHACDParameters
     /**
      * Set bias toward clipping along symmetry planes (native field: m_alpha).
      *
-     * @param v default = 0.05, min = 0.0, max = 1.0,
+     * @param alpha default = 0.05, min = 0.0, max = 1.0,
      */
-    public void setAlpha(double v) {
-        Validate.fraction(v, "alpha");
+    public void setAlpha(double alpha) {
+        Validate.fraction(alpha, "alpha");
 
         long objectId = nativeId();
-        setAlpha(objectId, v);
+        setAlpha(objectId, alpha);
     }
 
     /**
      * Set bias toward clipping along revolution axes (native field: m_beta).
      *
-     * @param v default = 0.05, min = 0.0, max = 1.0
+     * @param beta default = 0.05, min = 0.0, max = 1.0
      */
-    public void setBeta(double v) {
-        Validate.fraction(v, "beta");
+    public void setBeta(double beta) {
+        Validate.fraction(beta, "beta");
 
         long objectId = nativeId();
-        setBeta(objectId, v);
+        setBeta(objectId, beta);
     }
 
     /**
      * Set precision of the convex-hull generation process during the clipping
      * plane selection stage (native field: m_convexhullDownsampling).
      *
-     * @param v default = 4, min = 1, max = 16
+     * @param precision default = 4, min = 1, max = 16
      */
-    public void setConvexHullDownSampling(int v) {
-        Validate.inRange(v, "precision", 1, 16);
+    public void setConvexHullDownSampling(int precision) {
+        Validate.inRange(precision, "precision", 1, 16);
 
         long objectId = nativeId();
-        setConvexhullDownsampling(objectId, v);
+        setConvexhullDownsampling(objectId, precision);
     }
 
     /**
      * Alter whether debug output is enabled.
      *
-     * @param d true &rarr; enable, false &rarr; disable (default=false)
+     * @param setting true &rarr; enable, false &rarr; disable (default=false)
      */
-    public void setDebugEnabled(boolean d) {
-        DEBUG = d;
+    public void setDebugEnabled(boolean setting) {
+        this.debug = setting;
     }
 
     /**
      * Set maximum concavity (native field: m_concavity).
      *
-     * @param v default = 0.0025, min = 0.0, max = 1.0
+     * @param concavity default = 0.0025, min = 0.0, max = 1.0
+     * <p>
+     * Note: the native default is 0.001.
      */
-    public void setMaxConcavity(double v) {
-        Validate.fraction(v, "depth");
+    public void setMaxConcavity(double concavity) {
+        Validate.fraction(concavity, "concavity");
 
         long objectId = nativeId();
-        setConcavity(objectId, v);
+        setConcavity(objectId, concavity);
     }
 
     /**
-     * Set maximum number of vertices per convex-hull (native field:
+     * Alter the maximum number of vertices per convex hull (native field:
      * m_maxNumVerticesPerCH).
      *
-     * @param v default = 32, min = 4, max = 1024)
+     * @param limit default = 32, min = 4, max = 1024
+     * <p>
+     * Note: the native default is 64.
      */
-    public void setMaxVerticesPerHull(int v) {
-        Validate.inRange(v, "max vertices", 4, 1024);
+    public void setMaxVerticesPerHull(int limit) {
+        Validate.inRange(limit, "limit", 4, 1024);
 
         long objectId = nativeId();
-        setMaxNumVerticesPerCH(objectId, v);
+        setMaxNumVerticesPerCH(objectId, limit);
     }
 
     /**
-     * Set minimum volume to add vertices to convex-hulls (native field:
+     * Set the minimum volume to add vertices to convex hulls (native field:
      * m_minVolumePerCH).
      *
-     * @param v default = 0.0001, min = 0.0, max = 0.01
+     * @param volume default = 0.0001, min = 0.0, max = 0.01
      */
-    public void setMinVolumePerHull(double v) {
-        Validate.inRange(v, "min volume", 0.0, 0.01);
+    public void setMinVolumePerHull(double volume) {
+        Validate.inRange(volume, "min volume", 0.0, 0.01);
 
         long objectId = nativeId();
-        setMinVolumePerCH(objectId, v);
+        setMinVolumePerCH(objectId, volume);
     }
 
     /**
      * Enable/disable normalizing the mesh before applying the convex
      * decomposition (native field: m_pca).
      *
-     * @param v default = False
+     * @param v default = false
      */
     public void setPCA(boolean v) {
         long objectId = nativeId();
@@ -340,40 +361,63 @@ public class VHACDParameters
     }
 
     /**
-     * Set maximum number of voxels generated during the voxelization stage
-     * (native field: m_resolution).
+     * Alter the maximum number of voxels generated during the voxelization
+     * stage (native field: m_resolution).
      *
-     * @param v default = 100_000, min = 10_000, max = 64_000_000
+     * @param maxVoxels default = 100_000, min = 10_000, max = 64_000_000
      */
-    public void setVoxelResolution(int v) {
-        Validate.inRange(v, "maxVoxels", 10_000, 64_000_000);
+    public void setVoxelResolution(int maxVoxels) {
+        Validate.inRange(maxVoxels, "maxVoxels", 10_000, 64_000_000);
 
         long objectId = nativeId();
-        setResolution(objectId, v);
+        setResolution(objectId, maxVoxels);
     }
 
     /**
-     * Write selected parameters to an OutputStream.
+     * Represent this instance as a Map, in order to make comparisons easier.
      *
-     * @param os (not null)
+     * @return a map of property names to values
+     */
+    public Map<String, Object> toMap() {
+        Map<String, Object> result = new TreeMap<>();
+
+        result.put("ACDMode", getACDMode());
+        result.put("alpha", getAlpha());
+        result.put("beta", getBeta());
+        result.put("debug", debug);
+        result.put("hullDS", getConvexHullDownSampling());
+        result.put("maxConcavity", getMaxConcavity());
+        result.put("maxVerticesPH", getMaxVerticesPerHull());
+        result.put("minVolumePH", getMinVolumePerHull());
+        result.put("resolution", getVoxelResolution());
+        result.put("PCA", getPCA());
+        result.put("planeDS", getPlaneDownSampling());
+
+        return result;
+    }
+
+    /**
+     * Write selected parameters to the specified OutputStream.
+     *
+     * @param os the stream to write (not null)
      * @throws IOException from DataOutputStream
      */
     public void toOutputStream(OutputStream os) throws IOException {
-        DataOutputStream dos = new DataOutputStream(os);
+        try (DataOutputStream dos = new DataOutputStream(os)) {
+            dos.writeDouble(getMaxConcavity());
+            dos.writeDouble(getAlpha());
+            dos.writeDouble(getBeta());
+            dos.writeDouble(getMinVolumePerHull());
 
-        dos.writeDouble(getMaxConcavity());
-        dos.writeDouble(getAlpha());
-        dos.writeDouble(getBeta());
-        dos.writeDouble(getMinVolumePerHull());
-
-        dos.writeInt(getVoxelResolution());
-        dos.writeInt(getMaxVerticesPerHull());
-        dos.writeInt(getPlaneDownSampling());
-        dos.writeInt(getConvexHullDownSampling());
-        dos.writeInt(getPCA() ? 1 : 0);
-        dos.writeInt(getACDMode().ordinal());
-        dos.writeInt(getConvexHullApproximation());
-        dos.writeInt(getOclAcceleration());
+            dos.writeInt(getVoxelResolution());
+            dos.writeInt(getMaxVerticesPerHull());
+            dos.writeInt(getPlaneDownSampling());
+            dos.writeInt(getConvexHullDownSampling());
+            dos.writeInt(getPCA() ? 1 : 0);
+            dos.writeInt(getACDMode().ordinal());
+            dos.writeInt(getConvexHullApproximation());
+            dos.writeInt(getOclAcceleration());
+        }
     }
     // *************************************************************************
     // NativePhysicsObject methods
@@ -402,10 +446,11 @@ public class VHACDParameters
             clone.setPCA(getPCA());
             clone.setPlaneDownSampling(getPlaneDownSampling());
             clone.setVoxelResolution(getVoxelResolution());
+
             return clone;
 
-        } catch (CloneNotSupportedException e) {
-            throw new RuntimeException(e);
+        } catch (CloneNotSupportedException exception) {
+            throw new RuntimeException(exception);
         }
     }
 
@@ -423,15 +468,19 @@ public class VHACDParameters
         } else if (otherObject != null
                 && otherObject.getClass() == getClass()) {
             VHACDParameters other = (VHACDParameters) otherObject;
+            int cha = other.getConvexHullApproximation();
+            int chds = other.getConvexHullDownSampling();
+            double maxConcavity = other.getMaxConcavity();
+            double mvph = other.getMinVolumePerHull();
             result = getACDMode() == other.getACDMode()
                     && (Double.compare(getAlpha(), other.getAlpha()) == 0)
                     && (Double.compare(getBeta(), other.getBeta()) == 0)
-                    && getConvexHullApproximation() == other.getConvexHullApproximation()
-                    && getConvexHullDownSampling() == other.getConvexHullDownSampling()
+                    && getConvexHullApproximation() == cha
+                    && getConvexHullDownSampling() == chds
                     && getDebugEnabled() == other.getDebugEnabled()
-                    && (Double.compare(getMaxConcavity(), other.getMaxConcavity()) == 0)
+                    && (Double.compare(getMaxConcavity(), maxConcavity) == 0)
                     && getMaxVerticesPerHull() == other.getMaxVerticesPerHull()
-                    && (Double.compare(getMinVolumePerHull(), other.getMinVolumePerHull()) == 0)
+                    && (Double.compare(getMinVolumePerHull(), mvph) == 0)
                     && getOclAcceleration() == other.getOclAcceleration()
                     && getPCA() == other.getPCA()
                     && getPlaneDownSampling() == other.getPlaneDownSampling()
@@ -444,14 +493,14 @@ public class VHACDParameters
     }
 
     /**
-     * Generate the hash code for this object.
+     * Generate the hash code for this instance.
      *
-     * @return value for use in hashing
+     * @return a 32-bit value for use in hashing
      */
     @Override
     public int hashCode() {
         int hash = 5;
-        hash = 83 * hash + (DEBUG ? 1 : 0);
+        hash = 83 * hash + (debug ? 1 : 0);
         hash = 83 * hash + getACDMode().hashCode();
         hash = 83 * hash + Double.hashCode(getAlpha());
         hash = 83 * hash + Double.hashCode(getBeta());
@@ -466,6 +515,27 @@ public class VHACDParameters
         hash = 83 * hash + getVoxelResolution();
 
         return hash;
+    }
+
+    /**
+     * Represent this instance as a String.
+     *
+     * @return a descriptive string of text (not null, not empty)
+     */
+    @Override
+    public String toString() {
+        String result = String.format("VHACDParameters[%n"
+                + " %s  alpha=%s  beta=%s  debug=%s  hullDS=%s%n"
+                + " maxConcavity=%s  maxVerticesPH=%s  minVolumePH=%s%n"
+                + " resolution=%s  PCA=%s  planeDS=%s%n"
+                + "]",
+                getACDMode(), getAlpha(), getBeta(), getDebugEnabled(),
+                getConvexHullDownSampling(), getMaxConcavity(),
+                getMaxVerticesPerHull(), getMinVolumePerHull(),
+                getVoxelResolution(), getPCA(), getPlaneDownSampling()
+        );
+
+        return result;
     }
     // *************************************************************************
     // Java private methods
@@ -556,14 +626,13 @@ public class VHACDParameters
 
     native private static void setConcavity(long objectId, double depth);
 
-    native private static void setConvexhullApproximation(long objectId,
-            int value);
+    native private static void setConvexhullApproximation(
+            long objectId, int value);
 
-    native private static void setConvexhullDownsampling(long objectId,
-            int precision);
+    native private static void setConvexhullDownsampling(
+            long objectId, int precision);
 
-    native private static void setMaxNumVerticesPerCH(long objectId,
-            int numVertices);
+    native private static void setMaxNumVerticesPerCH(long objectId, int limit);
 
     native private static void setMinVolumePerCH(long objectId, double volume);
 
@@ -573,8 +642,8 @@ public class VHACDParameters
 
     native private static void setPca(long objectId, boolean enable);
 
-    native private static void setPlaneDownsampling(long objectId,
-            int granularity);
+    native private static void setPlaneDownsampling(
+            long objectId, int granularity);
 
     native private static void setResolution(long objectId, int maxVoxels);
 }

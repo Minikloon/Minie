@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2019-2020, Stephen Gold
+ Copyright (c) 2019-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,7 @@ import jme3utilities.math.noise.Generator;
  *
  * @author Stephen Gold sgold@sonic.net
  */
-public class MakeHeart {
+final public class MakeHeart {
     // *************************************************************************
     // constants and loggers
 
@@ -81,6 +81,15 @@ public class MakeHeart {
     final private static FloatBuffer sampleBuffer
             = BufferUtils.createFloatBuffer(numAxes * numSamples);
     // *************************************************************************
+    // constructors
+
+    /**
+     * A private constructor to inhibit instantiation of this class.
+     */
+    private MakeHeart() {
+        // do nothing
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
@@ -90,28 +99,17 @@ public class MakeHeart {
      */
     public static void main(String[] arguments) {
         NativeLibraryLoader.loadNativeLibrary("bulletjme", true);
-        /*
-         * Mute the chatty loggers found in some imported packages.
-         */
+
+        // Mute the chatty loggers found in some imported packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Set the logging level for this class.
-         */
-        //logger.setLevel(Level.INFO);
-        /*
-         * Instantiate the application.
-         */
-        MakeHeart application = new MakeHeart();
-        /*
-         * Log the working directory.
-         */
+
+        // Log the working directory.
         String userDir = System.getProperty("user.dir");
         logger.log(Level.INFO, "working directory is {0}",
                 MyString.quote(userDir));
-        /*
-         * Generate the collision shape.
-         */
-        application.makeHeart();
+
+        // Generate the collision shape.
+        makeHeart();
     }
     // *************************************************************************
     // private methods
@@ -119,26 +117,22 @@ public class MakeHeart {
     /**
      * Generate a collision shape for a 3-D heart.
      */
-    private void makeHeart() {
-        /*
-         * Phase 1: add solutions for y=0, x>0
-         */
+    private static void makeHeart() {
+        // Phase 1: add solutions for y=0, x>0
         int n1 = 30;
         for (int i = 0; i < n1; ++i) {
             double gamma = i * Math.PI / (n1 - 1);
             solve1(gamma);
         }
-        /*
-         * Phase 2: add solutions for x=0, y>0 (symmetric in y)
-         */
+
+        // Phase 2: add solutions for x=0, y>0 (symmetric in y)
         int n2 = 15;
         for (int i = 0; i < n2; ++i) {
             double beta = (i + 1) * Math.PI / n2;
             solve2(beta);
         }
-        /*
-         * Phase 3: add solutions for x>0, y>0 (symmetric in y)
-         */
+
+        // Phase 3: add solutions for x>0, y>0 (symmetric in y)
         Generator generate = new Generator();
         while (sampleBuffer.remaining() >= 2 * numAxes) {
             double x = 1.2 * generate.nextDouble();
@@ -157,9 +151,8 @@ public class MakeHeart {
         Matrix3f rotation = new Matrix3f();
         rotation.fromAngleAxis(FastMath.PI, Vector3f.UNIT_Z);
         compound.addChildShape(half, Vector3f.ZERO, rotation);
-        /*
-         * Phase 5: write the shape to the asset file.
-         */
+
+        // Phase 5: write the shape to the asset file.
         String assetPath = "CollisionShapes/heart.j3o";
         String writeFilePath = String.format("%s/%s", assetDirPath, assetPath);
         Heart.writeJ3O(writeFilePath, compound);
@@ -174,7 +167,7 @@ public class MakeHeart {
      * @param z the Z coordinate of the point to test
      * @return error
      */
-    private double plug(double x, double y, double z) {
+    private static double plug(double x, double y, double z) {
         double x2 = x * x;
         double y2 = y * y;
         double z2 = z * z;
@@ -193,7 +186,7 @@ public class MakeHeart {
      *
      * @param gamma angle from the +Z axis (in radians)
      */
-    private void solve1(double gamma) {
+    private static void solve1(double gamma) {
         double sinGamma = Math.sin(gamma);
         if (sinGamma < 0.0 && sinGamma > -1e-10) {
             sinGamma = 0.0;
@@ -214,9 +207,8 @@ public class MakeHeart {
         while (Math.abs(r1 - r2) > tolerance) {
             assert !trial1(cosGamma, sinGamma, r1);
             assert trial1(cosGamma, sinGamma, r2);
-            /*
-             * Bisect to obtain a new estimate of the solution.
-             */
+
+            // Bisect to obtain a new estimate of the solution.
             double r = (r1 + r2) / 2.0;
             boolean s = trial1(cosGamma, sinGamma, r);
             if (s) {
@@ -238,7 +230,7 @@ public class MakeHeart {
      *
      * @param gamma angle from the +Z axis (in radians)
      */
-    private void solve2(double gamma) {
+    private static void solve2(double gamma) {
         double sinGamma = Math.sin(gamma);
         double cosGamma = Math.cos(gamma);
 
@@ -256,9 +248,8 @@ public class MakeHeart {
         while (Math.abs(r1 - r2) > tolerance) {
             assert !trial2(cosGamma, sinGamma, r1);
             assert trial2(cosGamma, sinGamma, r2);
-            /*
-             * Bisect to obtain a new estimate of R.
-             */
+
+            // Bisect to obtain a new estimate of R.
             double r = (r1 + r2) / 2.0;
             boolean s = trial2(cosGamma, sinGamma, r);
             if (s) {
@@ -279,9 +270,11 @@ public class MakeHeart {
      * Use bisection search to find a value of R for which (x, R, z) is a zero
      * of the parametric function. If successful, adds 2 samples to the buffer.
      *
+     * @param x the X coordinate to solve for
+     * @param z the Z coordinate to solve for
      * @return true if successful, otherwise false
      */
-    private boolean solve3(double x, double z) {
+    private static boolean solve3(double x, double z) {
         double r1 = 0.0;
         boolean s1 = trial3(x, z, r1);
         double r2 = 0.7;
@@ -298,9 +291,8 @@ public class MakeHeart {
         while (Math.abs(r1 - r2) > tolerance) {
             assert !trial3(x, z, r1);
             assert trial3(x, z, r2);
-            /*
-             * Bisect to obtain a new estimate of the solution.
-             */
+
+            // Bisect to obtain a new estimate of the solution.
             double r = (r1 + r2) / 2.0;
             boolean s = trial3(x, z, r);
             if (s) {
@@ -316,7 +308,7 @@ public class MakeHeart {
         return true;
     }
 
-    private boolean trial1(double cosGamma, double sinGamma, double r) {
+    private static boolean trial1(double cosGamma, double sinGamma, double r) {
         double x = r * sinGamma;
         double z = r * cosGamma;
         double error = plug(x, 0.0, z);
@@ -324,7 +316,7 @@ public class MakeHeart {
         return error > 0.0;
     }
 
-    private boolean trial2(double cosGamma, double sinGamma, double r) {
+    private static boolean trial2(double cosGamma, double sinGamma, double r) {
         double y = r * sinGamma;
         double z = r * cosGamma;
         double error = plug(0.0, y, z);
@@ -332,7 +324,7 @@ public class MakeHeart {
         return error > 0.0;
     }
 
-    private boolean trial3(double x, double z, double r) {
+    private static boolean trial3(double x, double z, double r) {
         double error = plug(x, r, z);
         return error > 0.0;
     }
@@ -344,7 +336,7 @@ public class MakeHeart {
      * @param yy Y coordinate of the sample
      * @param zz Z coordinate of the sample
      */
-    private void writeSample(double xx, double yy, double zz) {
+    private static void writeSample(double xx, double yy, double zz) {
         float x = (float) xx;
         float y = (float) yy;
         float z = (float) zz;

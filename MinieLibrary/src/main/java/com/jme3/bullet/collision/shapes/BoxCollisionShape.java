@@ -45,10 +45,11 @@ import jme3utilities.math.MyBuffer;
 import jme3utilities.math.MyMath;
 import jme3utilities.math.MyVector3f;
 import jme3utilities.math.MyVolume;
+import jme3utilities.math.RectangularSolid;
 
 /**
- * An axis-aligned, rectangular-solid CollisionShape based on Bullet's
- * btBoxShape. For a rectangle, use Box2dShape.
+ * An axis-aligned, rectangular-solid collision shape based on Bullet's
+ * {@code btBoxShape}. For a rectangle, use Box2dShape.
  *
  * @author normenhansen
  */
@@ -69,7 +70,8 @@ public class BoxCollisionShape extends ConvexShape {
     // fields
 
     /**
-     * copy of the unscaled half extents (not null, no negative component)
+     * copy of the unscaled half extents (in shape units, not null, no negative
+     * component)
      */
     private Vector3f halfExtents = new Vector3f(1f, 1f, 1f);
     // *************************************************************************
@@ -84,8 +86,8 @@ public class BoxCollisionShape extends ConvexShape {
     /**
      * Instantiate a cube-shaped box with the specified half extent.
      *
-     * @param halfExtent the desired unscaled half extent on each local axis
-     * (not negative)
+     * @param halfExtent the desired half extent on each local axis (in shape
+     * units, not negative)
      */
     public BoxCollisionShape(float halfExtent) {
         Validate.nonNegative(halfExtent, "half extent");
@@ -97,12 +99,12 @@ public class BoxCollisionShape extends ConvexShape {
     /**
      * Instantiate a box shape with the specified half extents.
      *
-     * @param xHalfExtent the desired unscaled half extent on the local X axis
-     * (not negative)
-     * @param yHalfExtent the desired unscaled half extent on the local Y axis
-     * (not negative)
-     * @param zHalfExtent the desired unscaled half extent on the local Z axis
-     * (not negative)
+     * @param xHalfExtent the desired half extent on the local X axis (in shape
+     * units, not negative)
+     * @param yHalfExtent the desired half extent on the local Y axis (in shape
+     * units, not negative)
+     * @param zHalfExtent the desired half extent on the local Z axis (in shape
+     * units, not negative)
      */
     public BoxCollisionShape(float xHalfExtent, float yHalfExtent,
             float zHalfExtent) {
@@ -139,7 +141,7 @@ public class BoxCollisionShape extends ConvexShape {
     /**
      * Instantiate a box shape with the specified half extents.
      *
-     * @param halfExtents the desired unscaled half extents (not null, no
+     * @param halfExtents the desired half extents (in shape units, not null, no
      * negative component, unaffected)
      */
     public BoxCollisionShape(Vector3f halfExtents) {
@@ -161,17 +163,19 @@ public class BoxCollisionShape extends ConvexShape {
     public Vector3f getHalfExtents(Vector3f storeResult) {
         assert MyVector3f.isAllNonNegative(halfExtents) : halfExtents;
 
+        Vector3f result;
         if (storeResult == null) {
-            return halfExtents.clone();
+            result = halfExtents.clone();
         } else {
-            return storeResult.set(halfExtents);
+            result = storeResult.set(halfExtents);
         }
+        return result;
     }
 
     /**
-     * Calculate the unscaled volume of the box.
+     * Return the unscaled volume of the box.
      *
-     * @return the volume (&ge;0)
+     * @return the volume (in shape units cubed, &ge;0)
      */
     public float unscaledVolume() {
         float result = MyVolume.boxVolume(halfExtents);
@@ -180,7 +184,7 @@ public class BoxCollisionShape extends ConvexShape {
         return result;
     }
     // *************************************************************************
-    // CollisionShape methods
+    // ConvexShape methods
 
     /**
      * Callback from {@link com.jme3.util.clone.Cloner} to convert this
@@ -194,29 +198,14 @@ public class BoxCollisionShape extends ConvexShape {
     @Override
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
-        halfExtents = cloner.clone(halfExtents);
+        this.halfExtents = cloner.clone(halfExtents);
         createShape();
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public BoxCollisionShape jmeClone() {
-        try {
-            BoxCollisionShape clone = (BoxCollisionShape) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
      * Calculate how far the box extends from its center.
      *
-     * @return a distance (in physics-space units, &ge;0)
+     * @return the distance (in physics-space units, &ge;0)
      */
     @Override
     public float maxRadius() {
@@ -247,6 +236,40 @@ public class BoxCollisionShape extends ConvexShape {
     }
 
     /**
+     * Estimate the volume of this shape, including scale and margin.
+     *
+     * @return the volume (in physics-space units cubed, &ge;0)
+     */
+    @Override
+    public float scaledVolume() {
+        float result = unscaledVolume() * scale.x * scale.y * scale.z;
+        return result;
+    }
+
+    /**
+     * Approximate this shape with a HullCollisionShape.
+     *
+     * @return a new shape
+     */
+    @Override
+    public HullCollisionShape toHullShape() {
+        Vector3f hes = scale.mult(halfExtents); // in PSU
+        float minHalfExtent = MyMath.min(hes.x, hes.y, hes.z);
+        float defaultMargin = getDefaultMargin();
+        float hullMargin = Math.min(minHalfExtent, defaultMargin);
+        if (hullMargin <= 1e-9f) {
+            hullMargin = 1e-9f;
+        }
+
+        hes.subtractLocal(hullMargin, hullMargin, hullMargin);
+        RectangularSolid shrunkenSolid = new RectangularSolid(hes);
+        HullCollisionShape result = new HullCollisionShape(shrunkenSolid);
+        result.setMargin(hullMargin);
+
+        return result;
+    }
+
+    /**
      * Serialize this shape to the specified exporter, for example when saving
      * to a J3O file.
      *
@@ -263,7 +286,7 @@ public class BoxCollisionShape extends ConvexShape {
     // Java private methods
 
     /**
-     * Instantiate the configured btBoxShape.
+     * Instantiate the configured {@code btBoxShape}.
      */
     private void createShape() {
         assert MyVector3f.isAllNonNegative(halfExtents) : halfExtents;

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -32,13 +32,14 @@ import com.jme3.bullet.PhysicsSpace;
 import com.jme3.bullet.PhysicsTickListener;
 import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 import com.jme3.bullet.collision.shapes.CollisionShape;
+import com.jme3.bullet.collision.shapes.SphereCollisionShape;
 import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.math.Vector3f;
 
 /**
  * A simple example of rigid-body deactivation.
- *
+ * <p>
  * Builds upon HelloStaticBody.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -50,17 +51,16 @@ public class HelloDeactivation
     // fields
 
     private static PhysicsRigidBody dynamicCube;
-    private static PhysicsRigidBody staticCube;
-    private static PhysicsSpace physicsSpace;
+    private static PhysicsRigidBody supportCube;
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloDeactivation application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloDeactivation application = new HelloDeactivation();
         application.start();
     }
@@ -75,27 +75,37 @@ public class HelloDeactivation
         // Set up Bullet physics and create a physics space.
         BulletAppState bulletAppState = new BulletAppState();
         stateManager.attach(bulletAppState);
-        physicsSpace = bulletAppState.getPhysicsSpace();
+        PhysicsSpace physicsSpace = bulletAppState.getPhysicsSpace();
 
-        // To enable the callbacks, add this application as a tick listener.
+        // To enable the callbacks, register the application as a tick listener.
         physicsSpace.addTickListener(this);
 
         // Enable debug visualization to reveal what occurs in physics space.
         bulletAppState.setDebugEnabled(true);
 
-        // Create a CollisionShape for unit cubes.
-        float cubeHalfExtent = 0.5f;
-        CollisionShape cubeShape = new BoxCollisionShape(cubeHalfExtent);
-
-        // Create a dynamic body and add it to the space.
-        float cubeMass = 1f;
-        dynamicCube = new PhysicsRigidBody(cubeShape, cubeMass);
+        // Create a dynamic cube and add it to the space.
+        float boxHalfExtent = 0.5f;
+        CollisionShape smallCubeShape = new BoxCollisionShape(boxHalfExtent);
+        float boxMass = 1f;
+        dynamicCube = new PhysicsRigidBody(smallCubeShape, boxMass);
         physicsSpace.addCollisionObject(dynamicCube);
         dynamicCube.setPhysicsLocation(new Vector3f(0f, 4f, 0f));
 
-        // Create a static body and add it to the space.
-        staticCube = new PhysicsRigidBody(cubeShape, PhysicsBody.massForStatic);
-        physicsSpace.addCollisionObject(staticCube);
+        // Create 2 static bodies and add them to the space...
+        // The top body serves as a temporary support.
+        float cubeHalfExtent = 1f;
+        CollisionShape largeCubeShape = new BoxCollisionShape(cubeHalfExtent);
+        supportCube = new PhysicsRigidBody(
+                largeCubeShape, PhysicsBody.massForStatic);
+        physicsSpace.addCollisionObject(supportCube);
+
+        // The bottom body serves as a visual reference point.
+        float ballRadius = 0.5f;
+        CollisionShape ballShape = new SphereCollisionShape(ballRadius);
+        PhysicsRigidBody bottomBody = new PhysicsRigidBody(
+                ballShape, PhysicsBody.massForStatic);
+        bottomBody.setPhysicsLocation(new Vector3f(0f, -2f, 0f));
+        physicsSpace.addCollisionObject(bottomBody);
 
         // Minie's BulletAppState simulates the dynamics...
     }
@@ -103,10 +113,10 @@ public class HelloDeactivation
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the simulation is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
@@ -114,19 +124,19 @@ public class HelloDeactivation
     }
 
     /**
-     * Callback from Bullet, invoked just after the simulation has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
-     * @param space ignored
-     * @param timeStep ignored
+     * @param space the space that was just stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
         /*
          * Once the dynamic cube gets deactivated,
-         * remove the supporting cube from the PhysicsSpace.
+         * remove the support cube from the PhysicsSpace.
          */
-        if (!dynamicCube.isActive() && physicsSpace.contains(staticCube)) {
-            physicsSpace.removeCollisionObject(staticCube);
+        if (!dynamicCube.isActive() && space.contains(supportCube)) {
+            space.removeCollisionObject(supportCube);
         }
     }
 }

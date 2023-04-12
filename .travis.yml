@@ -1,6 +1,7 @@
 ---
 # configure deployment and continuous integration at travis-ci.com
 
+dist: bionic
 language: java
 
 jobs:
@@ -14,6 +15,7 @@ jobs:
           update: true
 
 script:
+  - date
   - ./gradlew build --console=plain --no-daemon
 
 after_failure:

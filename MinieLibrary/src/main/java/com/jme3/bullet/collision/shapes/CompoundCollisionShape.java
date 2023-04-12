@@ -31,7 +31,11 @@
  */
 package com.jme3.bullet.collision.shapes;
 
+import com.jme3.bullet.CollisionSpace;
+import com.jme3.bullet.PhysicsSpace;
+import com.jme3.bullet.collision.PhysicsCollisionObject;
 import com.jme3.bullet.collision.shapes.infos.ChildCollisionShape;
+import com.jme3.bullet.objects.PhysicsGhostObject;
 import com.jme3.bullet.util.DebugShapeFactory;
 import com.jme3.export.InputCapsule;
 import com.jme3.export.JmeExporter;
@@ -40,6 +44,7 @@ import com.jme3.export.OutputCapsule;
 import com.jme3.math.Matrix3f;
 import com.jme3.math.Matrix4f;
 import com.jme3.math.Transform;
+import com.jme3.math.Triangle;
 import com.jme3.math.Vector3f;
 import com.jme3.util.clone.Cloner;
 import java.io.IOException;
@@ -50,8 +55,8 @@ import java.util.logging.Logger;
 import jme3utilities.Validate;
 
 /**
- * A CollisionShape formed by combining child shapes, based on Bullet's
- * btCompoundShape.
+ * A collision shape formed by combining child shapes, based on Bullet's
+ * {@code btCompoundShape}.
  *
  * @author normenhansen
  */
@@ -84,7 +89,7 @@ public class CompoundCollisionShape extends CollisionShape {
     // fields
 
     /**
-     * child shapes of this shape
+     * children that make up this shape
      */
     private ArrayList<ChildCollisionShape> children;
     // *************************************************************************
@@ -95,7 +100,7 @@ public class CompoundCollisionShape extends CollisionShape {
      * dynamic AABB, and no children).
      */
     public CompoundCollisionShape() {
-        children = new ArrayList<>(defaultCapacity);
+        this.children = new ArrayList<>(defaultCapacity);
         createEmpty(defaultCapacity);
     }
 
@@ -109,7 +114,7 @@ public class CompoundCollisionShape extends CollisionShape {
     public CompoundCollisionShape(int initialCapacity) {
         Validate.positive(initialCapacity, "initial capacity");
 
-        children = new ArrayList<>(initialCapacity);
+        this.children = new ArrayList<>(initialCapacity);
         createEmpty(initialCapacity);
     }
     // *************************************************************************
@@ -169,8 +174,8 @@ public class CompoundCollisionShape extends CollisionShape {
      * @param rotation the local orientation of the child shape (not null,
      * unaffected)
      */
-    public void addChildShape(CollisionShape childShape, Vector3f offset,
-            Matrix3f rotation) {
+    public void addChildShape(
+            CollisionShape childShape, Vector3f offset, Matrix3f rotation) {
         if (childShape instanceof CompoundCollisionShape) {
             throw new IllegalArgumentException(
                     "A CompoundCollisionShape cannot have"
@@ -196,17 +201,67 @@ public class CompoundCollisionShape extends CollisionShape {
      * unaffected)
      */
     public void addChildShape(CollisionShape shape, Transform transform) {
-        Vector3f offset = transform.getTranslation();
+        Vector3f offset = transform.getTranslation(); // alias
         Matrix3f rotation = transform.getRotation().toRotationMatrix();
         addChildShape(shape, offset, rotation);
     }
 
     /**
+     * Generate a connectivity matrix for the children.
+     *
+     * @param space the space to use for tests, or null to create a new space
+     * @return an N-by-N matrix where e(i,j) is true if and only if the ith
+     * child intersects with the jth child
+     */
+    public boolean[][] connectivityMatrix(CollisionSpace space) {
+        int numChildren = children.size();
+        boolean[][] result = new boolean[numChildren][numChildren];
+        Matrix3f tmpRotation = new Matrix3f();
+        Vector3f tmpOffset = new Vector3f();
+
+        // Generate a ghost object for each child.
+        PhysicsGhostObject[] ghosts = new PhysicsGhostObject[numChildren];
+        for (int childI = 0; childI < numChildren; ++childI) {
+            result[childI][childI] = true;
+
+            ChildCollisionShape child = children.get(childI);
+            CollisionShape shape = child.getShape();
+            PhysicsGhostObject ghost = new PhysicsGhostObject(shape);
+            child.copyOffset(tmpOffset);
+            ghost.setPhysicsLocation(tmpOffset);
+            child.copyRotationMatrix(tmpRotation);
+            ghost.setPhysicsRotation(tmpRotation);
+            ghosts[childI] = ghost;
+        }
+
+        CollisionSpace testSpace = (space == null)
+                ? new CollisionSpace(
+                        tmpOffset, tmpOffset, PhysicsSpace.BroadphaseType.DBVT)
+                : space;
+
+        // Test each pair of children for intersections.
+        for (int childI = 0; childI < numChildren - 1; ++childI) {
+            PhysicsCollisionObject iPco = ghosts[childI];
+
+            for (int childJ = childI + 1; childJ < numChildren; ++childJ) {
+                PhysicsCollisionObject jPco = ghosts[childJ];
+                int numIntersections = testSpace.pairTest(iPco, jPco, null);
+                boolean intersects = (numIntersections > 0);
+                result[childI][childJ] = intersects;
+                result[childJ][childI] = intersects;
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * Apply the inverse of the specified Transform to each child shape.
      *
-     * @param paTransform the Transform to un-apply, typically one calculated by
-     * {@link #principalAxes(java.nio.FloatBuffer, com.jme3.math.Transform, com.jme3.math.Vector3f)}
-     * (not null, unaffected, scale=1)
+     * @param paTransform the Transform to un-apply, typically one obtained
+     * using {@link #principalAxes(java.nio.FloatBuffer,
+     * com.jme3.math.Transform, com.jme3.math.Vector3f)} (not null, unaffected,
+     * scale=1)
      */
     public void correctAxes(Transform paTransform) {
         Matrix4f tmpMatrix4f = new Matrix4f(); // TODO garbage
@@ -235,6 +290,74 @@ public class CompoundCollisionShape extends CollisionShape {
     }
 
     /**
+     * Enumerate disconnected groups of connected children.
+     * <p>
+     * A graph-coloring algorithm is applied to the connectivity matrix. Each
+     * node in the graph represents a child, and each color represents a group
+     * of connected children.
+     *
+     * @param space the space to use for tests, or null to create a new space
+     * @param storeMap storage for the mapping from children to groups (not
+     * null, length = number of children, modified)
+     * @return the number of groups found (&ge;0, &le;number of children)
+     */
+    public int countGroups(CollisionSpace space, int[] storeMap) {
+        Validate.nonNull(storeMap, "storage for colors");
+        int numNodes = children.size();
+        Validate.require(storeMap.length == numNodes, "the correct length");
+
+        boolean[][] connected = connectivityMatrix(space);
+
+        // Begin with all nodes colorless.
+        for (int nodeI = 0; nodeI < numNodes; ++nodeI) {
+            storeMap[nodeI] = -1; // -1 means colorless
+        }
+        int numColorlessNodes = numNodes;
+
+        int numAssignedColors = 0;
+        while (numColorlessNodes > 0) {
+            // Assign a new color to the first colorless node, if any.
+            int newColor = -1;
+            for (int nodeI = numAssignedColors; nodeI < numNodes; ++nodeI) {
+                if (storeMap[nodeI] == -1) {
+                    newColor = numAssignedColors;
+                    ++numAssignedColors;
+                    storeMap[nodeI] = newColor;
+                    --numColorlessNodes;
+                    break; // for
+                }
+            }
+            if (newColor == -1) { // Every node must be colored.
+                break; // while
+            }
+            /*
+             * Color any colorless nodes
+             * that connect to nodes having the new color.
+             */
+            boolean progress = true;
+            while (progress) {
+                progress = false;
+                for (int i = 0; i < numNodes; ++i) {
+                    if (storeMap[i] == newColor) {
+                        for (int j = 0; j < numNodes; ++j) {
+                            if (storeMap[j] == -1 && connected[i][j]) {
+                                storeMap[j] = newColor;
+                                --numColorlessNodes;
+                                progress = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Every node has been colored.
+        assert numAssignedColors >= 0 : numAssignedColors;
+        assert numAssignedColors <= children.size() : numAssignedColors;
+        return numAssignedColors;
+    }
+
+    /**
      * Find the first child with the specified shape.
      *
      * @param childShape the shape to search for (unaffected)
@@ -244,8 +367,8 @@ public class CompoundCollisionShape extends CollisionShape {
         int result = -1;
         for (int index = 0; index < children.size(); ++index) {
             ChildCollisionShape ccs = children.get(index);
-            CollisionShape shape = ccs.getShape();
-            if (shape == childShape) {
+            CollisionShape baseShape = ccs.getShape();
+            if (baseShape == childShape) {
                 result = index;
                 break;
             }
@@ -348,11 +471,11 @@ public class CompoundCollisionShape extends CollisionShape {
      * @param childShape the child's CollisionShape (not null, unaffected)
      * @param transform the desired Transform (not null, unaffected)
      */
-    public void setChildTransform(CollisionShape childShape,
-            Transform transform) {
+    public void
+            setChildTransform(CollisionShape childShape, Transform transform) {
         long childId = childShape.nativeId();
         long parentId = nativeId();
-        Vector3f offset = transform.getTranslation();
+        Vector3f offset = transform.getTranslation(); // alias
 
         int childIndex = findIndex(childShape);
         assert childIndex >= 0 : childIndex;
@@ -363,6 +486,46 @@ public class CompoundCollisionShape extends CollisionShape {
 
         ChildCollisionShape child = children.get(childIndex);
         child.setTransform(offset, rotation);
+    }
+
+    /**
+     * Divide this shape into 2 compound shapes. Each of this shape's children
+     * must be based on a splittable shape.
+     *
+     * @param parentTriangle a triangle that defines the splitting plane (in the
+     * parent's shape coordinates, not null, unaffected)
+     * @return a pair of shapes, not centered, the first element on the plane's
+     * minus side and the 2nd element on its plus side; either element may be
+     * null, indicating an empty shape
+     */
+    public CompoundCollisionShape[] split(Triangle parentTriangle) {
+        Validate.nonNull(parentTriangle, "parent triangle");
+        /*
+         * Organize the children into (up to) 2 new compound shapes, based on
+         * which side(s) of the splitting plane they are on.
+         */
+        int numChildren = children.size();
+        CompoundCollisionShape[] result = new CompoundCollisionShape[2];
+        Matrix3f newRotation = new Matrix3f();
+        Vector3f newOffset = new Vector3f();
+        for (ChildCollisionShape oldChild : children) {
+            ChildCollisionShape[] mp = oldChild.split(parentTriangle);
+            for (int sideI = 0; sideI < 2; ++sideI) {
+                ChildCollisionShape newChild = mp[sideI];
+                if (newChild != null) {
+                    if (result[sideI] == null) {
+                        result[sideI] = new CompoundCollisionShape(numChildren);
+                    }
+                    CollisionShape baseShape = newChild.getShape();
+                    newChild.copyOffset(newOffset);
+                    newChild.copyRotationMatrix(newRotation);
+                    result[sideI]
+                            .addChildShape(baseShape, newOffset, newRotation);
+                }
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -401,11 +564,30 @@ public class CompoundCollisionShape extends CollisionShape {
 
         if (result) {
             for (ChildCollisionShape child : children) {
-                CollisionShape childShape = child.getShape();
-                if (!childShape.canScale(scale)) {
+                CollisionShape baseShape = child.getShape();
+                if (!baseShape.canScale(scale)) {
                     result = false;
                     break;
                 }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Test whether this shape can be split by an arbitrary plane.
+     *
+     * @return true if splittable, false otherwise
+     */
+    @Override
+    public boolean canSplit() {
+        boolean result = true;
+        for (ChildCollisionShape child : children) {
+            CollisionShape baseShape = child.getShape();
+            if (!baseShape.canSplit()) {
+                result = false;
+                break;
             }
         }
 
@@ -425,25 +607,9 @@ public class CompoundCollisionShape extends CollisionShape {
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
 
-        children = cloner.clone(children);
+        this.children = cloner.clone(children);
         createEmpty(children.size());
         loadChildren();
-    }
-
-    /**
-     * Create a shallow clone for the JME cloner.
-     *
-     * @return a new instance
-     */
-    @Override
-    public CompoundCollisionShape jmeClone() {
-        try {
-            CompoundCollisionShape clone
-                    = (CompoundCollisionShape) super.clone();
-            return clone;
-        } catch (CloneNotSupportedException exception) {
-            throw new RuntimeException(exception);
-        }
     }
 
     /**
@@ -457,11 +623,11 @@ public class CompoundCollisionShape extends CollisionShape {
         Transform tmpTransform = new Transform();
 
         for (ChildCollisionShape child : children) {
-            CollisionShape childShape = child.getShape();
+            CollisionShape baseShape = child.getShape();
             child.copyOffset(tmpTransform.getTranslation());
             tmpTransform.getTranslation().multLocal(scale);
             child.copyRotation(tmpTransform.getRotation());
-            float childRadius = DebugShapeFactory.maxDistance(childShape,
+            float childRadius = DebugShapeFactory.maxDistance(baseShape,
                     tmpTransform, DebugShapeFactory.lowResolution);
             if (childRadius > result) {
                 result = childRadius;
@@ -484,7 +650,7 @@ public class CompoundCollisionShape extends CollisionShape {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        children = capsule.readSavableArrayList(tagChildren, null);
+        this.children = capsule.readSavableArrayList(tagChildren, null);
         loadChildren();
 
         setContactFilterEnabled(enableContactFilter);
@@ -499,6 +665,28 @@ public class CompoundCollisionShape extends CollisionShape {
     protected void recalculateAabb() {
         long nativeId = nativeId();
         recalcAabb(nativeId);
+    }
+
+    /**
+     * Estimate the volume of this shape, including scale and margin.
+     *
+     * @return the volume (in physics-space units cubed, &ge;0)
+     */
+    @Override
+    public float scaledVolume() {
+        /*
+         * Scale factors get applied during calculation of child volumes.
+         * Any overlaps among the children are ignored,
+         * which exaggerates of the estimated volume.
+         */
+        float result = 0f;
+        for (ChildCollisionShape child : children) {
+            CollisionShape base = child.getShape();
+            float childVolume = base.scaledVolume();
+            result += childVolume;
+        }
+
+        return result;
     }
 
     /**
@@ -519,9 +707,37 @@ public class CompoundCollisionShape extends CollisionShape {
          * in synch with the native ones.
          */
         for (ChildCollisionShape child : children) {
-            CollisionShape childShape = child.getShape();
-            childShape.updateScale();
+            CollisionShape baseShape = child.getShape();
+            baseShape.updateScale();
         }
+    }
+
+    /**
+     * Approximate this shape with a splittable shape.
+     *
+     * @return a splittable shape (either this shape or a new one)
+     */
+    @Override
+    public CollisionShape toSplittableShape() {
+        CompoundCollisionShape result;
+        if (canSplit()) {
+            result = this;
+
+        } else {
+            int numChildren = children.size();
+            result = new CompoundCollisionShape(numChildren);
+            Matrix3f tmpRotation = new Matrix3f();
+            Vector3f tmpOffset = new Vector3f();
+            for (ChildCollisionShape child : children) {
+                CollisionShape baseShape = child.getShape();
+                CollisionShape splittableShape = baseShape.toSplittableShape();
+                child.copyOffset(tmpOffset);
+                child.copyRotationMatrix(tmpRotation);
+                result.addChildShape(splittableShape, tmpOffset, tmpRotation);
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -541,7 +757,8 @@ public class CompoundCollisionShape extends CollisionShape {
     // Java private methods
 
     /**
-     * Instantiate an empty btCompoundShape with the specified initial capacity.
+     * Instantiate an empty {@code btCompoundShape} with the specified initial
+     * capacity.
      *
      * @param initialCapacity the number of children to allocate (&gt;0)
      */
@@ -558,14 +775,18 @@ public class CompoundCollisionShape extends CollisionShape {
     }
 
     /**
-     * Add the configured children to the empty btCompoundShape.
+     * Add the configured children to the empty {@code btCompoundShape}.
      */
     private void loadChildren() {
         long parentId = nativeId();
 
+        Matrix3f tmpMatrix = new Matrix3f();
+        Vector3f tmpOffset = new Vector3f();
         for (ChildCollisionShape child : children) {
-            addChildShape(parentId, child.getShape().nativeId(),
-                    child.copyOffset(null), child.copyRotationMatrix(null));
+            long baseShapeId = child.getShape().nativeId();
+            child.copyOffset(tmpOffset);
+            child.copyRotationMatrix(tmpMatrix);
+            addChildShape(parentId, baseShapeId, tmpOffset, tmpMatrix);
         }
     }
     // *************************************************************************
@@ -574,25 +795,25 @@ public class CompoundCollisionShape extends CollisionShape {
     native private static void addChildShape(long compoundId, long childShapeId,
             Vector3f offset, Matrix3f rotation);
 
-    native private static void calculatePrincipalAxisTransform(long shapeId,
-            FloatBuffer massBuffer, Transform storeTransform,
+    native private static void calculatePrincipalAxisTransform(
+            long shapeId, FloatBuffer massBuffer, Transform storeTransform,
             Vector3f storeInertia);
 
     native private static int countChildren(long shapeId);
 
-    native private static long createShape2(boolean dynamicAabbTree,
-            int initialChildCapacity);
+    native private static long
+            createShape2(boolean dynamicAabbTree, int initialChildCapacity);
 
     native private static void recalcAabb(long shapeId);
 
-    native private static void removeChildShape(long compoundId,
-            long childShapeId);
+    native private static void
+            removeChildShape(long compoundId, long childShapeId);
 
     native private static void rotate(long compoundId, Matrix3f rotationMatrix);
 
     native private static void setChildTransform(long compoundId,
             long childShapeId, Vector3f offset, Matrix3f rotation);
 
-    native private static void translate(long compoundId,
-            Vector3f offsetVector);
+    native private static void
+            translate(long compoundId, Vector3f offsetVector);
 }

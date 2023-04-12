@@ -35,7 +35,6 @@ import com.jme3.bounding.BoundingBox;
 import com.jme3.bullet.CollisionSpace;
 import com.jme3.bullet.NativePhysicsObject;
 import com.jme3.bullet.collision.shapes.CollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.DebugMeshInitListener;
 import com.jme3.bullet.util.DebugShapeFactory;
 import com.jme3.export.InputCapsule;
@@ -50,16 +49,20 @@ import com.jme3.math.Transform;
 import com.jme3.math.Vector3f;
 import com.jme3.util.clone.Cloner;
 import com.jme3.util.clone.JmeCloneable;
+import com.simsilica.mathd.Matrix3d;
 import com.simsilica.mathd.Quatd;
 import com.simsilica.mathd.Vec3d;
 import java.io.IOException;
+import java.util.Collection;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jme3utilities.MeshNormals;
 import jme3utilities.Validate;
 
 /**
  * The abstract base class for collision objects based on Bullet's
- * btCollisionObject.
+ * {@code btCollisionObject}.
  * <p>
  * Subclasses include MultiBodyCollider, PhysicsBody, PhysicsCharacter, and
  * PhysicsGhostObject.
@@ -169,6 +172,7 @@ abstract public class PhysicsCollisionObject
     final private static String tagDebugMaterial = "debugMaterial";
     final private static String tagDebugMeshNormals = "debugMeshNormals";
     final private static String tagDebugMeshResolution = "debugMeshResolution";
+    final private static String tagHasCsd = "hasCsd";
     final private static String tagFriction = "friction";
     final private static String tagIgnoreList = "ignoreList";
     final private static String tagRestitution = "restitution";
@@ -179,6 +183,15 @@ abstract public class PhysicsCollisionObject
     // fields
 
     /**
+     * make cloneFields() progress visible
+     */
+    private boolean doneCloningIgnores = false;
+    /**
+     * copy of the list of specific objects with which collisions are ignored,
+     * or null for none
+     */
+    private Collection<PhysicsCollisionObject> ignoreList;
+    /**
      * shape of this object, or null if none
      */
     private CollisionShape collisionShape;
@@ -186,10 +199,6 @@ abstract public class PhysicsCollisionObject
      * listener for new debug meshes, or null for none
      */
     private DebugMeshInitListener debugMeshInitListener = null;
-    /**
-     * which normals to generate for new debug meshes
-     */
-    private DebugMeshNormals debugMeshNormals = DebugMeshNormals.None;
     /**
      * collision groups with which this object can collide
      */
@@ -199,7 +208,8 @@ abstract public class PhysicsCollisionObject
      */
     private int collisionGroup = COLLISION_GROUP_01;
     /**
-     * resolution for new debug meshes (effective only for convex shapes)
+     * resolution for new debug meshes (effective only for objects with convex
+     * shapes)
      */
     private int debugMeshResolution = DebugShapeFactory.lowResolution;
     /**
@@ -210,6 +220,10 @@ abstract public class PhysicsCollisionObject
      * custom material for the debug shape, or null to use the default material
      */
     private Material debugMaterial = null;
+    /**
+     * which normals to generate for new debug meshes
+     */
+    private MeshNormals debugMeshNormals = MeshNormals.None;
     /**
      * application-specific data of this collision object. Untouched unless
      * Cloneable or Savable.
@@ -222,10 +236,21 @@ abstract public class PhysicsCollisionObject
      */
     private Object userObject = null;
     // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate a collision object with no tracker and no assigned native
+     * object.
+     */
+    protected PhysicsCollisionObject() { // avoid a warning from JDK 18 javadoc
+    }
+    // *************************************************************************
     // new methods exposed
 
     /**
      * Reactivate this object if it has been deactivated due to lack of motion.
+     * <p>
+     * Deactivation doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param forceFlag true to force activation
      */
@@ -236,14 +261,14 @@ abstract public class PhysicsCollisionObject
 
     /**
      * Add collision groups to the set with which this object can collide.
-     *
+     * <p>
      * Two objects can collide only if one of them has the collisionGroup of the
      * other in its collideWithGroups set.
      *
      * @param collisionGroup the groups to add, ORed together (bitmask)
      */
     public void addCollideWithGroup(int collisionGroup) {
-        collideWithGroups |= collisionGroup;
+        this.collideWithGroups |= collisionGroup;
         if (hasAssignedNativeObject()) {
             long objectId = nativeId();
             setCollideWithGroups(objectId, collideWithGroups);
@@ -257,13 +282,25 @@ abstract public class PhysicsCollisionObject
      * wheels of a PhysicsVehicle aren't collision objects, so the vehicle's
      * ignore list doesn't affect them.
      *
-     * @param otherPco the other collision object (not null, not this, modified)
+     * @param otherPco the other collision object (not null, not {@code this},
+     * modified)
      */
     public void addToIgnoreList(PhysicsCollisionObject otherPco) {
-        Validate.nonNull(otherPco, "other");
+        Validate.nonNull(otherPco, "other collision object");
         Validate.require(otherPco != this, "2 distinct collision objects");
 
-        if (!ignores(otherPco)) {
+        if (ignoreList == null) {
+            this.ignoreList = new TreeSet<>();
+        }
+        if (!ignoreList.contains(otherPco)) {
+            ignoreList.add(otherPco);
+
+            if (otherPco.ignoreList == null) {
+                otherPco.ignoreList = new TreeSet<>();
+            }
+            assert !otherPco.ignoreList.contains(this);
+            otherPco.ignoreList.add(this);
+
             long thisId = nativeId();
             long otherId = otherPco.nativeId();
             boolean toIgnore = true;
@@ -297,15 +334,34 @@ abstract public class PhysicsCollisionObject
      */
     public void clearIgnoreList() {
         long thisId = nativeId();
-        long[] otherIds = listIgnoredIds();
-        for (long otherId : otherIds) {
+        if (ignoreList != null && !ignoreList.isEmpty()) {
             boolean toIgnore = false;
-            setIgnoreCollisionCheck(thisId, otherId, toIgnore);
+            for (PhysicsCollisionObject otherPco : ignoreList) {
+                long otherId = otherPco.nativeId();
+                setIgnoreCollisionCheck(thisId, otherId, toIgnore);
+
+                assert otherPco.ignoreList.contains(this);
+                otherPco.ignoreList.remove(this);
+            }
+            ignoreList.clear();
         }
     }
 
     /**
-     * Copy common properties from another PhysicsCollisionObject. Used during
+     * Return the collision flags. Flag values are defined in
+     * {@link com.jme3.bullet.collision.CollisionFlag}.
+     *
+     * @return the values of all flags that are set, ORed together
+     */
+    public int collisionFlags() {
+        long objectId = nativeId();
+        int result = getCollisionFlags(objectId);
+
+        return result;
+    }
+
+    /**
+     * Copy common properties from another collision object. Used during
      * cloning.
      *
      * @param old (not null, unaffected)
@@ -314,11 +370,19 @@ abstract public class PhysicsCollisionObject
         assert old.hasAssignedNativeObject();
         assert old.nativeId() != nativeId();
 
+        int flags = old.collisionFlags();
+        boolean hasCsd
+                = (flags & CollisionFlag.HAS_CONTACT_STIFFNESS_DAMPING) != 0;
+
         setCcdMotionThreshold(old.getCcdMotionThreshold());
         setCcdSweptSphereRadius(old.getCcdSweptSphereRadius());
-        setContactDamping(old.getContactDamping());
+        if (hasCsd) {
+            setContactDamping(old.getContactDamping());
+        }
         setContactProcessingThreshold(old.getContactProcessingThreshold());
-        setContactStiffness(old.getContactStiffness());
+        if (hasCsd) {
+            setContactStiffness(old.getContactStiffness());
+        }
         setDeactivationTime(old.getDeactivationTime());
         setFriction(old.getFriction());
         setRestitution(old.getRestitution());
@@ -326,11 +390,11 @@ abstract public class PhysicsCollisionObject
         setSpinningFriction(old.getSpinningFriction());
 
         if (old.hasAnisotropicFriction(AfMode.basic)) {
-            setAnisotropicFriction(old.getAnisotropicFriction(null),
-                    AfMode.basic);
+            setAnisotropicFriction(
+                    old.getAnisotropicFriction(null), AfMode.basic);
         } else if (old.hasAnisotropicFriction(AfMode.rolling)) {
-            setAnisotropicFriction(old.getAnisotropicFriction(null),
-                    AfMode.rolling);
+            setAnisotropicFriction(
+                    old.getAnisotropicFriction(null), AfMode.rolling);
         }
     }
 
@@ -341,9 +405,10 @@ abstract public class PhysicsCollisionObject
      * @see #addToIgnoreList(com.jme3.bullet.collision.PhysicsCollisionObject)
      */
     public int countIgnored() {
-        long objectId = nativeId();
-        int result = getNumObjectsWithoutCollision(objectId);
+        int result = (ignoreList == null) ? 0 : ignoreList.size();
 
+        assert result == getNumObjectsWithoutCollision(nativeId()) :
+                result + " != " + getNumObjectsWithoutCollision(nativeId());
         assert result >= 0 : result;
         return result;
     }
@@ -362,13 +427,14 @@ abstract public class PhysicsCollisionObject
      *
      * @return an enum value (not null)
      */
-    public DebugMeshNormals debugMeshNormals() {
+    public MeshNormals debugMeshNormals() {
         assert debugMeshNormals != null;
         return debugMeshNormals;
     }
 
     /**
-     * Determine the resolution for new debug meshes (convex shapes only).
+     * Return the resolution for new debug meshes. Effective only for objects
+     * with convex shapes.
      *
      * @return 0=low, 1=high
      */
@@ -391,7 +457,7 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Find the PhysicCollisionObject with the specified ID. Native method.
+     * Find the collision object with the specified ID. Native method.
      *
      * @param pcoId the native identifier (not zero)
      * @return the pre-existing instance, or null if it's been reclaimed
@@ -399,7 +465,9 @@ abstract public class PhysicsCollisionObject
     native public static PhysicsCollisionObject findInstance(long pcoId);
 
     /**
-     * Read this object's activation state (native field: m_activationState1).
+     * Return this object's activation state (native field: m_activationState1).
+     * <p>
+     * Deactivation doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return the state (1=active tag, 2=island sleeping, 3=wants deactivation,
      * 4=disable deactivation, 5=disable simulation)
@@ -417,6 +485,8 @@ abstract public class PhysicsCollisionObject
     /**
      * Copy this object's anisotropic friction components (native field:
      * m_anisotropicFriction).
+     * <p>
+     * Friction doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param storeResult storage for the result (modified if not null)
      * @return the components of the friction (either storeResult or a new
@@ -443,8 +513,10 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read the continuous collision detection (CCD) motion threshold (native
+     * Return the continuous collision detection (CCD) motion threshold (native
      * field: m_ccdMotionThreshold).
+     * <p>
+     * CCD doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return the minimum distance per timestep to trigger CCD (in
      * physics-space units, &ge;0)
@@ -458,7 +530,9 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read the squared motion threshold.
+     * Return the squared motion threshold.
+     * <p>
+     * CCD doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return the minimum distance squared (in physics-space units, &ge;0)
      */
@@ -470,8 +544,10 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read the radius of the sphere used for continuous collision detection
+     * Return the radius of the sphere used for continuous collision detection
      * (CCD) (native field: m_ccdSweptSphereRadius).
+     * <p>
+     * CCD doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return the radius (in physics-space units, &ge;0)
      */
@@ -484,7 +560,7 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read the set of collision groups with which this object can collide.
+     * Return the set of collision groups with which this object can collide.
      *
      * @return the bitmask
      */
@@ -494,7 +570,7 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read the collision group of this object.
+     * Return the collision group of this object.
      *
      * @return the collision group (bitmask with exactly one bit set)
      */
@@ -505,7 +581,7 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Access the CollisionShape of this object.
+     * Access the shape of this object.
      *
      * @return the pre-existing instance, or null if none
      */
@@ -514,7 +590,7 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Access the CollisionSpace where this object is added.
+     * Access the space where this object is added.
      *
      * @return the pre-existing instance, or null if none
      */
@@ -529,7 +605,9 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read the contact damping (native field: m_contactDamping).
+     * Return the contact damping (native field: m_contactDamping).
+     * <p>
+     * Contact damping doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return the damping
      */
@@ -541,8 +619,11 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read the contact processing threshold (native field:
+     * Return the contact-processing threshold (native field:
      * m_contactProcessingThreshold).
+     * <p>
+     * Contact processing doesn't affect a PhysicsCharacter or
+     * PhysicsGhostObject.
      *
      * @return the threshold distance (in physics-space units)
      */
@@ -554,7 +635,10 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read the contact stiffness (native field: m_contactStiffness).
+     * Return the contact stiffness (native field: m_contactStiffness).
+     * <p>
+     * Contact stiffness doesn't affect a PhysicsCharacter or
+     * PhysicsGhostObject.
      *
      * @return the stiffness
      */
@@ -566,7 +650,9 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read the deactivation time (native field: m_deactivationTime).
+     * Return the deactivation time (native field: m_deactivationTime).
+     * <p>
+     * Deactivation doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return the time (in seconds)
      */
@@ -587,7 +673,9 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read this object's friction parameter (native field: m_friction).
+     * Return this object's friction parameter (native field: m_friction).
+     * <p>
+     * Friction doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return the parameter value (&ge;0)
      */
@@ -599,17 +687,18 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Determine the ID of the btCollisionObject. For compatibility with the
-     * jme3-bullet library.
+     * Return the ID of the native object ({@code btCollisionObject}).
      *
      * @return the native identifier (not zero)
+     * @deprecated use {@link NativePhysicsObject#nativeId()}
      */
+    @Deprecated
     final public long getObjectId() {
         return nativeId();
     }
 
     /**
-     * For compatibility with the jme3-bullet library.
+     * For compatibility with the jme3-jbullet library.
      *
      * @return a new location vector (in physics-space coordinates, not null)
      */
@@ -618,11 +707,11 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Copy the location of this object's center.
+     * Copy the location of this object's center to a Vector3f.
      *
      * @param storeResult storage for the result (modified if not null)
      * @return a location vector (in physics-space coordinates, either
-     * storeResult or a new vector, not null)
+     * storeResult or a new vector, finite)
      */
     public Vector3f getPhysicsLocation(Vector3f storeResult) {
         Vector3f result = (storeResult == null) ? new Vector3f() : storeResult;
@@ -635,11 +724,11 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Copy the location of this object's center.
+     * Copy the location of this object's center to a Vec3d.
      *
      * @param storeResult storage for the result (modified if not null)
      * @return a location vector (in physics-space coordinates, either
-     * storeResult or a new vector, not null)
+     * storeResult or a new vector, not null, finite)
      */
     public Vec3d getPhysicsLocationDp(Vec3d storeResult) {
         Vec3d result = (storeResult == null) ? new Vec3d() : storeResult;
@@ -647,6 +736,7 @@ abstract public class PhysicsCollisionObject
         long objectId = nativeId();
         getLocationDp(objectId, result);
 
+        assert result.isFinite() : result;
         return result;
     }
 
@@ -685,7 +775,7 @@ abstract public class PhysicsCollisionObject
 
     /**
      * Copy the orientation of this object (the basis of its local coordinate
-     * system) to a 3x3 matrix.
+     * system) to a Matrix3f.
      *
      * @param storeResult storage for the result (modified if not null)
      * @return a rotation matrix (in physics-space coordinates, either
@@ -701,8 +791,27 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read this object's restitution (bounciness) (native field:
+     * Copy the orientation of this object (the basis of its local coordinate
+     * system) to a Matrix3d.
+     *
+     * @param storeResult storage for the result (modified if not null)
+     * @return a rotation matrix (in physics-space coordinates, either
+     * storeResult or a new matrix, not null)
+     */
+    public Matrix3d getPhysicsRotationMatrixDp(Matrix3d storeResult) {
+        Matrix3d result = (storeResult == null) ? new Matrix3d() : storeResult;
+
+        long objectId = nativeId();
+        getBasisDp(objectId, result);
+
+        return result;
+    }
+
+    /**
+     * Return this object's restitution (bounciness) (native field:
      * m_restitution).
+     * <p>
+     * Restitution doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return restitution value
      */
@@ -714,7 +823,9 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read this object's rolling friction (native field: m_rollingFriction).
+     * Return this object's rolling friction (native field: m_rollingFriction).
+     * <p>
+     * Friction doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return friction value
      */
@@ -726,7 +837,7 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Determine the scale of this object.
+     * Copy the scale of this object.
      *
      * @param storeResult storage for the result (modified if not null)
      * @return the scale factor for each local axis (either storeResult or a new
@@ -738,7 +849,10 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Read this object's spinning friction (native field: m_spinningFriction).
+     * Return this object's spinning friction (native field:
+     * m_spinningFriction).
+     * <p>
+     * Friction doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return friction value
      */
@@ -750,8 +864,8 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Determine the coordinate transform of this object, including the scale of
-     * its shape.
+     * Copy the coordinate transform of this object, including the scale of its
+     * shape.
      *
      * @param storeResult storage for the result (modified if not null)
      * @return a coordinate transform (in physics-space coordinates, either
@@ -782,6 +896,8 @@ abstract public class PhysicsCollisionObject
 
     /**
      * Test whether this object has anisotropic friction.
+     * <p>
+     * Friction doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param mode the mode(s) to test for: 1=basic anisotropic friction,
      * 2=anisotropic rolling friction, 3=either one
@@ -805,18 +921,11 @@ abstract public class PhysicsCollisionObject
      * @see #addToIgnoreList(com.jme3.bullet.collision.PhysicsCollisionObject)
      */
     public boolean ignores(PhysicsCollisionObject other) {
-        boolean result = false;
-        if (other != null && other != this) {
-            long objectId = nativeId();
-            long otherId = other.nativeId();
-            int numIgnoredObjects = getNumObjectsWithoutCollision(objectId);
-            for (int index = 0; index < numIgnoredObjects; ++index) {
-                long id = getObjectWithoutCollision(objectId, index);
-                if (id == otherId) {
-                    result = true;
-                    break;
-                }
-            }
+        boolean result;
+        if (ignoreList == null || other == null) {
+            result = false;
+        } else {
+            result = ignoreList.contains(other);
         }
 
         return result;
@@ -824,12 +933,16 @@ abstract public class PhysicsCollisionObject
 
     /**
      * Test whether this object has been deactivated due to lack of motion.
+     * <p>
+     * Deactivation doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @return true if object still active, false if deactivated
      */
     public boolean isActive() {
         long objectId = nativeId();
-        return isActive(objectId);
+        boolean result = isActive(objectId);
+
+        return result;
     }
 
     /**
@@ -847,7 +960,7 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Test whether this object is added to a CollisionSpace.
+     * Test whether this object is added to a space.
      *
      * @return true&rarr;added to a space, false&rarr;not added to a space
      */
@@ -877,7 +990,9 @@ abstract public class PhysicsCollisionObject
      *
      * @return a new array (not null, may be empty)
      * @see #addToIgnoreList(com.jme3.bullet.collision.PhysicsCollisionObject)
+     * @deprecated use {@link #listIgnoredPcos()}
      */
+    @Deprecated
     public long[] listIgnoredIds() {
         long objectId = nativeId();
         int numIgnoredObjects = getNumObjectsWithoutCollision(objectId);
@@ -885,6 +1000,7 @@ abstract public class PhysicsCollisionObject
 
         for (int listIndex = 0; listIndex < numIgnoredObjects; ++listIndex) {
             long otherId = getObjectWithoutCollision(objectId, listIndex);
+            assert otherId != 0L;
             result[listIndex] = otherId;
         }
 
@@ -892,9 +1008,34 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Determine the collision group of this object's broadphase proxy. A proxy
-     * is created when the object is added to a CollisionSpace, and its group is
-     * 32 for a PhysicsCharacter, 2 for a static object, or 1 for anything else.
+     * Enumerate all collision objects in this object's ignore list.
+     *
+     * @return a new array (not null, may be empty)
+     * @see #addToIgnoreList(com.jme3.bullet.collision.PhysicsCollisionObject)
+     */
+    public PhysicsCollisionObject[] listIgnoredPcos() {
+        PhysicsCollisionObject[] result;
+        if (ignoreList == null) {
+            result = new PhysicsCollisionObject[0];
+
+        } else {
+            int count = ignoreList.size();
+            result = new PhysicsCollisionObject[count];
+
+            int index = 0;
+            for (PhysicsCollisionObject otherPco : ignoreList) {
+                result[index] = otherPco;
+                ++index;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Return the collision group of this object's broadphase proxy. A proxy is
+     * created when the object is added to a space, and its group is 32 for a
+     * PhysicsCharacter, 2 for a static object, or 1 for anything else.
      *
      * @return the proxy's collision group (a bitmask with exactly one bit set)
      * or null if this object has no proxy
@@ -910,9 +1051,9 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Determine the collision mask of this object's broadphase proxy. A proxy
-     * is created when the object is added to a CollisionSpace, and its mask is
-     * -3 for a static object or -1 for anything else.
+     * Return the collision mask of this object's broadphase proxy. A proxy is
+     * created when the object is added to a space, and its mask is -3 for a
+     * static object or -1 for anything else.
      *
      * @return the proxy's bitmask, or null if this object has no proxy
      */
@@ -932,7 +1073,7 @@ abstract public class PhysicsCollisionObject
      * @param collisionGroup the groups to remove, ORed together (bitmask)
      */
     public void removeCollideWithGroup(int collisionGroup) {
-        collideWithGroups &= ~collisionGroup;
+        this.collideWithGroups &= ~collisionGroup;
         if (hasAssignedNativeObject()) {
             setCollideWithGroups(collideWithGroups);
         }
@@ -944,10 +1085,16 @@ abstract public class PhysicsCollisionObject
      * @param otherPco the other collision object (not null, not this, modified)
      */
     public void removeFromIgnoreList(PhysicsCollisionObject otherPco) {
-        Validate.nonNull(otherPco, "other");
+        Validate.nonNull(otherPco, "other collision object");
         Validate.require(otherPco != this, "2 distinct collision objects");
 
-        if (ignores(otherPco)) {
+        if (ignoreList != null && ignoreList.contains(otherPco)) {
+            ignoreList.remove(otherPco);
+
+            assert otherPco.ignoreList != null;
+            assert otherPco.ignoreList.contains(this);
+            otherPco.ignoreList.remove(this);
+
             long thisId = nativeId();
             long otherId = otherPco.nativeId();
             boolean toIgnore = false;
@@ -958,6 +1105,8 @@ abstract public class PhysicsCollisionObject
     /**
      * Alter this object's anisotropic friction (native field:
      * m_anisotropicFriction).
+     * <p>
+     * Friction doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param components the desired friction components (not null, unaffected,
      * default=(1,1,1))
@@ -981,7 +1130,7 @@ abstract public class PhysicsCollisionObject
      * @see #getApplicationData()
      */
     public void setApplicationData(Object data) {
-        applicationData = data;
+        this.applicationData = data;
     }
 
     /**
@@ -990,6 +1139,8 @@ abstract public class PhysicsCollisionObject
      * <p>
      * CCD addresses the issue of fast objects passing through other objects
      * with no collision detected.
+     * <p>
+     * CCD doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param threshold the desired minimum distance per timestep to trigger CCD
      * (in physics-space units, &gt;0) or zero to disable CCD (default=0)
@@ -1002,6 +1153,8 @@ abstract public class PhysicsCollisionObject
     /**
      * Alter the continuous collision detection (CCD) swept-sphere radius for
      * this object (native field: m_ccdSweptSphereRadius).
+     * <p>
+     * CCD doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param radius (in physics-space units, &ge;0, default=0)
      */
@@ -1018,7 +1171,7 @@ abstract public class PhysicsCollisionObject
      */
     public void setCollideWithGroups(int collisionGroups) {
         long objectId = nativeId();
-        collideWithGroups = collisionGroups;
+        this.collideWithGroups = collisionGroups;
         setCollideWithGroups(objectId, collideWithGroups);
     }
 
@@ -1035,8 +1188,8 @@ abstract public class PhysicsCollisionObject
      * one bit set, default=COLLISION_GROUP_01)
      */
     public void setCollisionGroup(int collisionGroup) {
-        Validate.require(Integer.bitCount(collisionGroup) == 1,
-                "exactly one bit set");
+        Validate.require(
+                Integer.bitCount(collisionGroup) == 1, "exactly one bit set");
 
         this.collisionGroup = collisionGroup;
         long objectId = nativeId();
@@ -1044,8 +1197,7 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Apply the specified CollisionShape to this object. Meant to be
-     * overridden.
+     * Apply the specified shape to this object. Meant to be overridden.
      *
      * @param collisionShape the shape to apply (not null, alias created)
      */
@@ -1055,7 +1207,10 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Alter the contact damping (native field: m_contactDamping).
+     * Alter the contact damping (native field: m_contactDamping). Also affects
+     * the collision flags.
+     * <p>
+     * Contact damping doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param damping the desired damping (default=0.1)
      */
@@ -1068,6 +1223,9 @@ abstract public class PhysicsCollisionObject
     /**
      * Alter the contact-processing threshold (native field:
      * m_contactProcessingThreshold).
+     * <p>
+     * Contact processing doesn't affect a PhysicsCharacter or
+     * PhysicsGhostObject.
      *
      * @param distance the desired threshold distance (in physics-space units,
      * default=1e18 with SP library or 1e30 with DP library)
@@ -1078,7 +1236,11 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
-     * Alter the contact stiffness (native field: m_contactStiffness).
+     * Alter the contact stiffness (native field: m_contactStiffness). Also
+     * affects the collision flags.
+     * <p>
+     * Contact stiffness doesn't affect a PhysicsCharacter or
+     * PhysicsGhostObject.
      *
      * @param stiffness the desired stiffness (default=1e18 with SP library or
      * 1e30 with DP library)
@@ -1091,6 +1253,8 @@ abstract public class PhysicsCollisionObject
 
     /**
      * Alter the deactivation time (native field: m_deactivationTime).
+     * <p>
+     * Deactivation doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param time the desired time (in seconds, default=0)
      */
@@ -1106,7 +1270,7 @@ abstract public class PhysicsCollisionObject
      * default debug materials (default=null)
      */
     public void setDebugMaterial(Material material) {
-        debugMaterial = material;
+        this.debugMaterial = material;
     }
 
     /**
@@ -1116,7 +1280,7 @@ abstract public class PhysicsCollisionObject
      * (default=null)
      */
     public void setDebugMeshInitListener(DebugMeshInitListener listener) {
-        debugMeshInitListener = listener;
+        this.debugMeshInitListener = listener;
     }
 
     /**
@@ -1124,9 +1288,9 @@ abstract public class PhysicsCollisionObject
      *
      * @param newSetting an enum value (not null, default=None)
      */
-    public void setDebugMeshNormals(DebugMeshNormals newSetting) {
+    public void setDebugMeshNormals(MeshNormals newSetting) {
         Validate.nonNull(newSetting, "new setting");
-        debugMeshNormals = newSetting;
+        this.debugMeshNormals = newSetting;
     }
 
     /**
@@ -1141,7 +1305,7 @@ abstract public class PhysicsCollisionObject
         Validate.inRange(newSetting, "new setting",
                 DebugShapeFactory.lowResolution,
                 DebugShapeFactory.highResolution);
-        debugMeshResolution = newSetting;
+        this.debugMeshResolution = newSetting;
     }
 
     /**
@@ -1152,11 +1316,13 @@ abstract public class PhysicsCollisionObject
      */
     public void setDebugNumSides(int numSides) {
         Validate.inRange(numSides, "number of sides", 0, 2);
-        debugNumSides = numSides;
+        this.debugNumSides = numSides;
     }
 
     /**
      * Alter this object's friction (native field: m_friction).
+     * <p>
+     * Friction doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param friction the desired friction value (&ge;0, default=0.5)
      */
@@ -1168,8 +1334,53 @@ abstract public class PhysicsCollisionObject
     }
 
     /**
+     * Replace the ignore list.
+     *
+     * @param idList the collision-object IDs to ignore (not null, may be empty,
+     * unaffected)
+     * @deprecated use {@link #setIgnoreList(
+     * com.jme3.bullet.collision.PhysicsCollisionObject[])}
+     */
+    @Deprecated
+    public void setIgnoreList(long[] idList) {
+        Validate.nonNull(idList, "ID list");
+
+        clearIgnoreList();
+        for (long otherId : idList) {
+            PhysicsCollisionObject otherPco = findInstance(otherId);
+            addToIgnoreList(otherPco);
+        }
+    }
+
+    /**
+     * Replace the ignore list.
+     *
+     * @param desiredList collision objects to ignore (not null, may be empty,
+     * may contain nulls or duplicates or {@code this}, unaffected)
+     */
+    public void setIgnoreList(PhysicsCollisionObject[] desiredList) {
+        Validate.nonNull(desiredList, "desired list");
+
+        clearIgnoreList();
+        if (desiredList.length > 0) {
+            if (ignoreList == null) {
+                this.ignoreList = new TreeSet<>();
+            }
+
+            for (PhysicsCollisionObject otherPco : desiredList) {
+                if (otherPco != null && otherPco != this
+                        && !ignoreList.contains(otherPco)) {
+                    addToIgnoreList(otherPco);
+                }
+            }
+        }
+    }
+
+    /**
      * Alter this object's restitution (bounciness) (native field:
      * m_restitution). For perfect elasticity, set restitution=1.
+     * <p>
+     * Restitution doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param restitution the desired value (default=0)
      */
@@ -1182,6 +1393,8 @@ abstract public class PhysicsCollisionObject
      * Alter this object's rolling friction: torsional friction orthogonal to
      * the contact normal (native field: m_rollingFriction). Use this to stop
      * bodies from rolling.
+     * <p>
+     * Friction doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param friction the desired friction value (default=0)
      */
@@ -1193,6 +1406,8 @@ abstract public class PhysicsCollisionObject
     /**
      * Alter this object's spinning friction: torsional friction around the
      * contact normal (native field: m_spinningFriction). Use for grasping.
+     * <p>
+     * Friction doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param friction the desired friction value (default=0)
      */
@@ -1209,11 +1424,11 @@ abstract public class PhysicsCollisionObject
      * @see #setApplicationData(java.lang.Object)
      */
     public void setUserObject(Object user) {
-        userObject = user;
+        this.userObject = user;
     }
 
     /**
-     * Determine the ID of the CollisionSpace where this object is added.
+     * Return the ID of the space where this object is added.
      *
      * @return the ID, or zero if not added to any space
      */
@@ -1233,8 +1448,8 @@ abstract public class PhysicsCollisionObject
      * @param objectId the identifier of the btCollisionObject (not zero)
      * @param collisionShapeId the identifier of the btCollisionShape (not zero)
      */
-    native protected static void attachCollisionShape(long objectId,
-            long collisionShapeId);
+    native protected static void
+            attachCollisionShape(long objectId, long collisionShapeId);
 
     /**
      * Clone an ignore list.
@@ -1244,21 +1459,24 @@ abstract public class PhysicsCollisionObject
      * null, unaffected)
      */
     protected void cloneIgnoreList(Cloner cloner, PhysicsCollisionObject old) {
-        long[] ignoredIds = old.listIgnoredIds();
-        for (long oldPcoId : ignoredIds) {
-            PhysicsCollisionObject oldPco = findInstance(oldPcoId);
-            /*
-             * Don't do any real cloning here because rigid bodies get
-             * rebuilt during cloneFields(), which alters their native IDs.
-             * We want to ignore new IDs, not old ones,
-             * so if the other PCO hasn't been cloned yet,
-             * wait and let *that* PCO invoke addToIgnoreList().
-             */
-            if (cloner.isCloned(oldPco)) {
-                PhysicsCollisionObject newPco = cloner.clone(oldPco);
-                addToIgnoreList(newPco);
+        assert !doneCloningIgnores;
+
+        if (old.ignoreList != null) {
+            for (PhysicsCollisionObject oldPco : old.ignoreList) {
+                /*
+                 * We want to ignore only new PCOs, not old ones,
+                 * so if the other PCO hasn't cloned its list yet,
+                 * wait and let *that* PCO invoke addToIgnoreList().
+                 */
+                if (cloner.isCloned(oldPco)) {
+                    PhysicsCollisionObject newPco = cloner.clone(oldPco);
+                    if (newPco.doneCloningIgnores) {
+                        addToIgnoreList(newPco);
+                    }
+                }
             }
         }
+        this.doneCloningIgnores = true;
     }
 
     /**
@@ -1269,17 +1487,7 @@ abstract public class PhysicsCollisionObject
     native protected static void finalizeNative(long objectId);
 
     /**
-     * Read the collision flags of this object. Subclasses are responsible for
-     * cloning/loading/saving these flags. Flag values are defined in
-     * {@link com.jme3.bullet.collision.CollisionFlag}. Native method.
-     *
-     * @param objectId the ID of the btCollisionObject (not zero)
-     * @return the flags that are set, ORed together
-     */
-    native protected static int getCollisionFlags(long objectId);
-
-    /**
-     * Read the type of this object. Native method.
+     * Return the type of this object. Native method.
      *
      * @param objectId the ID of the btCollisionObject (not zero)
      * @return the type value
@@ -1313,10 +1521,16 @@ abstract public class PhysicsCollisionObject
         setCcdMotionThreshold(capsule.readFloat(tagCcdMotionThreshold, 0f));
         setCcdSweptSphereRadius(
                 capsule.readFloat(tagCcdSweptSphereRadius, 0f));
-        setContactDamping(capsule.readFloat(tagContactDamping, 0.1f));
+
+        boolean hasCsd = capsule.readBoolean(tagHasCsd, true);
+        if (hasCsd) {
+            setContactDamping(capsule.readFloat(tagContactDamping, 0.1f));
+        }
         setContactProcessingThreshold(
                 capsule.readFloat(tagContactProcessingThreshold, 0f));
-        setContactStiffness(capsule.readFloat(tagContactStiffness, 1e30f));
+        if (hasCsd) {
+            setContactStiffness(capsule.readFloat(tagContactStiffness, 1e30f));
+        }
         setDeactivationTime(capsule.readFloat(tagDeactivationTime, 0f));
         setFriction(capsule.readFloat(tagFriction, 0.5f));
         setRestitution(capsule.readFloat(tagRestitution, 0f));
@@ -1330,24 +1544,28 @@ abstract public class PhysicsCollisionObject
             setAnisotropicFriction(components, mode);
         }
 
-        Savable[] ignoreList = capsule.readSavableArray(tagIgnoreList, null);
-        for (Savable savable : ignoreList) {
-            PhysicsCollisionObject pco = (PhysicsCollisionObject) savable;
-            addToIgnoreList(pco);
+        Savable[] tmpArray = capsule.readSavableArray(tagIgnoreList, null);
+        if (tmpArray != null) {
+            for (Savable savable : tmpArray) {
+                PhysicsCollisionObject pco = (PhysicsCollisionObject) savable;
+                addToIgnoreList(pco);
+            }
         }
 
-        applicationData = capsule.readSavable(tagApplicationData, null);
-        userObject = capsule.readSavable(tagUserObject, null);
+        this.applicationData = capsule.readSavable(tagApplicationData, null);
+        this.userObject = capsule.readSavable(tagUserObject, null);
     }
 
     /**
      * Alter the activation state of this object. Native method.
+     * <p>
+     * Deactivation doesn't affect a PhysicsCharacter or PhysicsGhostObject.
      *
      * @param objectId the ID of the btCollisionObject (not zero)
      * @param desiredState the desired state
      */
-    native protected static void setActivationState(long objectId,
-            int desiredState);
+    native protected static void
+            setActivationState(long objectId, int desiredState);
 
     /**
      * Alter the collision flags of this object (native field:
@@ -1358,8 +1576,18 @@ abstract public class PhysicsCollisionObject
      * @param objectId the ID of the btCollisionObject (not zero)
      * @param desiredFlags the desired collision flags, ORed together
      */
-    native protected static void setCollisionFlags(long objectId,
-            int desiredFlags);
+    native protected static void
+            setCollisionFlags(long objectId, int desiredFlags);
+
+    /**
+     * Alter the ignore list for collisions. TODO privatize
+     *
+     * @param object1Id the ID of the first btCollisionObject (not zero)
+     * @param object2Id the ID of the 2nd btCollisionObject (not zero)
+     * @param setting true to ignore, false to stop ignoring
+     */
+    native protected static void setIgnoreCollisionCheck(
+            long object1Id, long object2Id, boolean setting);
 
     /**
      * Directly alter this object's location and basis.
@@ -1369,8 +1597,8 @@ abstract public class PhysicsCollisionObject
      * @param orientation the desired orientation for this object (rotation
      * matrix in physics-space coordinates, not null, unaffected)
      */
-    protected void setLocationAndBasis(Vector3f centerLocation,
-            Matrix3f orientation) {
+    protected void
+            setLocationAndBasis(Vector3f centerLocation, Matrix3f orientation) {
         Validate.finite(centerLocation, "center location");
         Validate.nonNull(orientation, "orientation");
 
@@ -1392,14 +1620,15 @@ abstract public class PhysicsCollisionObject
     @Override
     public void cloneFields(Cloner cloner, Object original) {
         if (applicationData instanceof Cloneable) {
-            applicationData = cloner.clone(applicationData);
+            this.applicationData = cloner.clone(applicationData);
         }
         if (userObject instanceof Cloneable) {
-            userObject = cloner.clone(userObject);
+            this.userObject = cloner.clone(userObject);
         }
 
-        collisionShape = cloner.clone(collisionShape);
-        debugMaterial = cloner.clone(debugMaterial);
+        this.collisionShape = cloner.clone(collisionShape);
+        this.debugMaterial = cloner.clone(debugMaterial);
+        this.ignoreList = null;
         /*
          * The caller should unassign the old native object and invoke
          * cloneIgnoreList() and copyPcoProperties().
@@ -1408,15 +1637,15 @@ abstract public class PhysicsCollisionObject
 
     /**
      * Create a shallow clone for the JME cloner. Note that the cloned object
-     * won't be added to any PhysicsSpace, even if the original was.
+     * won't be added to any space, even if the original was.
      *
      * @return a new instance
      */
     @Override
     public PhysicsCollisionObject jmeClone() {
         try {
-            PhysicsCollisionObject clone
-                    = (PhysicsCollisionObject) super.clone();
+            PhysicsCollisionObject clone = (PhysicsCollisionObject) clone();
+            clone.doneCloningIgnores = false;
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -1436,16 +1665,18 @@ abstract public class PhysicsCollisionObject
     public void read(JmeImporter importer) throws IOException {
         InputCapsule capsule = importer.getCapsule(this);
 
-        collisionGroup = capsule.readInt(tagCollisionGroup, COLLISION_GROUP_01);
-        collideWithGroups = capsule.readInt(tagCollisionGroupsMask,
-                COLLISION_GROUP_01);
-        debugMeshNormals = capsule.readEnum(tagDebugMeshNormals,
-                DebugMeshNormals.class, DebugMeshNormals.None);
-        debugMeshResolution = capsule.readInt(tagDebugMeshResolution, 0);
-        debugMaterial = (Material) capsule.readSavable(tagDebugMaterial, null);
+        this.collisionGroup
+                = capsule.readInt(tagCollisionGroup, COLLISION_GROUP_01);
+        this.collideWithGroups
+                = capsule.readInt(tagCollisionGroupsMask, COLLISION_GROUP_01);
+        this.debugMeshNormals = capsule.readEnum(
+                tagDebugMeshNormals, MeshNormals.class, MeshNormals.None);
+        this.debugMeshResolution = capsule.readInt(tagDebugMeshResolution, 0);
+        this.debugMaterial
+                = (Material) capsule.readSavable(tagDebugMaterial, null);
 
         Savable shape = capsule.readSavable(tagCollisionShape, null);
-        collisionShape = (CollisionShape) shape;
+        this.collisionShape = (CollisionShape) shape;
         /*
          * The subclass should create the btCollisionObject and then
          * invoke readPcoProperties() .
@@ -1464,14 +1695,15 @@ abstract public class PhysicsCollisionObject
         OutputCapsule capsule = exporter.getCapsule(this);
 
         capsule.write(collisionGroup, tagCollisionGroup, COLLISION_GROUP_01);
-        capsule.write(collideWithGroups, tagCollisionGroupsMask,
-                COLLISION_GROUP_01);
-        capsule.write(debugMeshNormals, tagDebugMeshNormals,
-                DebugMeshNormals.None);
+        capsule.write(
+                collideWithGroups, tagCollisionGroupsMask, COLLISION_GROUP_01);
+        capsule.write(
+                debugMeshNormals, tagDebugMeshNormals, MeshNormals.None);
         capsule.write(debugMeshResolution, tagDebugMeshResolution, 0);
         capsule.write(debugMaterial, tagDebugMaterial, null);
         capsule.write(collisionShape, tagCollisionShape, null);
 
+        // begin common properties
         if (applicationData instanceof Savable) {
             capsule.write((Savable) applicationData, tagApplicationData, null);
         }
@@ -1479,9 +1711,13 @@ abstract public class PhysicsCollisionObject
             capsule.write((Savable) userObject, tagUserObject, null);
         }
 
-        // common properties
         capsule.write(getCcdMotionThreshold(), tagCcdMotionThreshold, 0f);
         capsule.write(getCcdSweptSphereRadius(), tagCcdSweptSphereRadius, 0f);
+
+        int flags = collisionFlags();
+        boolean hasCsd
+                = (flags & CollisionFlag.HAS_CONTACT_STIFFNESS_DAMPING) != 0;
+        capsule.write(hasCsd, tagHasCsd, true);
         capsule.write(getContactDamping(), tagContactDamping, 0.1f);
         capsule.write(getContactProcessingThreshold(),
                 tagContactProcessingThreshold, 0f);
@@ -1504,14 +1740,12 @@ abstract public class PhysicsCollisionObject
             capsule.write(components, tagAnisotropicFrictionComponents, null);
         }
 
-        long[] ignoredIds = listIgnoredIds();
-        int numIgnored = ignoredIds.length;
-        Savable[] ignoreList = new Savable[numIgnored];
-        for (int index = 0; index < numIgnored; ++index) {
-            long pcoId = ignoredIds[index];
-            ignoreList[index] = findInstance(pcoId);
+        if (ignoreList != null) {
+            int numIgnored = ignoreList.size();
+            Savable[] tmpArray = new Savable[numIgnored];
+            ignoreList.toArray(tmpArray);
+            capsule.write(tmpArray, tagIgnoreList, null);
         }
-        capsule.write(ignoreList, tagIgnoreList, null);
     }
     // *************************************************************************
     // NativePhysicsObject methods
@@ -1524,11 +1758,16 @@ abstract public class PhysicsCollisionObject
     @Override
     public String toString() {
         String result = getClass().getSimpleName();
+        result = result.replace("Body", "");
         result = result.replace("Control", "C");
         result = result.replace("Physics", "");
         result = result.replace("Object", "");
-        long objectId = nativeId();
-        result += "#" + Long.toHexString(objectId);
+        if (hasAssignedNativeObject()) {
+            long objectId = nativeId();
+            result += "#" + Long.toHexString(objectId);
+        } else {
+            result += "#unassigned";
+        }
 
         return result;
     }
@@ -1551,16 +1790,20 @@ abstract public class PhysicsCollisionObject
 
     native private static int getActivationState(long objectId);
 
-    native private static void getAnisotropicFriction(long objectId,
-            Vector3f storeResult);
+    native private static void
+            getAnisotropicFriction(long objectId, Vector3f storeVector);
 
-    native private static void getBasis(long objectId, Matrix3f storeResult);
+    native private static void getBasis(long objectId, Matrix3f storeMatrix);
+
+    native private static void getBasisDp(long objectId, Matrix3d storeMatrix);
 
     native private static float getCcdMotionThreshold(long objectId);
 
     native private static float getCcdSweptSphereRadius(long objectId);
 
     native private static int getCollideWithGroups(long objectId);
+
+    native private static int getCollisionFlags(long objectId);
 
     native private static int getCollisionGroup(long objectId);
 
@@ -1576,20 +1819,20 @@ abstract public class PhysicsCollisionObject
 
     native private static float getFriction(long objectId);
 
-    native private static void getLocation(long objectId, Vector3f storeResult);
+    native private static void getLocation(long objectId, Vector3f storeVector);
 
-    native private static void getLocationDp(long objectId, Vec3d storeResult);
+    native private static void getLocationDp(long objectId, Vec3d storeVector);
 
     native private static int getNumObjectsWithoutCollision(long objectId);
 
-    native private static long getObjectWithoutCollision(long objectId,
-            int listIndex);
+    native private static long
+            getObjectWithoutCollision(long objectId, int listIndex);
 
-    native private static void getOrientation(long objectId,
-            Quaternion storeResult);
+    native private static void
+            getOrientation(long objectId, Quaternion storeQuat);
 
-    native private static void getOrientationDp(long objectId,
-            Quatd storeResult);
+    native private static void
+            getOrientationDp(long objectId, Quatd storeQuat);
 
     native private static int getProxyFilterGroup(long objectId);
 
@@ -1603,8 +1846,8 @@ abstract public class PhysicsCollisionObject
 
     native private static float getSpinningFriction(long objectId);
 
-    native private static boolean hasAnisotropicFriction(long objectId,
-            int mode);
+    native private static boolean
+            hasAnisotropicFriction(long objectId, int mode);
 
     native private static boolean hasBroadphaseProxy(long objectId);
 
@@ -1614,42 +1857,39 @@ abstract public class PhysicsCollisionObject
 
     native private static boolean isInWorld(long objectId);
 
-    native private static void setAnisotropicFriction(long objectId,
-            Vector3f components, int mode);
+    native private static void setAnisotropicFriction(
+            long objectId, Vector3f components, int mode);
 
-    native private static void setCcdMotionThreshold(long objectId,
-            float threshold);
+    native private static void
+            setCcdMotionThreshold(long objectId, float threshold);
 
-    native private static void setCcdSweptSphereRadius(long objectId,
-            float radius);
+    native private static void
+            setCcdSweptSphereRadius(long objectId, float radius);
 
-    native private static void setCollideWithGroups(long objectId,
-            int collisionGroups);
+    native private static void
+            setCollideWithGroups(long objectId, int collisionGroups);
 
-    native private static void setCollisionGroup(long objectId,
-            int collisionGroup);
+    native private static void
+            setCollisionGroup(long objectId, int collisionGroup);
 
-    native private static void setContactProcessingThreshold(long objectId,
-            float thresholdDistance);
+    native private static void setContactProcessingThreshold(
+            long objectId, float thresholdDistance);
 
-    native private static void setContactStiffnessAndDamping(long objectId,
-            float stiffness, float damping);
+    native private static void setContactStiffnessAndDamping(
+            long objectId, float stiffness, float damping);
 
     native private static void setDeactivationTime(long objectId, float time);
 
     native private static void setFriction(long objectId, float friction);
 
-    native private static void setIgnoreCollisionCheck(long object1Id,
-            long object2Id, boolean setting);
-
-    native private static void setLocationAndBasis(long objectId,
-            Vector3f location, Matrix3f basis);
+    native private static void setLocationAndBasis(
+            long objectId, Vector3f location, Matrix3f basis);
 
     native private static void setRestitution(long objectId, float restitution);
 
-    native private static void setRollingFriction(long objectId,
-            float friction);
+    native private static void
+            setRollingFriction(long objectId, float friction);
 
-    native private static void setSpinningFriction(long objectId,
-            float friction);
+    native private static void
+            setSpinningFriction(long objectId, float friction);
 }

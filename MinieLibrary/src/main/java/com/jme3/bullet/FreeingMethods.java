@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 jMonkeyEngine
+ * Copyright (c) 2021-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -58,7 +58,7 @@ final class FreeingMethods {
     /**
      * map classes to methods - initialized lazily
      */
-    final private static Map<Class<? extends NativePhysicsObject>, Method[]> methodsByClass
+    final private static Map<Class<? extends NativePhysicsObject>, Method[]> map
             = new ConcurrentHashMap<>(30);
     // *************************************************************************
     // constructors
@@ -78,10 +78,10 @@ final class FreeingMethods {
      * @return an internal array (not null, do not modify!)
      */
     static Method[] listMethods(Class<? extends NativePhysicsObject> clazz) {
-        Method[] result = methodsByClass.get(clazz);
+        Method[] result = map.get(clazz);
         if (result == null) {
             result = generate(clazz);
-            methodsByClass.put(clazz, result);
+            map.put(clazz, result);
         }
 
         return result;
@@ -100,15 +100,16 @@ final class FreeingMethods {
         Collection<Method> methods = new ArrayList<>(4);
         for (Class<?> c = clazz; c != Object.class; c = c.getSuperclass()) {
             try {
-                Method method = c.getDeclaredMethod("freeNativeObject", long.class);
+                Method method
+                        = c.getDeclaredMethod("freeNativeObject", long.class);
                 method.setAccessible(true);
                 methods.add(method);
             } catch (IllegalArgumentException
                     | NoClassDefFoundError
-                    | SecurityException e) {
+                    | SecurityException exception) {
                 System.out.println("c = " + c.getName());
-                throw new RuntimeException(e);
-            } catch (NoSuchMethodException e) {
+                throw new RuntimeException(exception);
+            } catch (NoSuchMethodException exception) {
                 // do nothing
             }
         }

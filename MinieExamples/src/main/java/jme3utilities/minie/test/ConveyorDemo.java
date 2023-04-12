@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2022, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,6 @@ package jme3utilities.minie.test;
 
 import com.jme3.app.Application;
 import com.jme3.app.StatsAppState;
-import com.jme3.app.state.AppState;
 import com.jme3.bullet.BulletAppState;
 import com.jme3.bullet.PhysicsSpace;
 import com.jme3.bullet.SolverMode;
@@ -38,12 +37,10 @@ import com.jme3.bullet.collision.ManifoldPoints;
 import com.jme3.bullet.collision.PhysicsCollisionObject;
 import com.jme3.bullet.collision.shapes.BoxCollisionShape;
 import com.jme3.bullet.collision.shapes.CollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.bullet.objects.PhysicsRigidBody;
 import com.jme3.font.BitmapText;
-import com.jme3.font.Rectangle;
 import com.jme3.input.CameraInput;
 import com.jme3.input.KeyInput;
 import com.jme3.light.AmbientLight;
@@ -60,10 +57,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.BackingStoreException;
 import jme3utilities.Heart;
+import jme3utilities.MeshNormals;
 import jme3utilities.MyAsset;
+import jme3utilities.MyString;
 import jme3utilities.math.MyMath;
 import jme3utilities.minie.test.common.PhysicsDemo;
-import jme3utilities.ui.CameraOrbitAppState;
 import jme3utilities.ui.InputMode;
 
 /**
@@ -136,41 +134,49 @@ public class ConveyorDemo
     // fields
 
     /**
-     * status displayed in the upper-left corner of the GUI node
+     * text displayed in the upper-left corner of the GUI node
      */
-    private BitmapText statusText;
+    private static BitmapText statusText;
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the ConveyorDemo application.
+     */
+    public ConveyorDemo() { // explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the ConveyorDemo application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
-        /*
-         * Enable direct-memory tracking.
-         */
+
+        // Enable direct-memory tracking.
         BufferUtils.setTrackDirectMemoryEnabled(true);
 
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
         try {
             settings.load(applicationName);
-        } catch (BackingStoreException e) {
+        } catch (BackingStoreException exception) {
             logger.warning("Failed to load AppSettings.");
         }
         settings.setAudioRenderer(null);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setTitle(applicationName); // Customize the window's title bar.
+        settings.setTitle(title); // Customize the window's title bar.
 
         Application application = new ConveyorDemo();
         application.setSettings(settings);
@@ -207,20 +213,20 @@ public class ConveyorDemo
         }
 
         // enable lateral friction for the current contact point:
-        ManifoldPoints.setFlags(contactPointId,
-                ContactPointFlag.LATERAL_FRICTION);
+        ManifoldPoints
+                .setFlags(contactPointId, ContactPointFlag.LATERAL_FRICTION);
 
         PhysicsCollisionObject beltPco = aIsAConveyorBelt ? pcoA : pcoB;
         int beltIndex = (Integer) beltPco.getApplicationData();
         Vector3f direction = beltDirections[beltIndex - 1];
-        float speed = beltSpeeds[beltIndex - 1];
+        float beltSpeed = beltSpeeds[beltIndex - 1];
 
         // modify its motion and its friction direction:
         if (MyMath.isOdd(beltIndex)) {
-            ManifoldPoints.setContactMotion1(contactPointId, speed);
+            ManifoldPoints.setContactMotion1(contactPointId, beltSpeed);
             ManifoldPoints.setLateralFrictionDir1(contactPointId, direction);
         } else {
-            ManifoldPoints.setContactMotion2(contactPointId, speed);
+            ManifoldPoints.setContactMotion2(contactPointId, beltSpeed);
             ManifoldPoints.setLateralFrictionDir2(contactPointId, direction);
         }
     }
@@ -254,7 +260,12 @@ public class ConveyorDemo
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        // Add the status text to the GUI.
+        statusText = new BitmapText(guiFont);
+        guiNode.attachChild(statusText);
+
+        super.acorusInit();
         setPauseOnLostFocus(false);
 
         configureCamera();
@@ -264,20 +275,13 @@ public class ConveyorDemo
 
         ColorRGBA bgColor = new ColorRGBA(0.1f, 0.1f, 0.1f, 1f);
         viewPort.setBackgroundColor(bgColor);
-        /*
-         * Hide the render-statistics overlay.
-         */
+
+        // Hide the render-statistics overlay.
         stateManager.getState(StatsAppState.class).toggleStats();
 
         addOuterWalls();
         addInnerWalls();
         addConveyorBelts();
-        /*
-         * Add the status text to the GUI.
-         */
-        statusText = new BitmapText(guiFont);
-        statusText.setLocalTranslation(0f, cam.getHeight(), 0f);
-        guiNode.attachChild(statusText);
     }
 
     /**
@@ -288,13 +292,11 @@ public class ConveyorDemo
         Material shinyMaterial
                 = MyAsset.createShinyMaterial(assetManager, ColorRGBA.White);
         shinyMaterial.setFloat("Shininess", 100f);
-        /*
-         * materials for dropped boxes
-         */
+
+        // materials for dropped boxes
         cloneAndRegisterMaterial("box", shinyMaterial, ColorRGBA.Orange);
-        /*
-         * materials for the conveyor belts and walls of each section
-         */
+
+        // materials for the conveyor belts and walls of each section
         ColorRGBA[] colorArray = {
             new ColorRGBA(0.82f, 0.65f, 0.04f, 1f),
             new ColorRGBA(0.73f, 0.17f, 0.18f, 1f),
@@ -319,7 +321,7 @@ public class ConveyorDemo
     }
 
     /**
-     * Determine the length of debug axis arrows (when they're visible).
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -329,8 +331,8 @@ public class ConveyorDemo
     }
 
     /**
-     * Add application-specific hotkey/button bindings and override existing
-     * ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -350,10 +352,7 @@ public class ConveyorDemo
         dim.bind(asToggleHelp, KeyInput.KEY_H);
         dim.bind(asTogglePause, KeyInput.KEY_PAUSE, KeyInput.KEY_PERIOD);
         dim.bind(asToggleVArrows, KeyInput.KEY_K);
-        /*
-         * The help node can't be created until all hotkeys are bound.
-         */
-        addHelp();
+        dim.bind(asToggleWArrows, KeyInput.KEY_N);
     }
 
     /**
@@ -371,9 +370,22 @@ public class ConveyorDemo
                     addBoxBody(new Vector3f(0.2f, 0.2f, 0.2f),
                             spawnLocation, massForDynamic, "box", null);
                     return;
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        statusText.setLocalTranslation(0f, newHeight, 0f);
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -401,9 +413,9 @@ public class ConveyorDemo
      * @param appData the desired application data, or null for none
      * @return the new body
      */
-    private PhysicsRigidBody addBoxBody(Vector3f halfExtents,
-            Vector3f centerLocation, float mass, String materialName,
-            Integer appData) {
+    private PhysicsRigidBody addBoxBody(
+            Vector3f halfExtents, Vector3f centerLocation, float mass,
+            String materialName, Integer appData) {
         CollisionShape shape = new BoxCollisionShape(halfExtents);
         PhysicsRigidBody result = new PhysicsRigidBody(shape, mass);
         addCollisionObject(result);
@@ -413,7 +425,7 @@ public class ConveyorDemo
         Material material = findMaterial(materialName);
         result.setDebugMaterial(material);
 
-        result.setDebugMeshNormals(DebugMeshNormals.Facet);
+        result.setDebugMeshNormals(MeshNormals.Facet);
         result.setPhysicsLocation(centerLocation);
 
         return result;
@@ -446,20 +458,6 @@ public class ConveyorDemo
     }
 
     /**
-     * Attach a Node to display hotkey help/hints.
-     */
-    private void addHelp() {
-        float margin = 10f; // in pixels
-        float width = 540f; // in pixels
-        float height = cam.getHeight() - 2 * margin;
-        float leftX = cam.getWidth() - (width + margin);
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
-    }
-
-    /**
      * Create 4 static rigid bodies to represent inner walls and add them to the
      * PhysicsSpace.
      */
@@ -485,9 +483,11 @@ public class ConveyorDemo
     }
 
     /**
-     * Add lighting and shadows to the specified scene.
+     * Add lighting to the specified scene.
+     *
+     * @param rootSpatial which scene (not null)
      */
-    private void addLighting(Spatial rootSpatial) {
+    private static void addLighting(Spatial rootSpatial) {
         ColorRGBA ambientColor = new ColorRGBA(0.5f, 0.5f, 0.5f, 1f);
         AmbientLight ambient = new AmbientLight(ambientColor);
         rootSpatial.addLight(ambient);
@@ -535,8 +535,8 @@ public class ConveyorDemo
      * @param material the prototype material (not null, unaffected)
      * @param color the desired color (not null, unaffected)
      */
-    private void cloneAndRegisterMaterial(String name, Material material,
-            ColorRGBA color) {
+    private void cloneAndRegisterMaterial(
+            String name, Material material, ColorRGBA color) {
         Material clone = material.clone();
         clone.setColor("Ambient", color.clone());
         clone.setColor("Diffuse", color.clone());
@@ -554,14 +554,10 @@ public class ConveyorDemo
 
         cam.setLocation(new Vector3f(12f, 6f, 5f));
         cam.setRotation(new Quaternion(-0.066f, 0.91052f, -0.1912f, -0.36053f));
-
-        AppState orbitState
-                = new CameraOrbitAppState(cam, "orbitLeft", "orbitRight");
-        stateManager.attach(orbitState);
     }
 
     /**
-     * Create and configure a new PhysicsSpace.
+     * Configure physics during startup.
      */
     private void configurePhysics() {
         // Set up Bullet physics and create a physics space.

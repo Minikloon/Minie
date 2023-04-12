@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2022, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -110,7 +110,8 @@ public class OtoControl
      */
     @Override
     public BoneLink getLeftFoot() {
-        return findBoneLink("foot.left");
+        BoneLink result = findBoneLink("foot.left");
+        return result;
     }
 
     /**
@@ -120,7 +121,8 @@ public class OtoControl
      */
     @Override
     public BoneLink getRightFoot() {
-        return findBoneLink("foot.right");
+        BoneLink result = findBoneLink("foot.right");
+        return result;
     }
     // *************************************************************************
     // Face methods
@@ -130,9 +132,8 @@ public class OtoControl
      * typically on the bridge of the nose, halfway between the pupils.
      *
      * @return the vertex specification (not null, not empty)
-     * @see
-     * com.jme3.bullet.animation.DynamicAnimControl#findManagerForVertex(java.lang.String,
-     * com.jme3.math.Vector3f, com.jme3.math.Vector3f)
+     * @see com.jme3.bullet.animation.DynamicAnimControl#findManagerForVertex(
+     * java.lang.String, com.jme3.math.Vector3f, com.jme3.math.Vector3f)
      */
     @Override
     public String faceCenterSpec() {

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2023 Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -64,14 +64,14 @@ public class MhGameControl
         LinkConfig hull = new LinkConfig(1f, MassHeuristic.Density,
                 ShapeHeuristic.VertexHull, new Vector3f(1f, 1f, 1f),
                 CenterHeuristic.Mean, RotationOrder.XZY);
-        /*
-         * Generate FourSphere shapes for links with > 1,000 mesh vertices.
-         */
+
+        // Generate FourSphere shapes for links with > 1,000 mesh vertices.
         LinkConfig simplified = new LinkConfig(1f, MassHeuristic.Density,
                 ShapeHeuristic.FourSphere, new Vector3f(1f, 1f, 1f),
                 CenterHeuristic.Mean, RotationOrder.XZY);
 
         super.setConfig(torsoName, hull);
+        super.setMainBoneName("pelvis");
 
         super.link("spine_03", simplified,
                 new RangeOfMotion(0.8f, 0.5f, 0.5f)); // 2,047 vertices
@@ -122,7 +122,8 @@ public class MhGameControl
      */
     @Override
     public BoneLink getLeftFoot() {
-        return findBoneLink("foot_l");
+        BoneLink result = findBoneLink("foot_l");
+        return result;
     }
 
     /**
@@ -132,7 +133,8 @@ public class MhGameControl
      */
     @Override
     public BoneLink getRightFoot() {
-        return findBoneLink("foot_r");
+        BoneLink result = findBoneLink("foot_r");
+        return result;
     }
     // *************************************************************************
     // Face methods
@@ -142,9 +144,8 @@ public class MhGameControl
      * typically on the bridge of the nose, halfway between the pupils.
      *
      * @return the vertex specification (not null, not empty)
-     * @see
-     * com.jme3.bullet.animation.DynamicAnimControl#findManagerForVertex(java.lang.String,
-     * com.jme3.math.Vector3f, com.jme3.math.Vector3f)
+     * @see com.jme3.bullet.animation.DynamicAnimControl#findManagerForVertex(
+     * java.lang.String, com.jme3.math.Vector3f, com.jme3.math.Vector3f)
      */
     @Override
     public String faceCenterSpec() {

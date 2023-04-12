@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020-2021, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,6 @@ import com.jme3.bullet.PhysicsSpace;
 import com.jme3.bullet.PhysicsTickListener;
 import com.jme3.bullet.collision.shapes.Box2dShape;
 import com.jme3.bullet.collision.shapes.CapsuleCollisionShape;
-import com.jme3.bullet.collision.shapes.infos.DebugMeshNormals;
 import com.jme3.bullet.debug.DebugInitListener;
 import com.jme3.bullet.objects.PhysicsBody;
 import com.jme3.bullet.objects.PhysicsCharacter;
@@ -44,7 +43,7 @@ import com.jme3.material.Material;
 import com.jme3.material.Materials;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.FastMath;
-import com.jme3.math.Matrix3f;
+import com.jme3.math.Quaternion;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.queue.RenderQueue;
 import com.jme3.scene.Node;
@@ -52,10 +51,11 @@ import com.jme3.scene.Spatial;
 import com.jme3.shadow.DirectionalLightShadowRenderer;
 import com.jme3.shadow.EdgeFilteringMode;
 import com.jme3.system.AppSettings;
+import jme3utilities.MeshNormals;
 
 /**
  * A simple example of character physics.
- *
+ * <p>
  * Builds upon HelloCustomDebug.
  *
  * @author Stephen Gold sgold@sonic.net
@@ -66,16 +66,20 @@ public class HelloCharacter
     // *************************************************************************
     // fields
 
-    private PhysicsCharacter character;
+    private static PhysicsCharacter character;
+    /**
+     * PhysicsSpace for simulation
+     */
+    private static PhysicsSpace physicsSpace;
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the HelloCharacter application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloCharacter application = new HelloCharacter();
 
         // Enable gamma correction for accurate lighting.
@@ -94,7 +98,7 @@ public class HelloCharacter
      */
     @Override
     public void simpleInitApp() {
-        PhysicsSpace physicsSpace = configurePhysics();
+        physicsSpace = configurePhysics();
 
         // Create a character with a capsule shape and add it to the space.
         float capsuleRadius = 0.5f;
@@ -108,17 +112,17 @@ public class HelloCharacter
         // Add a square to represent the ground.
         float halfExtent = 4f;
         float y = -2f;
-        PhysicsRigidBody ground = addSquare(halfExtent, y, physicsSpace);
+        PhysicsRigidBody ground = addSquare(halfExtent, y);
 
         // Customize the debug visualization of each object.
         Material redMaterial = createLitMaterial(1f, 0f, 0f);
         character.setDebugMaterial(redMaterial);
-        character.setDebugMeshNormals(DebugMeshNormals.Smooth);
+        character.setDebugMeshNormals(MeshNormals.Smooth);
         character.setDebugMeshResolution(DebugShapeFactory.highResolution);
 
         Material greenMaterial = createLitMaterial(0f, 0.5f, 0f);
         ground.setDebugMaterial(greenMaterial);
-        ground.setDebugMeshNormals(DebugMeshNormals.Facet);
+        ground.setDebugMeshNormals(MeshNormals.Facet);
 
         // Minie's BulletAppState simulates the dynamics...
     }
@@ -126,10 +130,10 @@ public class HelloCharacter
     // PhysicsTickListener methods
 
     /**
-     * Callback from Bullet, invoked just before the physics is stepped.
+     * Callback from Bullet, invoked just before each simulation step.
      *
-     * @param space the space that is about to be stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param space the space that's about to be stepped (not null)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void prePhysicsTick(PhysicsSpace space, float timeStep) {
@@ -140,10 +144,10 @@ public class HelloCharacter
     }
 
     /**
-     * Callback from Bullet, invoked just after the physics has been stepped.
+     * Callback from Bullet, invoked just after each simulation step.
      *
      * @param space the space that was just stepped (not null)
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
     @Override
     public void physicsTick(PhysicsSpace space, float timeStep) {
@@ -153,7 +157,10 @@ public class HelloCharacter
     // private methods
 
     /**
-     * Add lighting and shadows to the specified scene.
+     * Add lighting and shadows to the specified scene and set the background
+     * color.
+     *
+     * @param scene the scene to augment (not null)
      */
     private void addLighting(Spatial scene) {
         ColorRGBA ambientColor = new ColorRGBA(0.03f, 0.03f, 0.03f, 1f);
@@ -172,8 +179,8 @@ public class HelloCharacter
         int shadowMapSize = 2_048; // in pixels
         int numSplits = 3;
         DirectionalLightShadowRenderer dlsr
-                = new DirectionalLightShadowRenderer(assetManager,
-                        shadowMapSize, numSplits);
+                = new DirectionalLightShadowRenderer(
+                        assetManager, shadowMapSize, numSplits);
         dlsr.setEdgeFilteringMode(EdgeFilteringMode.PCFPOISSON);
         dlsr.setEdgesThickness(5);
         dlsr.setLight(sun);
@@ -186,15 +193,13 @@ public class HelloCharacter
     }
 
     /**
-     * Add a horizontal square body to the specified PhysicsSpace.
+     * Add a horizontal square body to the space.
      *
      * @param halfExtent (half of the desired side length)
      * @param y (the desired elevation, in physics-space coordinates)
-     * @param physicsSpace (not null)
      * @return the new body (not null)
      */
-    private PhysicsRigidBody addSquare(float halfExtent, float y,
-            PhysicsSpace physicsSpace) {
+    private PhysicsRigidBody addSquare(float halfExtent, float y) {
         // Construct a static rigid body with a square shape.
         Box2dShape shape = new Box2dShape(halfExtent);
         PhysicsRigidBody result
@@ -203,8 +208,8 @@ public class HelloCharacter
         physicsSpace.addCollisionObject(result);
 
         // Rotate it 90 degrees to a horizontal orientation.
-        Matrix3f rotate90 = new Matrix3f();
-        rotate90.fromAngleAxis(-FastMath.HALF_PI, Vector3f.UNIT_X);
+        Quaternion rotate90 = new Quaternion();
+        rotate90.fromAngles(-FastMath.HALF_PI, 0f, 0f);
         result.setPhysicsRotation(rotate90);
 
         // Translate it to the desired elevation.
@@ -215,6 +220,8 @@ public class HelloCharacter
 
     /**
      * Configure physics during startup.
+     *
+     * @return a new instance (not null)
      */
     private PhysicsSpace configurePhysics() {
         BulletAppState bulletAppState = new BulletAppState();
@@ -235,7 +242,7 @@ public class HelloCharacter
 
         PhysicsSpace result = bulletAppState.getPhysicsSpace();
 
-        // Activate the PhysicsTickListener interface.
+        // To enable the callbacks, register the application as a tick listener.
         result.addTickListener(this);
 
         return result;

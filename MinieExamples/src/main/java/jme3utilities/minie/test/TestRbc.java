@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2022, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -88,6 +88,7 @@ import jme3utilities.Heart;
 import jme3utilities.MyAsset;
 import jme3utilities.MyCamera;
 import jme3utilities.MySpatial;
+import jme3utilities.MyString;
 import jme3utilities.debug.PointVisualizer;
 import jme3utilities.math.MyArray;
 import jme3utilities.math.MyBuffer;
@@ -150,77 +151,84 @@ public class TestRbc
     /**
      * text displayed in the upper-left corner of the GUI node
      */
-    final private BitmapText[] statusLines = new BitmapText[2];
+    final private static BitmapText[] statusLines = new BitmapText[2];
     /**
      * AppState to manage the PhysicsSpace
      */
-    private BulletAppState bulletAppState;
+    private static BulletAppState bulletAppState;
     /**
      * shape being tested
      */
-    private CollisionShape testShape;
+    private static CollisionShape testShape;
     /**
      * part index returned by the most recent ray/sweep test
      */
-    private int partIndex = -1;
+    private static int partIndex = -1;
     /**
      * triangle index returned by the most recent ray/sweep test
      */
-    private int triangleIndex = -1;
+    private static int triangleIndex = -1;
     /**
      * cursor shown when the raytest finds a collision object
      */
-    private JmeCursor hitCursor;
+    private static JmeCursor hitCursor;
     /**
      * cursor shown when the raytest doesn't find a collision object
      */
-    private JmeCursor missCursor;
+    private static JmeCursor missCursor;
     /**
      * parent for added spatials
      */
-    final private Node meshesNode = new Node("meshes node");
+    final private static Node meshesNode = new Node("meshes node");
     /**
-     * visualizer for the most recent raytest/sweeptest hit
+     * visualizer for the most recent ray/sweep test hit
      */
-    private PointVisualizer hitPoint;
+    private static PointVisualizer hitPoint;
     /**
      * geometry for the missile, or null if none
      */
-    private Spatial missileSpatial;
+    private static Spatial missileSpatial;
     /**
      * spatial(s) being tested
      */
-    private Spatial testSpatial;
+    private static Spatial testSpatial;
     /**
      * name of the test being run
      */
-    private String testName = "Box";
+    private static String testName = "Box";
+    // *************************************************************************
+    // constructors
+
+    /**
+     * Instantiate the TestRbc application.
+     */
+    public TestRbc() { // made explicit to avoid a warning from JDK 18 javadoc
+    }
     // *************************************************************************
     // new methods exposed
 
     /**
      * Main entry point for the TestRbc application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
-        /*
-         * Mute the chatty loggers in certain packages.
-         */
+    public static void main(String[] arguments) {
+        String title = applicationName + " " + MyString.join(arguments);
+
+        // Mute the chatty loggers in certain packages.
         Heart.setLoggingLevels(Level.WARNING);
 
         boolean loadDefaults = true;
         AppSettings settings = new AppSettings(loadDefaults);
         try {
             settings.load(applicationName);
-        } catch (BackingStoreException e) {
+        } catch (BackingStoreException exception) {
             logger.warning("Failed to load AppSettings.");
         }
         settings.setAudioRenderer(null);
-        settings.setGammaCorrection(true);
+        settings.setResizable(true);
         settings.setSamples(4); // anti-aliasing
-        settings.setTitle(applicationName); // the window's title bar
-        settings.setVSync(true);
+        settings.setTitle(title); // Customize the window's title bar.
 
         Application application = new TestRbc();
         application.setSettings(settings);
@@ -233,7 +241,10 @@ public class TestRbc
      * Initialize this application.
      */
     @Override
-    public void actionInitializeApplication() {
+    public void acorusInit() {
+        addStatusLines();
+        super.acorusInit();
+
         MinieTestTerrains.initialize(assetManager);
         assert MyArray.isSorted(testNames);
 
@@ -248,18 +259,16 @@ public class TestRbc
         viewPort.setBackgroundColor(skyColor);
 
         addLighting(rootNode);
-        addStatusLines();
 
         float length = 0.8f;
         attachWorldAxes(length);
-        /*
-         * Hide the render-statistics overlay initially.
-         */
+
+        // Hide the render-statistics overlay initially.
         stateManager.getState(StatsAppState.class).toggleStats();
 
         int indicatorSize = 16; // in pixels
-        hitPoint = new PointVisualizer(assetManager, indicatorSize,
-                ColorRGBA.Red, "saltire");
+        hitPoint = new PointVisualizer(
+                assetManager, indicatorSize, ColorRGBA.Red, "saltire");
         rootNode.attachChild(hitPoint);
         hitPoint.setEnabled(false);
 
@@ -279,20 +288,39 @@ public class TestRbc
     }
 
     /**
+     * Calculate screen bounds for the detailed help node.
+     *
+     * @param viewPortWidth (in pixels, &gt;0)
+     * @param viewPortHeight (in pixels, &gt;0)
+     * @return a new instance
+     */
+    @Override
+    public Rectangle detailedHelpBounds(int viewPortWidth, int viewPortHeight) {
+        // Position help nodes below the status.
+        float margin = 10f; // in pixels
+        float leftX = margin;
+        float topY = viewPortHeight - 40f - margin;
+        float width = viewPortWidth - leftX - margin;
+        float height = topY - margin;
+        Rectangle result = new Rectangle(leftX, topY, width, height);
+
+        return result;
+    }
+
+    /**
      * Initialize the library of named materials during startup.
      */
     @Override
     public void generateMaterials() {
         super.generateMaterials();
-        /*
-         * Change the platform material to double-sided.
-         */
+
+        // Change the platform material to double-sided.
         Material platformMaterial = findMaterial("platform");
         RenderState ars = platformMaterial.getAdditionalRenderState();
         ars.setFaceCullMode(RenderState.FaceCullMode.Off);
 
-        Material wireMaterial = MyAsset.createWireframeMaterial(assetManager,
-                ColorRGBA.Green);
+        Material wireMaterial = MyAsset.createWireframeMaterial(
+                assetManager, ColorRGBA.Green);
         ars = wireMaterial.getAdditionalRenderState();
         ars.setFaceCullMode(RenderState.FaceCullMode.Off);
         registerMaterial("green wire", wireMaterial);
@@ -322,7 +350,7 @@ public class TestRbc
     }
 
     /**
-     * Determine the length of debug axis arrows (when they're visible).
+     * Determine the length of physics-debug arrows (when they're visible).
      *
      * @return the desired length (in physics-space units, &ge;0)
      */
@@ -332,8 +360,8 @@ public class TestRbc
     }
 
     /**
-     * Add application-specific hotkey/button bindings and override existing
-     * ones.
+     * Add application-specific hotkey bindings (and override existing ones, if
+     * necessary).
      */
     @Override
     public void moreDefaultBindings() {
@@ -376,15 +404,6 @@ public class TestRbc
         dim.bind(asToggleHelp, KeyInput.KEY_H);
         dim.bind(asTogglePcoAxes, KeyInput.KEY_SEMICOLON);
         dim.bind("toggle view", KeyInput.KEY_SLASH);
-
-        float margin = 10f; // in pixels
-        float width = cam.getWidth() - 2f * margin;
-        float height = cam.getHeight() - (2f * margin + 2f * 20f);
-        float leftX = margin;
-        float topY = margin + height;
-        Rectangle rectangle = new Rectangle(leftX, topY, width, height);
-
-        attachHelpNode(rectangle);
     }
 
     /**
@@ -458,9 +477,27 @@ public class TestRbc
                     toggleMeshes();
                     togglePhysicsDebug();
                     return;
+
+                default:
             }
         }
         super.onAction(actionString, ongoing, tpf);
+    }
+
+    /**
+     * Update the GUI layout and proposed settings after a resize.
+     *
+     * @param newWidth the new width of the framebuffer (in pixels, &gt;0)
+     * @param newHeight the new height of the framebuffer (in pixels, &gt;0)
+     */
+    @Override
+    public void onViewPortResize(int newWidth, int newHeight) {
+        for (int lineIndex = 0; lineIndex < statusLines.length; ++lineIndex) {
+            float y = newHeight - 20f * lineIndex;
+            statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
+        }
+
+        super.onViewPortResize(newWidth, newHeight);
     }
 
     /**
@@ -471,9 +508,8 @@ public class TestRbc
     @Override
     public void simpleUpdate(float tpf) {
         super.simpleUpdate(tpf);
-        /*
-         * Set mouse-cursor shape based on a raytest result.
-         */
+
+        // Set mouse-cursor shape based on a raytest result.
         Vector2f screenXY = inputManager.getCursorPosition();
         Vector3f nearLocation
                 = cam.getWorldCoordinates(screenXY, MyCamera.nearZ);
@@ -482,10 +518,10 @@ public class TestRbc
         PhysicsSpace physicsSpace = getPhysicsSpace();
         List<PhysicsRayTestResult> rayTest
                 = physicsSpace.rayTestRaw(nearLocation, farLocation);
-        if (rayTest.size() > 0) {
-            inputManager.setMouseCursor(hitCursor);
-        } else {
+        if (rayTest.isEmpty()) {
             inputManager.setMouseCursor(missCursor);
+        } else {
+            inputManager.setMouseCursor(hitCursor);
         }
 
         updateStatusLines();
@@ -505,9 +541,8 @@ public class TestRbc
         Spatial userB = event.getNodeB();
         if (userA == testSpatial && userB == missileSpatial
                 || userA == missileSpatial && userB == testSpatial) {
-            /*
-             * Put the missile's RBC into kinematic mode, so it will stick.
-             */
+
+            // Put the missile's RBC into kinematic mode, so it will stick.
             RigidBodyControl rigidBodyControl
                     = missileSpatial.getControl(RigidBodyControl.class);
             rigidBodyControl.setKinematic(true);
@@ -678,8 +713,8 @@ public class TestRbc
 
         switch (testName) {
             case "Cone":
-                testShape = new ConeCollisionShape(radius, height,
-                        PhysicsSpace.AXIS_Y);
+                testShape = new ConeCollisionShape(
+                        radius, height, PhysicsSpace.AXIS_Y);
                 break;
 
             case "ConeGImpact":
@@ -710,14 +745,14 @@ public class TestRbc
         float radius = 2f;
         int heightSample = 2;
         int circSample = 18;
-        Mesh mesh = new Cylinder(heightSample, circSample, radius, height,
-                closedFlag);
+        Mesh mesh = new Cylinder(
+                heightSample, circSample, radius, height, closedFlag);
         testSpatial = new Geometry("cylinder", mesh);
 
         switch (testName) {
             case "Cylinder":
-                testShape = new CylinderCollisionShape(radius, height,
-                        PhysicsSpace.AXIS_Z);
+                testShape = new CylinderCollisionShape(
+                        radius, height, PhysicsSpace.AXIS_Z);
                 break;
 
             case "CylinderGImpact":
@@ -741,6 +776,8 @@ public class TestRbc
 
     /**
      * Add terrain to the scene and PhysicsSpace.
+     *
+     * @param patchSize the desired patch size (3, 5, 8, 17, 33, or 65)
      */
     private void addTerrain(int patchSize) {
         switch (patchSize) {
@@ -797,13 +834,13 @@ public class TestRbc
 
         switch (testName) {
             case "KissCapsule":
-                testShape = new CapsuleCollisionShape(radius, 2f * radius,
-                        PhysicsSpace.AXIS_X);
+                testShape = new CapsuleCollisionShape(
+                        radius, 2f * radius, PhysicsSpace.AXIS_X);
                 break;
 
             case "KissHull":
-                testShape = CollisionShapeFactory.createDynamicMeshShape(
-                        testSpatial);
+                testShape = CollisionShapeFactory
+                        .createDynamicMeshShape(testSpatial);
                 break;
 
             case "KissMesh":
@@ -827,8 +864,8 @@ public class TestRbc
                 break;
 
             case "TwoSphere":
-                testShape = new MultiSphere(radius, 2f * radius,
-                        PhysicsSpace.AXIS_X);
+                testShape = new MultiSphere(
+                        radius, 2f * radius, PhysicsSpace.AXIS_X);
                 break;
 
             default:
@@ -854,8 +891,10 @@ public class TestRbc
 
     /**
      * Add lighting to the specified scene.
+     *
+     * @param rootSpatial which scene (not null)
      */
-    private void addLighting(Spatial rootSpatial) {
+    private static void addLighting(Spatial rootSpatial) {
         ColorRGBA ambientColor = new ColorRGBA(0.5f, 0.5f, 0.5f, 1f);
         AmbientLight ambient = new AmbientLight(ambientColor);
         rootSpatial.addLight(ambient);
@@ -1017,8 +1056,6 @@ public class TestRbc
     private void addStatusLines() {
         for (int lineIndex = 0; lineIndex < statusLines.length; ++lineIndex) {
             statusLines[lineIndex] = new BitmapText(guiFont);
-            float y = cam.getHeight() - 20f * lineIndex;
-            statusLines[lineIndex].setLocalTranslation(0f, y, 0f);
             guiNode.attachChild(statusLines[lineIndex]);
         }
     }
@@ -1093,19 +1130,19 @@ public class TestRbc
         List<PhysicsRayTestResult> rayTest
                 = physicsSpace.rayTest(nearLocation, farLocation);
 
-        if (rayTest.size() > 0) {
+        if (rayTest.isEmpty()) {
+            hitPoint.setEnabled(false);
+        } else {
             PhysicsRayTestResult nearestHit = rayTest.get(0);
             float fraction = nearestHit.getHitFraction();
-            Vector3f location = MyVector3f.lerp(fraction, nearLocation,
-                    farLocation, null);
+            Vector3f location = MyVector3f
+                    .lerp(fraction, nearLocation, farLocation, null);
 
             hitPoint.setLocalTranslation(location);
             hitPoint.setEnabled(true);
 
             partIndex = nearestHit.partIndex();
             triangleIndex = nearestHit.triangleIndex();
-        } else {
-            hitPoint.setEnabled(false);
         }
     }
 
@@ -1117,9 +1154,8 @@ public class TestRbc
         hitPoint.setEnabled(false);
         partIndex = -1;
         triangleIndex = -1;
-        /*
-         * Remove any added spatials from the scene.
-         */
+
+        // Remove any added spatials from the scene.
         meshesNode.detachAllChildren();
         missileSpatial = null;
         testSpatial = null;
@@ -1240,7 +1276,7 @@ public class TestRbc
      *
      * @param factor the factor to increase the margin (&gt;0)
      */
-    private void multiplyMargin(float factor) {
+    private static void multiplyMargin(float factor) {
         assert factor > 0f : factor;
 
         float margin = testShape.getMargin();
@@ -1265,7 +1301,7 @@ public class TestRbc
      * @param yScale desired Y-axis scale factor (default=1)
      * @param zScale desired Z-axis scale factor (default=1)
      */
-    private void setScale(float xScale, float yScale, float zScale) {
+    private static void setScale(float xScale, float yScale, float zScale) {
         if (testSpatial == null) {
             return;
         }
@@ -1300,31 +1336,31 @@ public class TestRbc
         List<PhysicsSweepTestResult> sweepTest = new LinkedList<>();
         float penetration = 0f; // physics-space units
         PhysicsSpace physicsSpace = getPhysicsSpace();
-        physicsSpace.sweepTest(shape, nearTransform, farTransform, sweepTest,
-                penetration);
+        physicsSpace.sweepTest(
+                shape, nearTransform, farTransform, sweepTest, penetration);
 
-        if (sweepTest.size() > 0) {
+        if (sweepTest.isEmpty()) {
+            hitPoint.setEnabled(false);
+        } else {
             PhysicsSweepTestResult nearestHit = sweepTest.get(0);
             float fraction = nearestHit.getHitFraction();
             Vector3f fromLocation = nearTransform.getTranslation();
             Vector3f toLocation = farTransform.getTranslation();
-            Vector3f location = MyVector3f.lerp(fraction, fromLocation,
-                    toLocation, null);
+            Vector3f location = MyVector3f
+                    .lerp(fraction, fromLocation, toLocation, null);
 
             hitPoint.setLocalTranslation(location);
             hitPoint.setEnabled(true);
 
             partIndex = nearestHit.partIndex();
             triangleIndex = nearestHit.triangleIndex();
-        } else {
-            hitPoint.setEnabled(false);
         }
     }
 
     /**
      * Toggle rendering of the test/missile spatial(s).
      */
-    private void toggleMeshes() {
+    private static void toggleMeshes() {
         Spatial.CullHint hint = meshesNode.getLocalCullHint();
         if (hint == Spatial.CullHint.Inherit
                 || hint == Spatial.CullHint.Never) {
@@ -1358,8 +1394,8 @@ public class TestRbc
 
         float margin = testShape.getMargin();
         Vector3f scale = testShape.getScale(null);
-        message = String.format("view=%s, margin=%.3f, scale=%s",
-                viewName, margin, scale);
+        message = String.format(
+                "view=%s, margin=%.3f, scale=%s", viewName, margin, scale);
         if (partIndex >= 0) {
             message += String.format(", part[%d]", partIndex);
         }

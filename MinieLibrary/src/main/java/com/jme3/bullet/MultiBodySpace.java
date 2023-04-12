@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021 jMonkeyEngine
+ * Copyright (c) 2020-2022 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,9 +44,9 @@ import jme3utilities.Validate;
 
 /**
  * A PhysicsSpace that supports multibodies, with its own
- * btMultiBodyDynamicsWorld.
+ * {@code btMultiBodyDynamicsWorld}.
  *
- * @author Stephen Gold
+ * @author Stephen Gold sgold@sonic.net
  */
 public class MultiBodySpace extends PhysicsSpace {
     // *************************************************************************
@@ -146,7 +146,9 @@ public class MultiBodySpace extends PhysicsSpace {
      */
     public Collection<MultiBody> getMultiBodyList() {
         Collection<MultiBody> result = multiBodyMap.values();
-        return Collections.unmodifiableCollection(result);
+        result = Collections.unmodifiableCollection(result);
+
+        return result;
     }
 
     /**
@@ -156,7 +158,8 @@ public class MultiBodySpace extends PhysicsSpace {
      * @return the pre-existing MultiBodySpace running on this thread
      */
     public static MultiBodySpace getMultiBodySpace() {
-        return (MultiBodySpace) getCollisionSpace();
+        CollisionSpace result = getCollisionSpace();
+        return (MultiBodySpace) result;
     }
 
     /**

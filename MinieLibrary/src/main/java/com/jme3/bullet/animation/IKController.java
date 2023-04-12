@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022 jMonkeyEngine
+ * Copyright (c) 2018-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,11 +84,11 @@ abstract public class IKController implements JmeCloneable, Savable {
     }
 
     /**
-     * Instantiate an enabled controller. TODO protect
+     * Instantiate an enabled controller.
      *
      * @param controlledLink the link to be controlled (not null)
      */
-    public IKController(PhysicsLink controlledLink) {
+    protected IKController(PhysicsLink controlledLink) {
         assert controlledLink != null;
         if (logger.isLoggable(Level.FINE)) {
             logger.log(Level.FINE, "Creating controller for bone {0}.",
@@ -157,7 +157,7 @@ abstract public class IKController implements JmeCloneable, Savable {
      */
     @Override
     public void cloneFields(Cloner cloner, Object original) {
-        controlledLink = cloner.clone(controlledLink);
+        this.controlledLink = cloner.clone(controlledLink);
     }
 
     /**
@@ -168,7 +168,7 @@ abstract public class IKController implements JmeCloneable, Savable {
     @Override
     public IKController jmeClone() {
         try {
-            IKController clone = (IKController) super.clone();
+            IKController clone = (IKController) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);

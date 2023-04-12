@@ -57,7 +57,7 @@ public class SoftBodyMaterial
      * message logger for this class
      */
     final public static Logger logger
-            = Logger.getLogger(PhysicsSoftBody.class.getName());
+            = Logger.getLogger(SoftBodyMaterial.class.getName());
     /**
      * field names for serialization
      */
@@ -184,7 +184,7 @@ public class SoftBodyMaterial
     public void cloneFields(Cloner cloner, Object original) {
         unassignNativeObject();
 
-        body = cloner.clone(body);
+        this.body = cloner.clone(body);
         long softBodyId = body.nativeId();
         long materialId = getMaterialId(softBodyId);
         setNativeIdNotTracked(materialId);
@@ -203,7 +203,7 @@ public class SoftBodyMaterial
     @Override
     public SoftBodyMaterial jmeClone() {
         try {
-            SoftBodyMaterial clone = (SoftBodyMaterial) super.clone();
+            SoftBodyMaterial clone = (SoftBodyMaterial) clone();
             return clone;
         } catch (CloneNotSupportedException exception) {
             throw new RuntimeException(exception);
@@ -224,7 +224,7 @@ public class SoftBodyMaterial
         assert body == null;
 
         InputCapsule capsule = importer.getCapsule(this);
-        body = (PhysicsSoftBody) capsule.readSavable(tagBody, null);
+        this.body = (PhysicsSoftBody) capsule.readSavable(tagBody, null);
 
         long softBodyId = body.nativeId();
         long materialId = getMaterialId(softBodyId);
@@ -263,12 +263,12 @@ public class SoftBodyMaterial
 
     native private static float getVolumeStiffnessFactor(long materialId);
 
-    native private static void setAngularStiffnessFactor(long materialId,
-            float stiffness);
+    native private static void
+            setAngularStiffnessFactor(long materialId, float stiffness);
 
-    native private static void setLinearStiffnessFactor(long materialId,
-            float stiffness);
+    native private static void
+            setLinearStiffnessFactor(long materialId, float stiffness);
 
-    native private static void setVolumeStiffnessFactor(long materialId,
-            float stiffness);
+    native private static void
+            setVolumeStiffnessFactor(long materialId, float stiffness);
 }

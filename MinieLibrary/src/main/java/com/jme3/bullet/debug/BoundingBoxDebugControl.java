@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 jMonkeyEngine
+ * Copyright (c) 2019-2023 jMonkeyEngine
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,19 +87,19 @@ class BoundingBoxDebugControl extends AbstractPhysicsDebugControl {
      * @param debugAppState which app state (not null, alias created)
      * @param pco which collision object to visualize (not null, alias created)
      */
-    BoundingBoxDebugControl(BulletDebugAppState debugAppState,
-            PhysicsCollisionObject pco) {
+    BoundingBoxDebugControl(
+            BulletDebugAppState debugAppState, PhysicsCollisionObject pco) {
         super(debugAppState);
         this.pco = pco;
 
-        bbox = pco.boundingBox(null);
+        this.bbox = pco.boundingBox(null);
         float xExtent = bbox.getXExtent();
         float yExtent = bbox.getYExtent();
         float zExtent = bbox.getZExtent();
         WireBox mesh = new WireBox(xExtent, yExtent, zExtent);
-        geom = new Geometry("bounding box of " + pco, mesh);
+        this.geom = new Geometry("bounding box of " + pco, mesh);
 
-        center = bbox.getCenter();
+        center = bbox.getCenter(); // alias
         geom.setLocalTranslation(center);
 
         Material material = debugAppState.getBoundingBoxMaterial();

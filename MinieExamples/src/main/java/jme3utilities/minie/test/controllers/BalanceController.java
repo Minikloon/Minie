@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2018-2021, Stephen Gold
+ Copyright (c) 2018-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -83,8 +83,8 @@ public class BalanceController extends IKController {
      * @param centerOfSupport the initial location of the center of support (in
      * physics-space coordinates, not null, unaffected)
      */
-    public BalanceController(PhysicsLink controlledLink,
-            Vector3f centerOfSupport) {
+    public BalanceController(
+            PhysicsLink controlledLink, Vector3f centerOfSupport) {
         super(controlledLink);
         this.centerOfSupport = centerOfSupport.clone();
     }
@@ -99,11 +99,14 @@ public class BalanceController extends IKController {
      * storeResult or a new vector)
      */
     public Vector3f centerOfSupport(Vector3f storeResult) {
+        Vector3f result;
         if (storeResult == null) {
-            return centerOfSupport.clone();
+            result = centerOfSupport.clone();
         } else {
-            return storeResult.set(centerOfSupport);
+            result = storeResult.set(centerOfSupport);
         }
+
+        return result;
     }
 
     /**
@@ -165,13 +168,13 @@ public class BalanceController extends IKController {
     @Override
     public void cloneFields(Cloner cloner, Object original) {
         super.cloneFields(cloner, original);
-        centerOfSupport = cloner.clone(centerOfSupport);
+        this.centerOfSupport = cloner.clone(centerOfSupport);
     }
 
     /**
      * Apply an impulse to the controlled rigid body to keep the model's center
      * of mass located directly above its center of support. Meant to be invoked
-     * by the controlled link before each physics tick.
+     * by the controlled link before each simulation step.
      *
      * @param timeStep the physics timestep (in seconds, &ge;0)
      */
@@ -189,14 +192,12 @@ public class BalanceController extends IKController {
         Vector3f comLocation = new Vector3f();
         Vector3f comVelocity = new Vector3f();
         float ragdollMass = dac.centerOfMass(comLocation, comVelocity);
-        /*
-         * error = setpoint - actual
-         */
+
+        // error = setpoint - actual
         Vector3f locationError = centerOfSupport.subtract(comLocation);
         Vector3f velocityError = comVelocity.negate(); // velocity setpoint = 0
-        /*
-         * Calculate an impulse.
-         */
+
+        // Calculate an impulse.
         Vector3f sum = new Vector3f(0f, 0f, 0f);
         if (locationError.y < 0f) { // center of mass is ABOVE center of support
             // location term
@@ -208,9 +209,8 @@ public class BalanceController extends IKController {
             float velocityGain = velocityGainFactor * ragdollMass;
             MyVector3f.accumulateScaled(sum, velocityError, velocityGain);
         }
-        /*
-         * Apply the impulse to the center of the controlled link's rigid body.
-         */
+
+        // Apply the impulse to the center of the controlled link's rigid body.
         PhysicsRigidBody rigidBody = link.getRigidBody();
         rigidBody.applyCentralImpulse(sum);
     }
@@ -227,10 +227,12 @@ public class BalanceController extends IKController {
         super.read(importer);
         InputCapsule capsule = importer.getCapsule(this);
 
-        locationGainFactor = capsule.readFloat("locationGainFactor", 0.02f);
-        velocityGainFactor = capsule.readFloat("velocityGainFactor", 0.02f);
-        centerOfSupport = (Vector3f) capsule.readSavable("centerOfSupport",
-                new Vector3f());
+        this.locationGainFactor
+                = capsule.readFloat("locationGainFactor", 0.02f);
+        this.velocityGainFactor
+                = capsule.readFloat("velocityGainFactor", 0.02f);
+        this.centerOfSupport = (Vector3f) capsule.readSavable(
+                "centerOfSupport", new Vector3f());
     }
 
     /**

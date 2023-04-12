@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2020, Stephen Gold
+ Copyright (c) 2020-2023, Stephen Gold
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -42,12 +42,12 @@ import com.jme3.math.Vector3f;
 
 /**
  * A simple demonstration of contact response.
- *
+ * <p>
  * Press the spacebar to disable the ball's contact response. Once this happens,
  * the blue (static) box no longer exerts any contact force on the ball. Gravity
  * takes over, and the ball falls through.
- *
- * Builds on HelloStaticBody.
+ * <p>
+ * Builds upon HelloStaticBody.
  *
  * @author Stephen Gold sgold@sonic.net
  */
@@ -58,9 +58,9 @@ public class HelloContactResponse extends SimpleApplication {
     /**
      * Main entry point for the HelloContactResponse application.
      *
-     * @param ignored array of command-line arguments (not null)
+     * @param arguments array of command-line arguments (not null)
      */
-    public static void main(String[] ignored) {
+    public static void main(String[] arguments) {
         HelloContactResponse application = new HelloContactResponse();
         application.start();
     }
@@ -74,8 +74,8 @@ public class HelloContactResponse extends SimpleApplication {
     public void simpleInitApp() {
         // Set up Bullet physics (with debug enabled).
         BulletAppState bulletAppState = new BulletAppState();
-        bulletAppState.setDebugEnabled(true); // default = false
         stateManager.attach(bulletAppState);
+        bulletAppState.setDebugEnabled(true); // for debug visualization
         PhysicsSpace physicsSpace = bulletAppState.getPhysicsSpace();
 
         // Add a static box to the space, to serve as a horizontal platform.
@@ -105,6 +105,9 @@ public class HelloContactResponse extends SimpleApplication {
                 if (action.equals("freefall") && ongoing) {
                     // Disable the ball's contact response.
                     ball.setContactResponse(false);
+
+                    // Activate the ball in case it got deactivated.
+                    ball.activate();
                 }
             }
         };

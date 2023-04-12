@@ -66,7 +66,7 @@ import jme3utilities.Validate;
 
 /**
  * A CollisionSpace to simulate dynamic physics, with its own
- * btDiscreteDynamicsWorld.
+ * {@code btDiscreteDynamicsWorld}.
  *
  * @author normenhansen
  */
@@ -190,8 +190,7 @@ public class PhysicsSpace
     /**
      * first-in/first-out (FIFO) queue of physics tasks
      */
-    final private Queue<AppTask<?>> pQueue
-            = new ConcurrentLinkedQueue<>();
+    final private Queue<AppTask<?>> pQueue = new ConcurrentLinkedQueue<>();
     /**
      * parameters used by the contact-and-constraint solver
      */
@@ -204,7 +203,7 @@ public class PhysicsSpace
      * first-in/first-out (FIFO) queue of physics tasks for each thread
      */
     final protected static ThreadLocal<Queue<AppTask<?>>> pQueueTL
-            = new ThreadLocal<Queue<AppTask<?>>>() {
+            = new ThreadLocal<Queue<AppTask<?>>>() { // TODO privatize
         @Override
         protected ConcurrentLinkedQueue<AppTask<?>> initialValue() {
             return new ConcurrentLinkedQueue<>();
@@ -314,9 +313,10 @@ public class PhysicsSpace
     /**
      * Add all physics controls in the specified subtree of the scene graph to
      * this space (e.g. after loading from disk). For compatibility with the
-     * jme3-bullet library.
+     * jme3-jbullet library.
      * <p>
-     * Does not add any joints.
+     * Does not add joints unless they are managed by a PhysicsControl; the
+     * jme3-jbullet version attempts to add ALL joints.
      * <p>
      * Note: recursive!
      *
@@ -324,7 +324,7 @@ public class PhysicsSpace
      */
     public void addAll(Spatial spatial) {
         add(spatial);
-        //recursion
+
         if (spatial instanceof Node) {
             List<Spatial> children = ((Node) spatial).getChildren();
             for (Spatial child : children) {
@@ -373,9 +373,8 @@ public class PhysicsSpace
             return;
         }
         assert joint.getPhysicsSpace() == null;
-        /*
-         * Warn if the jointed bodies aren't already added to this space.
-         */
+
+        // Warn if the jointed bodies aren't already added to this space.
         PhysicsBody a = joint.getBodyA();
         if (a != null && !contains(a)) {
             logger.log(Level.WARNING,
@@ -423,9 +422,9 @@ public class PhysicsSpace
     /**
      * Register the specified tick listener with this space.
      * <p>
-     * Tick listeners are notified before and after each physics step. A physics
-     * step is not necessarily the same as a frame; it is more influenced by the
-     * accuracy of the PhysicsSpace.
+     * Tick listeners are notified before and after each simulation step. A
+     * simulation step is not necessarily the same as a frame; it is more
+     * influenced by the accuracy of the PhysicsSpace.
      *
      * @see #setAccuracy(float)
      *
@@ -520,14 +519,15 @@ public class PhysicsSpace
 
         while (!contactProcessedEvents.isEmpty()) {
             PhysicsCollisionEvent event = contactProcessedEvents.pop();
-            for (PhysicsCollisionListener listener : contactProcessedListeners) {
+            for (PhysicsCollisionListener listener
+                    : contactProcessedListeners) {
                 listener.collision(event);
             }
         }
     }
 
     /**
-     * Invoke the specified callable during the next physics tick. This is
+     * Invoke the specified callable during the next simulation step. This is
      * useful for applying forces.
      *
      * @param <V> the return type of the Callable
@@ -573,7 +573,9 @@ public class PhysicsSpace
      */
     public Collection<PhysicsCharacter> getCharacterList() {
         Collection<PhysicsCharacter> result = characterMap.values();
-        return Collections.unmodifiableCollection(result);
+        result = Collections.unmodifiableCollection(result);
+
+        return result;
     }
 
     /**
@@ -600,7 +602,9 @@ public class PhysicsSpace
      */
     public Collection<PhysicsJoint> getJointList() {
         Collection<PhysicsJoint> result = jointMap.values();
-        return Collections.unmodifiableCollection(result);
+        result = Collections.unmodifiableCollection(result);
+
+        return result;
     }
 
     /**
@@ -610,7 +614,8 @@ public class PhysicsSpace
      * @return the pre-existing PhysicsSpace running on this thread
      */
     public static PhysicsSpace getPhysicsSpace() {
-        return (PhysicsSpace) getCollisionSpace();
+        CollisionSpace result = getCollisionSpace();
+        return (PhysicsSpace) result;
     }
 
     /**
@@ -622,7 +627,9 @@ public class PhysicsSpace
      */
     public Collection<PhysicsRigidBody> getRigidBodyList() {
         Collection<PhysicsRigidBody> result = rigidMap.values();
-        return Collections.unmodifiableCollection(result);
+        result = Collections.unmodifiableCollection(result);
+
+        return result;
     }
 
     /**
@@ -636,7 +643,7 @@ public class PhysicsSpace
 
     /**
      * Read the number of iterations used by the contact-and-constraint solver,
-     * for compatibility with the jme3-bullet library.
+     * for compatibility with the jme3-jbullet library.
      *
      * @return the number of iterations used (&ge;1)
      */
@@ -662,7 +669,23 @@ public class PhysicsSpace
      */
     public Collection<PhysicsVehicle> getVehicleList() {
         Collection<PhysicsVehicle> result = vehicleMap.values();
-        return Collections.unmodifiableCollection(result);
+        result = Collections.unmodifiableCollection(result);
+
+        return result;
+    }
+
+    /**
+     * Test whether CCD checks for collisions with static and kinematic bodies
+     * (native field: m_ccdWithStaticOnly).
+     *
+     * @return true if checks are limited, false if checking also for collisions
+     * with dynamic bodies
+     */
+    public boolean isCcdWithStaticOnly() {
+        long spaceId = nativeId();
+        boolean result = isCcdWithStaticOnly(spaceId);
+
+        return result;
     }
 
     /**
@@ -720,9 +743,10 @@ public class PhysicsSpace
     /**
      * Remove all physics controls in the specified subtree of the scene graph
      * from this space (e.g. before saving to disk). For compatibility with the
-     * jme3-bullet library.
+     * jme3-jbullet library.
      * <p>
-     * Does not remove any joints.
+     * Does not remove joints unless they are managed by a PhysicsControl; the
+     * jme3-jbullet version attempts to remove ALL joints.
      * <p>
      * Note: recursive!
      *
@@ -730,7 +754,7 @@ public class PhysicsSpace
      */
     public void removeAll(Spatial spatial) {
         remove(spatial);
-        //recursion
+
         if (spatial instanceof Node) {
             List<Spatial> children = ((Node) spatial).getChildren();
             for (Spatial child : children) {
@@ -797,11 +821,12 @@ public class PhysicsSpace
     /**
      * De-register the specified listener for ongoing contacts.
      *
-     * @see
-     * #addOngoingCollisionListener(com.jme3.bullet.collision.PhysicsCollisionListener)
+     * @see #addOngoingCollisionListener(
+     * com.jme3.bullet.collision.PhysicsCollisionListener)
      * @param listener the listener to de-register (not null)
      */
-    public void removeOngoingCollisionListener(PhysicsCollisionListener listener) {
+    public void removeOngoingCollisionListener(
+            PhysicsCollisionListener listener) {
         Validate.nonNull(listener, "listener");
 
         boolean success = contactProcessedListeners.remove(listener);
@@ -835,6 +860,18 @@ public class PhysicsSpace
     }
 
     /**
+     * Alter whether CCD checks for collisions with static and kinematic bodies
+     * (native field: m_ccdWithStaticOnly).
+     *
+     * @param setting true to limit checking, false to check also for collisions
+     * with dynamic bodies (default=false)
+     */
+    public void setCcdWithStaticOnly(boolean setting) {
+        long spaceId = nativeId();
+        setCcdWithStaticOnly(spaceId, setting);
+    }
+
+    /**
      * Alter the gravitational acceleration acting on newly-added bodies.
      * <p>
      * Typically, when a body is added to a space, the body's gravity gets set
@@ -851,11 +888,11 @@ public class PhysicsSpace
     }
 
     /**
-     * Alter the maximum number of time steps per frame.
+     * Alter the maximum number of simulation steps per frame.
      * <p>
-     * Extra physics steps help maintain determinism when the render fps drops
-     * below 1/accuracy. For example a value of 2 can compensate for frame rates
-     * as low as 30fps, assuming the physics has an accuracy of 1/60 sec.
+     * Extra simulation steps help maintain determinism when the render fps
+     * drops below 1/accuracy. For example a value of 2 can compensate for frame
+     * rates as low as 30fps, assuming the physics has an accuracy of 1/60 sec.
      * <p>
      * Setting this value too high can depress the frame rate.
      *
@@ -883,7 +920,7 @@ public class PhysicsSpace
 
     /**
      * Alter the number of iterations used by the contact-and-constraint solver,
-     * for compatibility with the jme3-bullet library.
+     * for compatibility with the jme3-jbullet library.
      * <p>
      * Use 4 for low quality, 20 for high quality.
      *
@@ -935,7 +972,8 @@ public class PhysicsSpace
     }
 
     /**
-     * Update this space.
+     * Update this space. This method should be invoked from the thread that
+     * created the space.
      *
      * @param timeInterval the time interval to simulate (in seconds, &ge;0)
      * @param maxSteps the maximum number of steps of size {@code accuracy}
@@ -951,6 +989,10 @@ public class PhysicsSpace
             boolean doProcessed, boolean doStarted) {
         assert Validate.nonNegative(timeInterval, "time interval");
         assert Validate.nonNegative(maxSteps, "max steps");
+
+        if (NativeLibrary.jniEnvId() != jniEnvId()) {
+            logger.log(Level.WARNING, "invoked from wrong thread");
+        }
 
         long spaceId = nativeId();
         assert accuracy > 0f : accuracy;
@@ -1011,7 +1053,9 @@ public class PhysicsSpace
 
     /**
      * Add the specified object to this space. For compatibility with the
-     * jme3-bullet library.
+     * jme3-jbullet library.
+     * <p>
+     * The jme3-jbullet version allows the argument to be null.
      *
      * @param object the PhysicsControl, Spatial-with-PhysicsControl, collision
      * object, or PhysicsJoint to add (not null)
@@ -1145,7 +1189,9 @@ public class PhysicsSpace
 
     /**
      * Remove the specified object from this space. For compatibility with the
-     * jme3-bullet library.
+     * jme3-jbullet library.
+     * <p>
+     * The jme3-jbullet version allows the argument to be null.
      *
      * @param object the PhysicsControl, Spatial-with-PhysicsControl, collision
      * object, or PhysicsJoint to remove, or null
@@ -1192,10 +1238,13 @@ public class PhysicsSpace
      * Invoked by native code immediately after a contact manifold is removed.
      * Skipped if stepSimulation() was invoked with doEnded=false.
      *
-     * @param manifoldId the native ID of the btPersistentManifold (not 0)
+     * @param manifoldId the native ID of the {@code btPersistentManifold} (not
+     * zero)
      */
     @Override
     public void onContactEnded(long manifoldId) {
+        assert NativeLibrary.jniEnvId() == jniEnvId() : "wrong thread";
+
         for (ContactListener listener : contactListeners) {
             listener.onContactEnded(manifoldId);
         }
@@ -1208,17 +1257,20 @@ public class PhysicsSpace
      *
      * @param pcoA the first involved object (not null)
      * @param pcoB the 2nd involved object (not null)
-     * @param pointId the native ID of the btManifoldPoint (not 0)
+     * @param pointId the native ID of the {@code btManifoldPoint} (not zero)
      */
     @Override
     public void onContactProcessed(PhysicsCollisionObject pcoA,
             PhysicsCollisionObject pcoB, long pointId) {
+        assert NativeLibrary.jniEnvId() == jniEnvId() : "wrong thread";
+
         for (ContactListener listener : contactListeners) {
             listener.onContactProcessed(pcoA, pcoB, pointId);
         }
 
         PhysicsCollisionEvent event
                 = new PhysicsCollisionEvent(pcoA, pcoB, pointId);
+
         // Queue the event to be handled later by distributeEvents().
         contactProcessedEvents.add(event);
     }
@@ -1227,10 +1279,13 @@ public class PhysicsSpace
      * Invoked by native code immediately after a contact manifold is created.
      * Skipped if stepSimulation() was invoked with doStarted=false.
      *
-     * @param manifoldId the native ID of the btPersistentManifold (not 0)
+     * @param manifoldId the native ID of the {@code btPersistentManifold} (not
+     * zero)
      */
     @Override
     public void onContactStarted(long manifoldId) {
+        assert NativeLibrary.jniEnvId() == jniEnvId() : "wrong thread";
+
         for (ContactListener listener : contactListeners) {
             listener.onContactStarted(manifoldId);
         }
@@ -1241,9 +1296,11 @@ public class PhysicsSpace
         }
 
         long bodyAId = PersistentManifolds.getBodyAId(manifoldId);
-        PhysicsCollisionObject pcoA = PhysicsCollisionObject.findInstance(bodyAId);
+        PhysicsCollisionObject pcoA
+                = PhysicsCollisionObject.findInstance(bodyAId);
         long bodyBId = PersistentManifolds.getBodyBId(manifoldId);
-        PhysicsCollisionObject pcoB = PhysicsCollisionObject.findInstance(bodyBId);
+        PhysicsCollisionObject pcoB
+                = PhysicsCollisionObject.findInstance(bodyBId);
 
         for (int i = 0; i < numPoints; ++i) {
             long pointId = PersistentManifolds.getPointId(manifoldId, i);
@@ -1306,11 +1363,12 @@ public class PhysicsSpace
         }
         long rigidBodyId = rigidBody.nativeId();
         rigidMap.put(rigidBodyId, rigidBody);
-
-        //Workaround
-        //It seems that adding a Kinematic RigidBody to the dynamicWorld
-        //prevents it from being dynamic again afterward.
-        //So we add it dynamic, then set it kinematic.
+        /*
+         * Workaround:
+         * It seems that adding a Kinematic RigidBody to the dynamicWorld
+         * prevents it from being dynamic again afterward.
+         * So we add it dynamic, then set it kinematic.
+         */
         boolean kinematic = false;
         if (rigidBody.isKinematic()) {
             kinematic = true;
@@ -1360,9 +1418,11 @@ public class PhysicsSpace
     /**
      * Callback invoked (by native code) just after the physics is stepped.
      *
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
-    private void postTick_native(float timeStep) {
+    private void postTick(float timeStep) {
+        assert NativeLibrary.jniEnvId() == jniEnvId() : "wrong thread";
+
         for (PhysicsTickListener listener : tickListeners) {
             listener.physicsTick(this, timeStep);
         }
@@ -1371,18 +1431,24 @@ public class PhysicsSpace
     /**
      * Callback invoked (by native code) just before the physics is stepped.
      *
-     * @param timeStep the time per physics step (in seconds, &ge;0)
+     * @param timeStep the time per simulation step (in seconds, &ge;0)
      */
-    private void preTick_native(float timeStep) {
-        AppTask task;
-        while ((task = pQueue.poll()) != null) {
-            if (task.isCancelled()) {
-                continue;
+    private void preTick(float timeStep) {
+        assert NativeLibrary.jniEnvId() == jniEnvId() : "wrong thread";
+
+        while (true) {
+            AppTask task = pQueue.poll();
+            if (task == null) {
+                task = pQueueTL.get().poll();
             }
-            try {
-                task.invoke();
-            } catch (RuntimeException exception) {
-                logger.log(Level.SEVERE, null, exception);
+            if (task == null) {
+                break;
+            } else if (!task.isCancelled()) {
+                try {
+                    task.invoke();
+                } catch (RuntimeException exception) {
+                    logger.log(Level.SEVERE, null, exception);
+                }
             }
         }
 
@@ -1457,14 +1523,14 @@ public class PhysicsSpace
 
     native private static void addAction(long spaceId, long actionId);
 
-    native private static void addCharacterObject(long spaceId,
-            long characterId);
+    native private static void
+            addCharacterObject(long spaceId, long characterId);
 
-    native private static void addConstraintC(long spaceId, long constraintId,
-            boolean disableCollisions);
+    native private static void addConstraintC(
+            long spaceId, long constraintId, boolean disableCollisions);
 
-    native private static void addRigidBody(long spaceId, long rigidBodyId,
-            int proxyGroup, int proxyMask);
+    native private static void addRigidBody(
+            long spaceId, long rigidBodyId, int proxyGroup, int proxyMask);
 
     native private static int countManifolds(long spaceId);
 
@@ -1480,24 +1546,29 @@ public class PhysicsSpace
 
     native private static long getSolverInfo(long spaceId);
 
+    native private static boolean isCcdWithStaticOnly(long spaceId);
+
     native private static boolean isSpeculativeContactRestitution(long spaceId);
 
     native private static void removeAction(long spaceId, long actionId);
 
-    native private static void removeCharacterObject(long spaceId,
-            long characterId);
+    native private static void
+            removeCharacterObject(long spaceId, long characterId);
 
-    native private static void removeConstraint(long spaceId,
-            long constraintId);
+    native private static void
+            removeConstraint(long spaceId, long constraintId);
 
     native private static void removeRigidBody(long spaceId, long rigidBodyId);
+
+    native private static void
+            setCcdWithStaticOnly(long spaceId, boolean setting);
 
     native private static void setGravity(long spaceId, Vector3f gravityVector);
 
     native private static void setSolverType(long spaceId, int solverType);
 
-    native private static void setSpeculativeContactRestitution(long spaceId,
-            boolean apply);
+    native private static void
+            setSpeculativeContactRestitution(long spaceId, boolean apply);
 
     native private static void stepSimulation(long spaceId, float timeInterval,
             int maxSubSteps, float accuracy, boolean enableContactEndedCallback,
